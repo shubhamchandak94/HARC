@@ -9,13 +9,46 @@ def hamming2(str1, str2):
     return sum(imap(ne, str1, str2))
 #	return sum([str1[i]!=str2[i] for i in range(len(str1))])	
 
+def char2index(c):
+	if c == 'A':
+		return 0		
+	if c == 'C':
+		return 1
+	if c == 'G':
+		return 2
+	if c == 'T':
+		return 3
+	if c == 'N':
+		return 4
+def findmajority(count):
+	l = []
+	for i in range(len(count[0])):
+		s = [count[j][i] for j in range(5)]
+		maxcount = max(s[0:4])
+		if maxcount == 0: #only N's seen so far
+			l.append('A')
+			continue
+		if s[0] == maxcount:
+			l.append('A')
+			continue
+		if s[1] == maxcount:
+			l.append('C')
+			continue
+		if s[2] == maxcount:
+			l.append('G')
+			continue
+		if s[3] == maxcount:
+			l.append('T')
+			continue
+	return ''.join(l)
+
 infile = "chrom22_50x_noRC_noisy.dna"
-outfile = "tempte5.dna"
+outfile = "tempte8.dna"
 readlen = 100
 no_reads = 17500000
 matchlen = 80
 maxmatch = 20
-thresh = [4,5,6,7]+[8]*16 #maximum number of mismatches allowed
+thresh = 5 #maximum number of mismatches allowed
 ind = [[i for i in range(j,80,5)] for j in range(5)]
 
 print "Reading file"
@@ -37,6 +70,10 @@ for i in range(no_reads):
 print "Ordering reads and writing to file"
 remainingreads = set([i for i in range(no_reads)])
 current = 0
+count = [[0]*100 for j in range(5)]
+for j in range(readlen):
+	count[char2index(lines[current][j])][j] = 1
+ref = findmajority(count)
 fout = open(outfile,'w')
 while True:
 	flag = 0
@@ -47,21 +84,27 @@ while True:
 	if(len(remainingreads)==0):
 		break
 	for i in range(maxmatch):
-		l = [[lines[current][j+i] for j in ind[k]] for k in range(5)]
+		l = [[ref[j+i] for j in ind[k]] for k in range(5)]
 		s = [''.join(l[k]) for k in range(5)]
 		inter = set()
-		for k in range(5):
+		for k in range(5):	
 			if s[k] in d[k]:
-				inter = set(d[k][s[k]]).union(inter)
-		inter = inter.intersection(remainingreads)	
+				inter = inter.union(set(d[k][s[k]]))
+		inter = inter.intersection(remainingreads)
 		if len(inter)>0:
 			for j in inter:
-				if(hamming2(lines[current][i:],lines[j][:readlen-i])<=thresh[i]):
+				if(hamming2(ref[i:],lines[j][:readlen-i])<=thresh):
 					current = j
 					flag = 1
 					break
 		if flag == 1:
-			break		
+			for j in range(readlen-i):
+				count[char2index(lines[current][j])][i+j] += 1		
+			count = [count[j][i:]+[0]*i for j in range(5)]
+			for j in range(readlen-i,readlen):
+				count[char2index(lines[current][j])][j] = 1
+			ref = findmajority(count)	
+			break
 
 #if len(d[lines[current][0:matchlen]]) == 0:
 #		del d[lines[current][0:matchlen]]
@@ -86,6 +129,11 @@ while True:
 		continue
 	current = remainingreads.pop()
 	remainingreads.add(current)
+	count = [[0]*100 for j in range(5)]
+	for j in range(readlen):
+		count[char2index(lines[current][j])][j] = 1
+	ref = findmajority(count)
+
 
 print "Done"
 fout.close()

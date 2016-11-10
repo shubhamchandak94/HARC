@@ -1,3 +1,5 @@
+
+#Instead of \n in read_seq we have a separate file readpos which stores the offset from previous read
 infile = "temp2.dna"
 outfile_seq = "readseq.txt"
 outfile_match = "readmatch.txt"

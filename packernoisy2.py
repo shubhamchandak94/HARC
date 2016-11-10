@@ -1,3 +1,4 @@
+#find best match with ref or prev
 import operator
 from itertools import imap
 
@@ -43,11 +44,11 @@ def findmajority(count):
 
 
 
-infile = "tempte4.dna"
-outfile_seq = "read_seq25.txt"
-outfile_pos = "read_pos25.txt"
-outfile_noise = "read_noise25.txt"
-outfile_noisepos = "read_noisepos25.txt"
+infile = "tempte5.dna"
+outfile_seq = "read_seq26.txt"
+outfile_pos = "read_pos26.txt"
+outfile_noise = "read_noise26.txt"
+outfile_noisepos = "read_noisepos26.txt"
 
 readlen = 100
 minmatch = 20
