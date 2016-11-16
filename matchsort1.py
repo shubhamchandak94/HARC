@@ -37,7 +37,7 @@ while True:
 		del d[lines[current][0:matchlen]]
 	else:
 		for i in d[lines[current][0:matchlen]]:
-			if lines[current][matchlen:] == lines[i][matchlen:]:
+			if True:#lines[current][matchlen:] == lines[i][matchlen:]:
 				current = i
 				flag = 1
 				break
@@ -46,7 +46,7 @@ while True:
 	for j in range(1,maxmatch):
 		if lines[current][j:j+matchlen] in d:
 			for i in d[lines[current][j:j+matchlen]]:
-				if lines[current][j+matchlen:] == lines[i][matchlen:readlen-j]:
+				if True:#lines[current][j+matchlen:] == lines[i][matchlen:readlen-j]:
 					current = i
 					flag = 1
 					break

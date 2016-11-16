@@ -1,6 +1,6 @@
 from itertools import imap
 import operator
-
+from distance import hamming
 # hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
 def hamming2(str1, str2):
     #assert len(str1) == len(str2)
@@ -42,13 +42,13 @@ def findmajority(count):
 			continue
 	return ''.join(l)
 
-infile = "chrom22_50x_noRC_noisy.dna"
-outfile = "tempte8.dna"
-readlen = 100
-no_reads = 17500000
+infile = "SRR959239.dna"
+outfile = "temp1.dna"
+readlen = 98
+no_reads = 5372832
 matchlen = 80
-maxmatch = 20
-thresh = 5 #maximum number of mismatches allowed
+maxmatch = 18
+thresh = 4 #maximum number of mismatches allowed
 ind = [[i for i in range(j,80,5)] for j in range(5)]
 
 print "Reading file"
@@ -70,7 +70,7 @@ for i in range(no_reads):
 print "Ordering reads and writing to file"
 remainingreads = set([i for i in range(no_reads)])
 current = 0
-count = [[0]*100 for j in range(5)]
+count = [[0]*readlen for j in range(5)]
 for j in range(readlen):
 	count[char2index(lines[current][j])][j] = 1
 ref = findmajority(count)
@@ -93,7 +93,7 @@ while True:
 		inter = inter.intersection(remainingreads)
 		if len(inter)>0:
 			for j in inter:
-				if(hamming2(ref[i:],lines[j][:readlen-i])<=thresh):
+				if(hamming(ref[i:],lines[j][:readlen-i])<=thresh):
 					current = j
 					flag = 1
 					break
@@ -129,7 +129,7 @@ while True:
 		continue
 	current = remainingreads.pop()
 	remainingreads.add(current)
-	count = [[0]*100 for j in range(5)]
+	count = [[0]*readlen for j in range(5)]
 	for j in range(readlen):
 		count[char2index(lines[current][j])][j] = 1
 	ref = findmajority(count)
