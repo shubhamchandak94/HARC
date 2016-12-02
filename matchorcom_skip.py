@@ -1,10 +1,12 @@
 import random
-infile = "temp3.dna"
-outfile = "temp1.dna"
-readlen = 40
+infile = "temp1.dna"
+outfile = "temp4.dna"
+readlen = 100
 no_reads = 5372832
-matchlen = 10
-maxmatch = 20
+rangestart = 10
+rangeend = 20
+skipstart = 80
+maxmatch = 30
 
 print "Reading file"
 f = open(infile,'r')
@@ -26,7 +28,7 @@ for k in range(1,no_reads):
 	flag = 0
 	if chunkstart == True:
 		for i in range(maxmatch):
-			if(current[:readlen-i]==prev[i:]):
+			if(current[:skipstart-i]==prev[i:skipstart]):
 				flag = 1
 				if i == 0:
 				    	rshift = 2
@@ -36,7 +38,7 @@ for k in range(1,no_reads):
 				break
 		if flag == 0:
 			for i in range(1,maxmatch):
-				if(current[i:]==prev[:(readlen-i)]):
+				if(current[i:skipstart]==prev[:(skipstart-i)]):
 					flag = 1
 					rshift = 0
 					chunkstart = False
@@ -49,7 +51,7 @@ for k in range(1,no_reads):
 	else:
 		if rshift == 1:		
 			for i in range(maxmatch):
-				if(current[:readlen-i]==prev[i:]):
+				if(current[:skipstart-i]==prev[i:skipstart]):
 					flag = 1
 					break
 			if flag == 0:
@@ -60,7 +62,7 @@ for k in range(1,no_reads):
 	
 		elif rshift == 0:
 			for i in range(maxmatch):
-				if(current[i:]==prev[:(readlen-i)]):
+				if(current[i:skipstart]==prev[:(skipstart-i)]):
 					flag = 1
 					break
 			if flag == 0:
@@ -70,14 +72,14 @@ for k in range(1,no_reads):
 				numchunks+=1
 		else:
 			for i in range(maxmatch):
-				if(current[:readlen-i]==prev[i:]):
+				if(current[:skipstart-i]==prev[i:skipstart]):
 					flag = 1
 					if i > 0:
 						rshift = 1
 					break
 			if flag == 0:
 				for i in range(1,maxmatch):
-					if(current[i:]==prev[:(readlen-i)]):
+					if(current[i:skipstart]==prev[:(skipstart-i)]):
 						flag = 1
 						rshift = 0	
 						break
@@ -101,10 +103,10 @@ print "Constructing dictionary"
 d = {}
 for i in range(numchunks):
  	j = chunkpos[i][0]	
-	if lines[j][0:matchlen] in d:
-		d[lines[j][0:matchlen]].add(i)
+	if lines[j][rangestart:rangeend] in d:
+		d[lines[j][rangestart:rangeend]].add(i)
 	else:
-		d[lines[j][0:matchlen]] = set([i])
+		d[lines[j][rangestart:rangeend]] = set([i])
 
 print "Ordering chunks and writing to file"
 
@@ -124,17 +126,17 @@ while True:
 		for i in range(beg,end-1,-1):
 			fout.write(lines[i]+'\n')		
 
-	d[lines[beg][0:matchlen]].remove(current)
+	d[lines[beg][rangestart:rangeend]].remove(current)
 	remainingchunks.remove(current)
 	if(len(remainingchunks)==0):
 		break
-	if len(d[lines[beg][0:matchlen]]) == 0:
-		del d[lines[beg][0:matchlen]]
+	if len(d[lines[beg][rangestart:rangeend]]) == 0:
+		del d[lines[beg][rangestart:rangeend]]
 	
 	for j in range(maxmatch):
-		if lines[end][j:j+matchlen] in d:
-			for i in d[lines[end][j:j+matchlen]]:
-				if lines[end][j+matchlen:] == lines[chunkpos[i][0]][matchlen:readlen-j]:
+		if lines[end][j+rangestart:j+rangeend] in d:
+			for i in d[lines[end][j+rangestart:j+rangeend]]:
+				if lines[end][j+rangeend:skipstart] == lines[chunkpos[i][0]][rangeend:skipstart-j]:
 					current = i
 					flag = 1
 					break

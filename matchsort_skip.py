@@ -1,11 +1,13 @@
 import random
 
-infile = "chrom22_50x_noRC_random.dna"
-outfile = "temp3.dna"
-readlen = 100
-no_reads = 17500000
-matchlen = 80
-maxmatch = 20
+infile = "SRR959239.dna"
+outfile = "temp1.dna"
+readlen = 98
+no_reads = 5372832
+rangestart = 10
+rangeend = 20
+skipstart = 80
+maxmatch = 4
 
 print "Reading file"
 f = open(infile,'r')
@@ -15,39 +17,39 @@ f.close()
 print "Constructing dictionary"
 d = {}
 for i in range(no_reads):
-	if lines[i][0:matchlen] in d:
-		d[lines[i][0:matchlen]].add(i)
+	if lines[i][rangestart:rangeend] in d:
+		d[lines[i][rangestart:rangeend]].add(i)
 	else:
-		d[lines[i][0:matchlen]] = set([i])
+		d[lines[i][rangestart:rangeend]] = set([i])
 
 print "Ordering reads and writing to file"
 remainingreads = set([i for i in range(no_reads)])
-current = 0
-unmatched = 0
+current = 1000000
 fout = open(outfile,'w')
+unmatched = 1
 while True:
 	flag = 0
 	if len(remainingreads)%1000000 == 0:
 		print str(len(remainingreads)//1000000)+'M reads remain'
 	fout.write(lines[current]+'\n')
-	d[lines[current][0:matchlen]].remove(current)
+	d[lines[current][rangestart:rangeend]].remove(current)
 	remainingreads.remove(current)
 	if(len(remainingreads)==0):
 		break
-	if len(d[lines[current][0:matchlen]]) == 0:
-		del d[lines[current][0:matchlen]]
+	if len(d[lines[current][rangestart:rangeend]]) == 0:
+		del d[lines[current][rangestart:rangeend]]
 	else:
-		for i in d[lines[current][0:matchlen]]:
-			if lines[current][matchlen:] == lines[i][matchlen:]:
+		for i in d[lines[current][rangestart:rangeend]]:
+			if lines[current][rangeend:skipstart] == lines[i][rangeend:skipstart]:
 				current = i
 				flag = 1
 				break
 	if flag == 1:
 		continue
 	for j in range(1,maxmatch):
-		if lines[current][j:j+matchlen] in d:
-			for i in d[lines[current][j:j+matchlen]]:
-				if lines[current][j+matchlen:] == lines[i][matchlen:readlen-j]:
+		if lines[current][j+rangestart:j+rangeend] in d:
+			for i in d[lines[current][j+rangestart:j+rangeend]]:
+				if lines[current][j+rangeend:skipstart] == lines[i][rangeend:skipstart-j]:
 					current = i
 					flag = 1
 					break
@@ -60,8 +62,5 @@ while True:
 	current = remainingreads.pop()
 	remainingreads.add(current)
 
-print "Done, unmatched reads = "+str(unmatched)
+print "Done, unmatched reads = " + str(unmatched)
 fout.close()
-	
-		
-

@@ -35,21 +35,20 @@ def findmajority(count):
 	return ''.join(l)
 
 infile = "SRR959239.dna"
-outfile_seq = "read_seq7.txt"
-outfile_flag = "read_flag7.txt"
-outfile_rev = "read_rev7.txt"
-outfile_noise = "read_noise7.txt"
-outfile_noisepos = "read_noisepos7.txt"
+outfile_seq = "read_seq32.txt"
+outfile_flag = "read_flag32.txt"
+outfile_rev = "read_rev32.txt"
+outfile_noise = "read_noise32.txt"
+outfile_noisepos = "read_noisepos32.txt"
 readlen = 98
 no_reads = 5372832
 matchlen = 80
 maxmatch = 18
-thresh = 4 #maximum number of mismatches allowed
-num_dict = 5 # should divide matchlen
+thresh = 10 #maximum number of mismatches allowed
+num_dict = 1 # should divide matchlen
 
-ind = [[i for i in range(j,matchlen,num_dict)] for j in range(num_dict)]
-
-print "Reading file"
+#ind = [[i for i in range(j,matchlen,num_dict)] for j in range(num_dict)]ind = [[i for i in range(30,70)]]
+ind = [[i for i in range(35,65)]]
 f = open(infile,'r')
 lines = [f.readline().rstrip('\n') for i in range(no_reads)]
 f.close()

@@ -44,11 +44,11 @@ def findmajority(count):
 
 
 
-infile = "temp1.dna"
-outfile_seq = "read_seq6.txt"
-outfile_flag = "read_flag6.txt"
-outfile_noise = "read_noise6.txt"
-outfile_noisepos = "read_noisepos6.txt"
+infile = "temp3.dna"
+outfile_seq = "read_seq31.txt"
+outfile_flag = "read_flag31.txt"
+outfile_noise = "read_noise31.txt"
+outfile_noisepos = "read_noisepos31.txt"
 
 readlen = 98
 maxmatch = 18

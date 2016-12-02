@@ -1,11 +1,12 @@
-infile = "SRR959239_orcomordered.dna"
-outfile = "temp1.dna"
-readlen = 100
+infile = "temp1.dna"
+outfile = "temp2.dna"
+readlen = 34
 no_reads = 5372832
-matchlen = 80
-maxmatch = 20
+matchlen = 10
+maxmatch = 10
 
 from Bio.Seq import Seq
+import random
 
 print "Reading file"
 f = open(infile,'r')
@@ -101,17 +102,24 @@ else:
 
 print "Number of chunks found = "+str(numchunks)
 
+random.shuffle(chunkpos)
 
 print "Constructing dictionary"
-d = {}
+d1 = {}
+d2 = {}
 for i in range(numchunks):
  	j = chunkpos[i][0]	
-	if lines[j][0:matchlen] in d:
-		d[lines[j][0:matchlen]].add(i)
+	if lines[j][0:matchlen] in d1:
+		d1[lines[j][0:matchlen]].add(i)
 	else:
-		d[lines[j][0:matchlen]] = set([i])
+		d1[lines[j][0:matchlen]] = set([i])
+	if revlines[j][0:matchlen] in d2:
+		d2[revlines[j][0:matchlen]].add(i)
+	else:
+		d2[revlines[j][0:matchlen]] = set([i]) 
 
 print "Ordering chunks and writing to file"
+unmatched = 1
 remainingchunks = set([i for i in range(numchunks)])
 current = 0
 fout = open(outfile,'w')
@@ -128,17 +136,28 @@ while True:
 		for i in range(beg,end-1,-1):
 			fout.write(lines[i]+'\n')		
 
-	d[lines[beg][0:matchlen]].remove(current)
+	d1[lines[beg][0:matchlen]].remove(current)
+	d2[revlines[beg][0:matchlen]].remove(current)
 	remainingchunks.remove(current)
 	if(len(remainingchunks)==0):
 		break
-	if len(d[lines[beg][0:matchlen]]) == 0:
-		del d[lines[beg][0:matchlen]]
+	if len(d1[lines[beg][0:matchlen]]) == 0:
+		del d1[lines[beg][0:matchlen]]
+	if len(d2[revlines[beg][0:matchlen]]) == 0:
+		del d2[revlines[beg][0:matchlen]]
 	
 	for j in range(maxmatch):
-		if lines[end][j:j+matchlen] in d:
-			for i in d[lines[end][j:j+matchlen]]:
+		if lines[end][j:j+matchlen] in d1:
+			for i in d1[lines[end][j:j+matchlen]]:
 				if lines[end][j+matchlen:] == lines[chunkpos[i][0]][matchlen:readlen-j]:
+					current = i
+					flag = 1
+					break
+			if flag == 1:
+					break
+		if lines[end][j:j+matchlen] in d2:
+			for i in d2[lines[end][j:j+matchlen]]:
+				if lines[end][j+matchlen:] == revlines[chunkpos[i][0]][matchlen:readlen-j]:
 					current = i
 					flag = 1
 					break
@@ -149,9 +168,6 @@ while True:
 #	current = random.sample(remainingreads,1)[0]
 	current = remainingchunks.pop()
 	remainingchunks.add(current)
-
-print "Done"
+	unmatched += 1
+print "Done, unmatched chunks = "+str(unmatched)
 fout.close()
-	
-		
-

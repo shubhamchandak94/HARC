@@ -1,6 +1,6 @@
 from itertools import imap
 import operator
-
+from distance import hamming
 # hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
 def hamming2(str1, str2):
     #assert len(str1) == len(str2)
@@ -9,13 +9,13 @@ def hamming2(str1, str2):
     return sum(imap(ne, str1, str2))
 #	return sum([str1[i]!=str2[i] for i in range(len(str1))])	
 
-infile = "chrom22_50x_noRC_noisy.dna"
-outfile = "tempte3.dna"
-readlen = 100
-no_reads = 17500000
+infile = "SRR959239.dna"
+outfile = "temp3.dna"
+readlen = 98
+no_reads = 5372832
 matchlen = 80
-maxmatch = 20
-thresh = 12 #maximum number of mismatches allowed
+maxmatch = 4
+thresh = 8 #maximum number of mismatches allowed
 ind = [[i for i in range(j,80,5)] for j in range(5)]
 
 print "Reading file"
@@ -49,39 +49,20 @@ while True:
 	for i in range(maxmatch):
 		l = [[lines[current][j+i] for j in ind[k]] for k in range(5)]
 		s = [''.join(l[k]) for k in range(5)]
+		inter = set()
 		for k in range(5):	
 			if s[k] in d[k]:
-				inter = set(d[k][s[k]]).intersection(remainingreads)
-				if len(inter)>0:
-					for j in inter:
-						if(hamming2(lines[current][i:],lines[j][:readlen-i])<=thresh):
-							current = j
-							flag = 1
-							break
-			if flag == 1:
-				break		
+				inter = set(d[k][s[k]]).union(inter)
+		inter = inter.intersection(remainingreads)
+		if len(inter)>0:
+			for j in inter:
+				if(hamming(lines[current][i:],lines[j][:readlen-i])<=thresh):
+					current = j
+					flag = 1
+					break
 		if flag == 1:
 			break
 
-#if len(d[lines[current][0:matchlen]]) == 0:
-#		del d[lines[current][0:matchlen]]
-#	else:
-#		for i in d[lines[current][0:matchlen]]:
-#			if hamming2(lines[current][matchlen:],lines[i][matchlen:]) <= thresh:
-#				current = i
-#				flag = 1
-#				break
-#	if flag == 1:
-#		continue
-#	for j in range(1,maxmatch):
-#		if lines[current][j:j+matchlen] in d:
-#			for i in d[lines[current][j:j+matchlen]]:
-#				if hamming2(lines[current][j+matchlen:],lines[i][matchlen:readlen-j]) <= thresh:
-#					current = i
-#					flag = 1
-#					break
-#			if flag == 1:
-#					break
 	if flag == 1:
 		continue
 	current = remainingreads.pop()

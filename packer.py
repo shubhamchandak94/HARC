@@ -1,8 +1,8 @@
-infile = "temp2.dna"
-outfile_seq = "read_seq4.txt"
-outfile_flag = "read_flag4.txt"
-readlen = 98
-maxmatch = 18
+infile = "temp3.dna"
+outfile_seq = "read_seq31.txt"
+outfile_flag = "read_flag31.txt"
+readlen = 100
+maxmatch = 20
 neg = False #whether we want to match the current read with the previous read shifted rightward 
 f_seq = open(outfile_seq,'w')
 f_flag = open(outfile_flag,'w')
