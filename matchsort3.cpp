@@ -98,7 +98,6 @@ void readDnaFile(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread)
 			std::cout << i/1000000 << "M reads read"<<"\n";
 		f >> s;
 		stringtobitset(s,read[i],revread[i]);
-		
 	}
 	f.close();
 	return;
@@ -140,29 +139,39 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 	int current = 0;
 	int flag;
 	sortedorder.push_back(current);
-	std::bitset<2*readlen> b;
-	std::bitset<2*readlen> b1;
-
+	fout << 'd';//for direct
+	std::bitset<2*readlen> *b = new std::bitset<2*readlen> [numdict];
+	std::bitset<2*readlen> b1,b2;
+	
 	for(int i = 1; i < numreads; i++)
 	{
 		if(i%1000000 == 0)
 			std::cout<< i/1000000 << "M reads done"<<"\n";
 		remainingreads.erase(current);
-		b = read[current]&mask1;
-		int pos = std::lower_bound(dict[b].begin(),dict[b].end(),current)-dict[b].begin();
-		//binary search since dict[b] is sorted
-		dict[b].erase(dict[b].begin()+pos);
-A
-		if(dict[b].size() == 0)
-			dict.erase(b);
+		for(int l = 0; l < numdict; l++)
+		{	b[l] = read[current]&mask1[l];
+			int pos = std::lower_bound(dict[l][b[l]].begin(),dict[l][b[l]].end(),current)-dict[l][b[l]].begin();
+			//binary search since dict[b] is sorted
+			dict[l][b[l]].erase(dict[l][b[l]].begin()+pos);
+			if(dict[l][b[l]].size() == 0)
+				dict[l].erase(b[l]);
+		}	
 		b1 = read[current];
+		b2 = revread[current];
 		flag = 0;
 		for(int j = 0; j < maxmatch; j++)
 		{
-			b = mask1&b1;
-			if(dict.count(b) == 1)
+			std::set<int> s;
+			std::vector<int>::iterator it;
+			for(int l = 0; l < numdict; l++)
 			{
-				for (std::vector<int>::iterator it = dict[b].begin() ; it != dict[b].end(); ++it)
+				b[l] = read[current]&mask1[l];
+				if(dict[l].count(b[l]) == 1)
+					s.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
+			}
+			if(s.size() > 0)
+			{
+				for (std::set<int>::iterator it = s.begin() ; it != s.end(); ++it)
 				{
 					int k = *it;
 					if((b1^(read[k]&mask[j])).count()<=thresh)
@@ -209,6 +218,12 @@ void generatemasks(std::bitset<2*readlen> *mask)
 void generateindexmasks(std::bitset<2*readlen> *mask1)
 {
 	for(int i = 0; i < numdict; i++)
+		mask1[i].reset();
+	for(int i = 40; i < 58; i++)
+		mask1[0] = 1;
+	return;
+}
+
 void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder)
 {
 	std::ofstream fout(outfile,std::ofstream::out);
