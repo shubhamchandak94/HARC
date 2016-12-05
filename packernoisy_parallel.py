@@ -2,7 +2,7 @@
 from joblib import Parallel, delayed
 from distance import hamming
 
-infile = "temp3.dna"
+infile = "temp.dna"
 outfile_seq = "read_seq31.txt"
 outfile_flag = "read_flag31.txt"
 outfile_noise = "read_noise31.txt"
@@ -109,6 +109,13 @@ s_flag = ['']*numcores
 s_noise = ['']*numcores
 s_noisepos = ['']*numcores
 
+i = no_reads/numcores
+startline = [i*j for j in range(numcores)]
+endline = [startline[j+1]-1 for j in range(numcores-1)]
+endline.append(no_reads)
+
+Parallel(n_jobs=numcores)(delayed(pack)(startline[i],endline[i],s_seq[i],s_flag[i],s_noise[i],s_noisepos[i]) for i in range(numdict))
+
 for i in range(numcores):
   f_seq.write(s_seq[i]+'\n')
   f_flag.write(s_flag[i]+'\n')
@@ -119,58 +126,3 @@ f_seq.close()
 f_flag.close()	
 f_noise.close()
 f_noisepos.close()
-
-k = 0
-ref = 'A'*readlen # ref is the reference which is constantly updated (introduced because matching a read to previous read leads to double noise than actual)
-prev = 'A'*readlen
-count = [[1]*readlen,[0]*readlen,[0]*readlen,[0]*readlen,[0]*readlen] #number of A's,C's,T's,G's and N's seen at each position in ref
-#Note: N is never considered in the ref - we arbitrarily place an A if only N's are seen at some position
-with open(infile,'r') as f:
-	for line in f:
-		k = k + 1
-		if k%1000000 == 0:
-			print str(k//1000000)+'M done'
-		current = line.rstrip('\n')
-		flag = 0
-		for i in range(maxmatch):
-			if(hamming(current[:(readlen-i)],ref[i:])<=thresh):
-				if(hamming(current[:(readlen-i)],ref[i:])<=hamming(current[:(readlen-i)],prev[i:])):
-					f_flag.write('r')
-					f_seq.write(current[(readlen-i):]+'\n')
-					prevj = 0;
-					for j in range(readlen-i):
-						count[char2index(current[j])][i+j] += 1		
-						if current[j]!=ref[i+j]:
-							f_noise.write(current[j])
-							f_noisepos.write("%02d"%(j-prevj))#delta encoding
-							prevj = j	
-				else:
-					f_flag.write('p')
-					f_seq.write(current[(readlen-i):]+'\n')
-					prevj = 0;
-					for j in range(readlen-i):
-						count[char2index(current[j])][i+j] += 1		
-						if current[j]!=prev[i+j]:
-							f_noise.write(current[j])
-							f_noisepos.write("%02d"%(j-prevj))#delta encoding
-							prevj = j	
-				
-				count = [count[j][i:]+[0]*i for j in range(5)]
-				for j in range(readlen-i,readlen):
-					count[char2index(current[j])][j] = 1
-				
-				ref = findmajority(count)	
-				#ref = current#ref[i:]+current[readlen-i:]
-				f_noise.write('\n')
-				flag = 1
-				break
-		
-		if flag == 0:
-			f_flag.write('0')
-			f_seq.write(current+'\n')
-			count = [[0]*readlen for j in range(5)]
-			for j in range(readlen):
-				count[char2index(current[j])][j] = 1
-			ref = findmajority(count)
-		prev = current						
-
