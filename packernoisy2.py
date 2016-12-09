@@ -1,59 +1,28 @@
-#find best match with ref or prev
-import operator
-from itertools import imap
+#find best match with ref or prev - for files with no Ns
 from distance import hamming
-#hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
 
-def char2index(c):
-	if c == 'A':
-		return 0		
-	if c == 'C':
-		return 1
-	if c == 'G':
-		return 2
-	if c == 'T':
-		return 3
-	if c == 'N':
-		return 4
+char2index = {'A':0,'C':1,'G':2,'T':3}
+index2char = {0:'A',1:'C',2:'G',3:'T'}
+
 def findmajority(count):
-	l = []
-	for i in range(len(count[0])):
-		s = [count[j][i] for j in range(5)]
-		maxcount = max(s[0:4])
-		if maxcount == 0: #only N's seen so far
-			l.append('A')
-			continue
-		if s[0] == maxcount:
-			l.append('A')
-			continue
-		if s[1] == maxcount:
-			l.append('C')
-			continue
-		if s[2] == maxcount:
-			l.append('G')
-			continue
-		if s[3] == maxcount:
-			l.append('T')
-			continue
+	maxcount = [max(s) for s in count]
+	l = [index2char[s.index(maxcount[i])] for i,s in zip(range(readlen),count)]
 	return ''.join(l)
 
 
 
-infile = "temp3.dna"
-outfile_seq = "read_seq31.txt"
-outfile_flag = "read_flag31.txt"
-outfile_noise = "read_noise31.txt"
-outfile_noisepos = "read_noisepos31.txt"
+infile = "temp1.dna"
+infile_flag = "tempflag1.txt"
+outfile_seq = "read_seq61.txt"
+outfile_flag = "read_flag61.txt"
+outfile_noise = "read_noise61.txt"
+outfile_noisepos = "read_noisepos61.txt"
 
-readlen = 98
-maxmatch = 18
-thresh = 20 # maximum number of mismatches allowed 
+readlen = 100
+maxmatch = 40
+thresh = 30 # maximum number of mismatches allowed 
 
+in_flag = open(infile_flag,'r')
 f_seq = open(outfile_seq,'w')
 f_flag = open(outfile_flag,'w')
 f_noise = open(outfile_noise,'w')
@@ -61,56 +30,66 @@ f_noisepos = open(outfile_noisepos,'w')
 k = 0
 ref = 'A'*readlen # ref is the reference which is constantly updated (introduced because matching a read to previous read leads to double noise than actual)
 prev = 'A'*readlen
-count = [[1]*readlen,[0]*readlen,[0]*readlen,[0]*readlen,[0]*readlen] #number of A's,C's,T's,G's and N's seen at each position in ref
-#Note: N is never considered in the ref - we arbitrarily place an A if only N's are seen at some position
+count = [[1,0,0,0] for i in range(readlen)] #number of A's,C's,T's,G's seen at each position in ref
+
 with open(infile,'r') as f:
 	for line in f:
 		k = k + 1
 		if k%1000000 == 0:
 			print str(k//1000000)+'M done'
 		current = line.rstrip('\n')
+		c = in_flag.read(1)
 		flag = 0
-		for i in range(maxmatch):
-			if(hamming(current[:(readlen-i)],ref[i:])<=thresh):
-				if(hamming(current[:(readlen-i)],ref[i:])<=hamming(current[:(readlen-i)],prev[i:])):
-					f_flag.write('r')
-					f_seq.write(current[(readlen-i):]+'\n')
-					prevj = 0;
-					for j in range(readlen-i):
-						count[char2index(current[j])][i+j] += 1		
-						if current[j]!=ref[i+j]:
-							f_noise.write(current[j])
-							f_noisepos.write("%02d"%(j-prevj))#delta encoding
-							prevj = j	
-				else:
-					f_flag.write('p')
-					f_seq.write(current[(readlen-i):]+'\n')
-					prevj = 0;
-					for j in range(readlen-i):
-						count[char2index(current[j])][i+j] += 1		
-						if current[j]!=prev[i+j]:
-							f_noise.write(current[j])
-							f_noisepos.write("%02d"%(j-prevj))#delta encoding
-							prevj = j	
-				
-				count = [count[j][i:]+[0]*i for j in range(5)]
-				for j in range(readlen-i,readlen):
-					count[char2index(current[j])][j] = 1
-				
-				ref = findmajority(count)	
-				#ref = current#ref[i:]+current[readlen-i:]
-				f_noise.write('\n')
-				flag = 1
-				break
-		
-		if flag == 0:
+		if c=='1':
+			for i in range(maxmatch):
+				if(hamming(current[:(readlen-i)],ref[i:])<=thresh or hamming(current[:(readlen-i)],prev[i:])<=thresh):
+					if(hamming(current[:(readlen-i)],ref[i:])<=hamming(current[:(readlen-i)],prev[i:])):
+						f_flag.write('r')
+						f_seq.write(current[(readlen-i):]+'\n')
+						prevj = 0;	
+						for j in range(readlen-i):
+							count[i+j][char2index[current[j]]] += 1		
+							if current[j]!=ref[i+j]:
+								f_noise.write(current[j])
+								f_noisepos.write("%02d"%(j-prevj))#delta encoding
+								prevj = j	
+					else:
+						f_flag.write('p')
+						f_seq.write(current[(readlen-i):]+'\n')
+						prevj = 0;
+						
+						for j in range(readlen-i):
+							count[i+j][char2index[current[j]]] += 1		
+							if current[j]!=prev[i+j]:
+								f_noise.write(current[j])
+								f_noisepos.write("%02d"%(j-prevj))#delta encoding
+								prevj = j	
+					
+					count = count[i:]+[[0,0,0,0] for t in range(i)]
+					for j in range(readlen-i,readlen):
+						count[j][char2index[current[j]]] = 1
+					ref = findmajority(count)	
+					#ref = current#ref[i:]+current[readlen-i:]
+					f_noise.write('\n')
+					flag = 1
+					break
+			
+			if flag == 0:
+				f_flag.write('0')
+				f_seq.write(current+'\n')
+				count = [[0,0,0,0] for i in range(readlen)]
+				for j in range(readlen):
+					count[j][char2index[current[j]]] = 1
+				ref = current
+			prev = current						
+		else:
 			f_flag.write('0')
 			f_seq.write(current+'\n')
-			count = [[0]*readlen for j in range(5)]
+			count = [[0,0,0,0] for i in range(readlen)]
 			for j in range(readlen):
-				count[char2index(current[j])][j] = 1
-			ref = findmajority(count)
-		prev = current						
+				count[j][char2index[current[j]]] = 1
+			ref = current
+			prev = current						
 f_seq.close()
 f_flag.close()	
 f_noise.close()
