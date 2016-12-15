@@ -2,6 +2,8 @@
 //get substring of bitset.
 //Slower than matchsort2.cpp but uses slightly less memory.
 
+//outfile contains the reordered reads (one on each line)
+
 #include <iostream>
 #include <fstream>
 #include <bitset>
