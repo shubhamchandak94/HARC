@@ -1,6 +1,5 @@
 #Maintain reference and find best match with it
-import operator
-from itertools import imap
+from distance import hamming
 
 #hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
 def hamming2(str1, str2):
@@ -72,7 +71,7 @@ with open(infile,'r') as f:
 		for i in range(minmatch):
 			if(hamming2(current[:(readlen-i)],ref[i:])<=thresh):
 				f_pos.write('+')
-				f_seq.write(current[(readlen-i+1):]+'\n')
+				f_seq.write(current[(readlen-i):]+'\n')
 				prevj = 0;
 				for j in range(readlen-i):
 					count[char2index(current[j])][i+j] += 1		

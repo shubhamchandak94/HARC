@@ -1,5 +1,7 @@
+#Second stage encoding for noiseless reads. The variable neg decides whether we want to match the current read with previous read shifted in both directions. 
+#The reordered reads in infile are encoded into outfile_seq (which stores the suffix of the read/full read for unmatched read), outfile_flag which stores 0 for unmatched, + for shifted right and - for shifted left, 
+#Instead of \n in read_seq we have a separate file outfile_pos which stores the offset from previous read
 
-#Instead of \n in read_seq we have a separate file readpos which stores the offset from previous read
 infile = "temp2.dna"
 outfile_seq = "readseq.txt"
 outfile_match = "readmatch.txt"
@@ -19,7 +21,7 @@ with open(infile,'r') as f:
 		for i in range(minmatch):
 			if(current[:readlen-i]==prev[i:]):
 				f_match.write('+')
-				f_seq.write(current[(readlen-i+1):])
+				f_seq.write(current[(readlen-i):])
 				f_pos.write("%02d"%i)
 				prev = current
 				flag = 1

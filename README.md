@@ -84,6 +84,13 @@ g++ matchsort7.cpp -std=c++11 -o a.out
 ./a.out
 ```
 
+##### Some python packages
+```
+sudo pip install distance
+sudo pip install biopython
+sudo pip install joblib
+```
+
 ##### Running Python code
 ```
 python matchsortnoisy8.py

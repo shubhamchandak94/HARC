@@ -1,11 +1,11 @@
-import random
+#Reorders reads from infile and writes reordered reads to outfile. For noiseless reads without RC. Picks the first read found in the bin (does not check if next read matches shifter version of the current read.) 
 
-infile = "chrom22_50x_noRC_random.dna"
-outfile = "temp3.dna"
-readlen = 100
-no_reads = 17500000
+infile = "SRR959239.dna"
+outfile = "temp2.dna"
+readlen = 98
+no_reads = 5372832
 matchlen = 80
-maxmatch = 20
+maxmatch = 18
 
 print "Reading file"
 f = open(infile,'r')
@@ -16,14 +16,13 @@ print "Constructing dictionary"
 d = {}
 for i in range(no_reads):
 	if lines[i][0:matchlen] in d:
-		d[lines[i][0:matchlen]].append(i)
+		d[lines[i][0:matchlen]].add(i)
 	else:
-		d[lines[i][0:matchlen]] = [i]
+		d[lines[i][0:matchlen]] = set([i])
 
 print "Ordering reads and writing to file"
 remainingreads = set([i for i in range(no_reads)])
 current = 0
-unmatched = 0
 fout = open(outfile,'w')
 while True:
 	flag = 0
@@ -37,8 +36,8 @@ while True:
 	if len(d[lines[current][0:matchlen]]) == 0:
 		del d[lines[current][0:matchlen]]
 	else:
-		for i in range(d[lines[current][0:matchlen]]):
-			if lines[current][matchlen:] == lines[i][matchlen:]:
+		for i in d[lines[current][0:matchlen]]:
+			if True:#lines[current][matchlen:] == lines[i][matchlen:]:
 				current = i
 				flag = 1
 				break
@@ -46,8 +45,8 @@ while True:
 		continue
 	for j in range(1,maxmatch):
 		if lines[current][j:j+matchlen] in d:
-			for i in range(d[lines[current][j:j+matchlen]]):
-				if lines[current][j+matchlen:] == lines[i][matchlen:readlen-j]:
+			for i in d[lines[current][j:j+matchlen]]:
+				if True:#lines[current][j+matchlen:] == lines[i][matchlen:readlen-j]:
 					current = i
 					flag = 1
 					break
@@ -55,12 +54,10 @@ while True:
 					break
 	if flag == 1:
 		continue
-#	current = random.sample(remainingreads,1)[0]
-	unmatched += 1
 	current = remainingreads.pop()
 	remainingreads.add(current)
 
-print "Done, unmatched reads = "+str(unmatched)
+print "Done"
 fout.close()
 	
 		
