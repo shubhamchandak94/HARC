@@ -1,13 +1,10 @@
-#find best match with ref or prev
-import operator
-from itertools import imap
+#Encoding for noisy reads. Maintains a reference using findmajority function and count array
+#Encodes each read in terms of clean reference or previous read whichever has smaller Hamming distance.
+#Four output files - outfile_seq has the suffix (and newline), outfile_flag has flag (r, p or 0)- ref, prev or unmatched
+#outfile_noise has the base in the current read and a newline after every read that was matched,
+#noisepos file has the noise position delta encoded with 2 digits per position (no newline here)
+#Note that the clean reference never has the N character.
 from distance import hamming
-#hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
 
 def char2index(c):
 	if c == 'A':
