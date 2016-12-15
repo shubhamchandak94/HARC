@@ -1,3 +1,6 @@
+//Reordering for real reads. First tries to find a read within thresh in the intersection of the dictionaries. Picks the first read belolw thresh. If no read within thresh is found in the intersection, then it takes the union of the reads found in the dictionary bins and looks there. 
+//The idea was to reduce noise in the high thresh setting. However benefit is negligible and the code runs very slowly.
+
 #include <iostream>
 #include <fstream>
 #include <bitset>
@@ -7,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <set>
+#include <iterator>
 
 #define infile "SRR065390_clean.dna"
 #define outfile "temp2.dna"
@@ -14,8 +18,22 @@
 #define readlen 100
 #define maxmatch 20
 #define numreads 67155743
-#define thresh 16
-#define numdict 4
+#define thresh 32
+#define numdict 2
+
+
+void generateindexmasks(std::bitset<2*readlen> *mask1)
+//function to generate dictionary index masks
+//should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included), then second should be (readlen-1-end1)-(readlen-1-start1))
+{
+	for(int i = 0; i < numdict; i++)
+		mask1[i].reset();
+	for(int i = 2*30; i < 2*49; i++)
+		mask1[0][i] = 1;
+	for(int i = 2*49; i < 2*67; i++)
+		mask1[1][i] = 1;
+	return;
+}
 
 void stringtobitset(std::string s,std::bitset<2*readlen> &read, std::bitset<2*readlen> &revread);
 
@@ -170,67 +188,117 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 		for(int j = 0; j < maxmatch; j++)
 		{
 			std::set<int> s;
+			std::vector<int> inter;
 			std::vector<int>::iterator it;
 			for(int l = 0; l < numdict; l++)
 			{
 				b[l] = b1&mask1[l];
 				if(dict[l].count(b[l]) == 1)
+				{
 					s.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
+					if(inter.size()==0)
+						inter = dict[l][b[l]];
+					else
+					{
+						std::vector<int> common;
+						std::set_intersection(inter.begin(),inter.end(),dict[l][b[l]].begin(),dict[l][b[l]].end(), std::back_inserter(common));
+						inter = common;
+					}
+				}
+			}
+			if(inter.size() > 0)
+			{
+				for (std::vector<int>::iterator it = inter.begin() ; it != inter.end(); ++it)
+				{	
+					int k = *it;
+					if((b1^(read[k]&mask[j])).count()<=thresh)
+					{
+						current = k;
+						flag = 1;
+						revflag = 0;
+						revcomp.push_back(revflag);
+						sortedorder.push_back(current);
+						break;
+					}			
+					
+				}
+				if(flag == 1)
+					break;
 			}
 			if(s.size() > 0)
 			{
-				int bestmatch = 2*readlen,bestmatchpos;
 				for (std::set<int>::iterator it = s.begin() ; it != s.end(); ++it)
 				{
-					if((b1^(read[*it]&mask[j])).count()<bestmatch)
+					int k = *it;
+					if((b1^(read[k]&mask[j])).count()<=thresh)
 					{
-						bestmatch = (b1^(read[*it]&mask[j])).count();
-						bestmatchpos = *it;
-					}
-				}
-				if(bestmatch <= thresh)
-				{
-					current = bestmatchpos;
-					flag = 1;
-					revflag = 0;
-					revcomp.push_back(revflag);
-					sortedorder.push_back(current);
-					break;
-				}			
+						current = k;
+						flag = 1;
+						revflag = 0;
+						revcomp.push_back(revflag);
+						sortedorder.push_back(current);
+						break;
+					}			
 					
+				}
 				if(flag == 1)
 					break;
 			}
 			b1>>=2;
 
 			std::set<int> s1;
+			std::vector<int> inter1;
 			for(int l = 0; l < numdict; l++)
 			{
 				b[l] = b2&mask1[l];
 				if(dict[l].count(b[l]) == 1)
+				{
 					s1.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
+					if(inter1.size()==0)
+						inter1 = dict[l][b[l]];
+					else
+					{
+						std::vector<int> common;
+						set_intersection(inter1.begin(),inter1.end(),dict[l][b[l]].begin(),dict[l][b[l]].end(), std::back_inserter(common));
+						inter1 = common;
+					}
+				}
+			}
+			if(inter1.size() > 0)
+			{
+				for (std::vector<int>::iterator it = inter1.begin() ; it != inter1.end(); ++it)
+				{
+					int k = *it;
+					if((b2^(read[k]&mask[j])).count()<=thresh)
+					{
+						current = k;
+						flag = 1;
+						revflag = 1;
+						revcomp.push_back(revflag);
+						sortedorder.push_back(current);
+						break;
+					}			
+					
+				}
+				if(flag == 1)
+					break;
 			}
 			if(s1.size() > 0)
 			{
-				int bestmatch = 2*readlen,bestmatchpos;
 				for (std::set<int>::iterator it = s1.begin() ; it != s1.end(); ++it)
 				{
-					if((b2^(read[*it]&revmask[j])).count()<bestmatch)
+					int k = *it;
+					if((b2^(read[k]&revmask[j])).count()<=thresh)
 					{
-						bestmatch = (b2^(read[*it]&revmask[j])).count();
-						bestmatchpos = *it;
-					}
-				}
-				if(bestmatch <= thresh)
-				{
-					current = bestmatchpos;
-					flag = 1;
-					revflag = 1;
-					revcomp.push_back(revflag);
-					sortedorder.push_back(current);
-					break;
-				}			
+						current = k;
+						flag = 1;
+						revflag = 1;
+						revcomp.push_back(revflag);
+						sortedorder.push_back(current);
+						break;
+					}			
 					
+				}
 				if(flag == 1)
 					break;
 			}
@@ -265,20 +333,6 @@ void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
 }
 
 
-void generateindexmasks(std::bitset<2*readlen> *mask1)
-{
-	for(int i = 0; i < numdict; i++)
-		mask1[i].reset();
-	for(int i = 2*20; i < 2*35; i++)
-		mask1[0][i] = 1;
-	for(int i = 2*35; i < 2*50; i++)
-		mask1[1][i] = 1;
-	for(int i = 2*50; i < 2*65; i++)
-		mask1[2][i] = 1;
-	for(int i = 2*65; i < 2*80; i++)
-		mask1[3][i] = 1;
-	return;
-}
 
 void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp)
 {

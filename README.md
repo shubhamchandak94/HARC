@@ -12,6 +12,7 @@ cat SRR065390_1.fastq SRR065390_2.fastq > SRR065390.fastq
 For some datasets (e.g. SRR327342 and SRR870667), the two fastq files may have reads of different lengths
 
 ###### Metagenomics
+B
 ```
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.1.fq.gz
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.2.fq.gz
@@ -83,6 +84,32 @@ with open('SRR065390_clean.dna','r') as f:
 g++ matchsort7.cpp -std=c++11 -o a.out
 ./a.out
 ```
+##### Using Google sparsehashmap
+###### Installing
+```
+git clone https://github.com/sparsehash/sparsehash.git
+cd sparsehash
+./configure
+sudo make install
+```
+###### Using
+In the code replace 
+```cpp
+#include<unordered_map>
+```
+by
+```cpp
+#include<sparsehash/sparse_hash_map>
+```
+and replace the data type
+```cpp
+std::unordered_map<>
+```
+by
+```cpp
+google::sparse_hash_map<>
+```
+There should be no need to change anything else. However note that sparsehashmap does not seem to work with bitset as the index. One way to get around this (if the index length is not too large) is to use the bitset.ulong function.
 
 ##### Some python packages
 ```
@@ -120,4 +147,5 @@ make
 ./gen_fastq 35000000 100 PATH/chrom22clean.fasta PATH/chrom22_reads.fastq -e
 ```
 
+B
 To get reads without reverse complementation, replace gen_fastq by gen_fastq_noRC above.

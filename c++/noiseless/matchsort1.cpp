@@ -1,3 +1,6 @@
+//Reordering stage for noiseless reads. Uses bitset of length 2*matchlen as dictionary index. Splice function is used to get substring of bitset.
+//Slower than matchsort2.cpp but uses slightly less memory.
+
 #include <iostream>
 #include <fstream>
 #include <bitset>
@@ -12,6 +15,7 @@
 #define readlen 100
 #define maxmatch 20
 #define numreads 17500000
+#define matchlen 20
 
 void stringtobitset(std::string s,std::bitset<2*readlen> &b);
 
@@ -19,13 +23,13 @@ std::string bitsettostring(std::bitset<2*readlen> b);
 
 void readDnaFile(std::bitset<2*readlen> *read);
 
-void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> &dict);
+void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*matchlen>,std::vector<int>> &dict);
 
-//std::bitset<2*readlen> splice(std::bitset<2*readlen> b, int start, int end); 
+std::bitset<2*matchlen> splice(std::bitset<2*readlen> b, int start, int end); 
 
 void generatemasks(std::bitset<2*readlen> *mask);
 
-void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> &dict,std::vector<int> &sortedorder);
+void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*matchlen>,std::vector<int>> &dict,std::vector<int> &sortedorder);
 
 void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder);
 
@@ -37,7 +41,7 @@ int main()
 	//using vector instead of list to save some space (at the cost of linear time required to delete elements)
 	readDnaFile(read);
 	std::cout << "Constructing dictionaries\n";
-	std::unordered_map<std::bitset<2*readlen>,std::vector<int>> dict;
+	std::unordered_map<std::bitset<2*matchlen>,std::vector<int>> dict;
 	dict.reserve(numreads);
 	constructdictionary(read,dict);
 	std::vector<int> sortedorder;
@@ -90,19 +94,14 @@ void readDnaFile(std::bitset<2*readlen> *read)
 }
 		
 
-void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> &dict)
+void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*matchlen>,std::vector<int>> &dict)
 {
-	std::bitset<2*readlen> b;
-	std::bitset<2*readlen> mask;
-	for(int i = 0; i < 40; i++)
-		mask[i] = 1;
-	for(int i = 40; i < 2*readlen; i++)
-		mask[i] = 0;
+	std::bitset<2*matchlen> b;
 	for(int i = 0; i < numreads; i++)
 	{	
 		if(i%1000000 == 0)
 			std::cout << i/1000000 << "M reads done"<<"\n";
-		b = read[i]&mask;
+		b = splice(read[i],0,2*matchlen);
 		if(dict.count(b) == 1)
 			dict[b].push_back(i);
 		else
@@ -111,24 +110,19 @@ void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::b
 	return;
 }
 
-std::bitset<2*readlen> splice(std::bitset<2*readlen> b, int start, int end)
+std::bitset<2*matchlen> splice(std::bitset<2*readlen> b, int start, int end)
 {
-	std::bitset<2*readlen> b1;
+	std::bitset<2*matchlen> b1;
 	for (int i = start; i < end; i++)
 		b1[i-start] = b[i];
 	return b1;
 }
 
 
-void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> &dict, std::vector<int> &sortedorder)
+void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*matchlen>,std::vector<int>> &dict, std::vector<int> &sortedorder)
 {	
 	std::bitset<2*readlen> *mask = new std::bitset<2*readlen> [maxmatch];
 	generatemasks(mask);
-	std::bitset<2*readlen> mask1;
-	for(int i = 0; i < 40; i++)
-		mask1[i] = 1;
-	for(int i = 40; i < 2*readlen; i++)
-		mask1[i] = 0;
 	std::unordered_set<int> remainingreads;
 
 	for(int i = 0; i < numreads; i++)
@@ -137,15 +131,15 @@ void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*read
 	int current = 0;
 	int flag;
 	sortedorder.push_back(current);
-	std::bitset<2*readlen> b;
+	std::bitset<2*matchlen> b;
 	std::bitset<2*readlen> b1;
 
 	for(int i = 1; i < numreads; i++)
 	{
 		if(i%1000000 == 0)
-			std::cout<< i/1000000 << "M reads done"<<"\n";
+			std::cout<<unmatched << i/1000000 << "M reads done"<<"\n";
 		remainingreads.erase(current);
-		b = read[current]&mask1;
+		b = splice(read[current],0,2*matchlen);
 		int pos = std::lower_bound(dict[b].begin(),dict[b].end(),current)-dict[b].begin();
 		//binary search since dict[b] is sorted
 		dict[b].erase(dict[b].begin()+pos);
@@ -155,7 +149,7 @@ void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*read
 		flag = 0;
 		for(int j = 0; j < maxmatch; j++)
 		{
-			b = mask1&b1;
+			b = splice(b1,0,2*matchlen);
 			if(dict.count(b) == 1)
 			{
 				for (std::vector<int>::iterator it = dict[b].begin() ; it != dict[b].end(); ++it)
@@ -183,11 +177,9 @@ void reorder(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*read
 			sortedorder.push_back(current);
 		}
 	}
-	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
+	std::cout << "Reordering done, "<<unmatched<<" were unmatched";
 	return;
 }
-
-
 void generatemasks(std::bitset<2*readlen> *mask)
 {
 	for(int i = 0; i < maxmatch; i++)
@@ -238,3 +230,5 @@ std::string bitsettostring(std::bitset<2*readlen> b)
 	}
 	return s;
 }
+
+	

@@ -1,3 +1,5 @@
+//v1 mentioned in the report. Reordering without using any clean reference. First union of all dictionary bins is taken and then a read in a bin picked if hamming distance is below threshold.
+//generates three output files: outfile has the reordered reads (some might be reverse complemented), outfileRC has 0's and 1's where 0 means that read is not RC and 1 means it is, outfileflag has information which can be useful to the second stage - it contains 0 or 1 depending on whether the read is a matched or not (so second stage immediately realizes if a read is unmatched)
 #include <iostream>
 #include <fstream>
 #include <bitset>
@@ -7,16 +9,29 @@
 #include <vector>
 #include <algorithm>
 #include <set>
-#include <iterator>
 
-#define infile "SRR065390_clean.dna"
-#define outfile "temp2.dna"
-#define outfileRC "tempRC2.txt"
-#define readlen 100
-#define maxmatch 20
-#define numreads 67155743
-#define thresh 32
+#define infile "SRR327342_2_clean.dna"
+#define outfile "temp7.dna"
+#define outfileRC "tempRC7.txt"
+#define outfileflag "tempflag7.txt"
+#define readlen 75
+#define maxmatch 23
+#define numreads 14283592
+#define thresh 16
 #define numdict 2
+
+void generateindexmasks(std::bitset<2*readlen> *mask1)
+//function to generate dictionary index masks
+//should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included), then second should be (readlen-1-end1)-(readlen-1-start1))
+{
+	for(int i = 0; i < numdict; i++)
+		mask1[i].reset();
+	for(int i = 2*23; i < 2*38; i++)
+		mask1[0][i] = 1;
+	for(int i = 2*37; i < 2*52; i++)
+		mask1[1][i] = 1;
+	return;
+}
 
 void stringtobitset(std::string s,std::bitset<2*readlen> &read, std::bitset<2*readlen> &revread);
 
@@ -26,13 +41,11 @@ void readDnaFile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread);
 
 void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict);
 
-void generateindexmasks(std::bitset<2*readlen> *mask1);
-
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
 
-void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::vector<int> &sortedorder,std::vector<int> &revcomp);
+void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int>& flagvec);
 
-void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp);
+void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec);
 
 
 int main()
@@ -45,11 +58,11 @@ int main()
 	std::cout << "Constructing dictionaries\n";
 	std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict = new std::unordered_map<std::bitset<2*readlen>,std::vector<int>> [numdict];
 	constructdictionary(read,dict);
-	std::vector<int> sortedorder,revcomp;
+	std::vector<int> sortedorder,revcomp,flagvec;
 	std::cout << "Reordering reads\n";
-	reorder(read,revread,dict,sortedorder,revcomp);
+	reorder(read,revread,dict,sortedorder,revcomp,flagvec);
 	std::cout << "Writing to file\n";
-	writetofile(read,revread,sortedorder,revcomp);	
+	writetofile(read,revread,sortedorder,revcomp,flagvec);	
 	std::cout << "Done!\n";
 	return 0;
 }
@@ -125,7 +138,7 @@ void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::b
 	return;
 }
 
-void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::vector<int> &sortedorder,std::vector<int> &revcomp)
+void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec)
 {	
 	std::bitset<2*readlen> *mask = new std::bitset<2*readlen> [maxmatch];
 	std::bitset<2*readlen> *revmask = new std::bitset<2*readlen> [maxmatch];
@@ -142,6 +155,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 	//flag to check if match was found or not, revflag to check if the current read is forward or reverse 
 	sortedorder.push_back(current);
 	revcomp.push_back(0);//for direct
+	flagvec.push_back(0);//for unmatched
 	std::bitset<2*readlen> *b = new std::bitset<2*readlen> [numdict];
 	std::bitset<2*readlen> b1,b2;
 	
@@ -171,42 +185,12 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 		for(int j = 0; j < maxmatch; j++)
 		{
 			std::set<int> s;
-			std::vector<int> inter;
 			std::vector<int>::iterator it;
 			for(int l = 0; l < numdict; l++)
 			{
 				b[l] = b1&mask1[l];
 				if(dict[l].count(b[l]) == 1)
-				{
 					s.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
-					if(inter.size()==0)
-						inter = dict[l][b[l]];
-					else
-					{
-						std::vector<int> common;
-						std::set_intersection(inter.begin(),inter.end(),dict[l][b[l]].begin(),dict[l][b[l]].end(), std::back_inserter(common));
-						inter = common;
-					}
-				}
-			}
-			if(inter.size() > 0)
-			{
-				for (std::vector<int>::iterator it = inter.begin() ; it != inter.end(); ++it)
-				{	
-					int k = *it;
-					if((b1^(read[k]&mask[j])).count()<=thresh)
-					{
-						current = k;
-						flag = 1;
-						revflag = 0;
-						revcomp.push_back(revflag);
-						sortedorder.push_back(current);
-						break;
-					}			
-					
-				}
-				if(flag == 1)
-					break;
 			}
 			if(s.size() > 0)
 			{
@@ -220,6 +204,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 						revflag = 0;
 						revcomp.push_back(revflag);
 						sortedorder.push_back(current);
+						flagvec.push_back(1);//for matched
 						break;
 					}			
 					
@@ -230,41 +215,11 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 			b1>>=2;
 
 			std::set<int> s1;
-			std::vector<int> inter1;
 			for(int l = 0; l < numdict; l++)
 			{
 				b[l] = b2&mask1[l];
 				if(dict[l].count(b[l]) == 1)
-				{
 					s1.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
-					if(inter1.size()==0)
-						inter1 = dict[l][b[l]];
-					else
-					{
-						std::vector<int> common;
-						set_intersection(inter1.begin(),inter1.end(),dict[l][b[l]].begin(),dict[l][b[l]].end(), std::back_inserter(common));
-						inter1 = common;
-					}
-				}
-			}
-			if(inter1.size() > 0)
-			{
-				for (std::vector<int>::iterator it = inter1.begin() ; it != inter1.end(); ++it)
-				{
-					int k = *it;
-					if((b2^(read[k]&mask[j])).count()<=thresh)
-					{
-						current = k;
-						flag = 1;
-						revflag = 1;
-						revcomp.push_back(revflag);
-						sortedorder.push_back(current);
-						break;
-					}			
-					
-				}
-				if(flag == 1)
-					break;
 			}
 			if(s1.size() > 0)
 			{
@@ -278,6 +233,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 						revflag = 1;
 						revcomp.push_back(revflag);
 						sortedorder.push_back(current);
+						flagvec.push_back(1);
 						break;
 					}			
 					
@@ -294,6 +250,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 			revflag = 0;
 			revcomp.push_back(revflag);
 			sortedorder.push_back(current);
+			flagvec.push_back(0);
 		}
 	}
 	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
@@ -316,24 +273,16 @@ void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
 }
 
 
-void generateindexmasks(std::bitset<2*readlen> *mask1)
-{
-	for(int i = 0; i < numdict; i++)
-		mask1[i].reset();
-	for(int i = 2*30; i < 2*49; i++)
-		mask1[0][i] = 1;
-	for(int i = 2*49; i < 2*67; i++)
-		mask1[1][i] = 1;
-	return;
-}
 
-void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp)
+void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec)
 {
 	std::ofstream fout(outfile,std::ofstream::out);
 	std::ofstream foutRC(outfileRC,std::ofstream::out);
-	std::vector<int>::iterator it1,it2;
-	for (it1 = sortedorder.begin(),it2 = revcomp.begin() ; it1 != sortedorder.end(); ++it1,++it2)
+	std::ofstream foutflag(outfileflag,std::ofstream::out);
+	std::vector<int>::iterator it1,it2,it3;
+	for (it1 = sortedorder.begin(),it2 = revcomp.begin(),it3 = flagvec.begin() ; it1 != sortedorder.end(); ++it1,++it2,++it3)
 	{
+		foutflag << *it3;
 		if(*it2 == 0)
 		{
 			fout<<bitsettostring(read[*it1])<<"\n";
@@ -347,6 +296,7 @@ void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, s
 	}
 	fout.close();
 	foutRC.close();
+	foutflag.close();
 	return;
 }
 

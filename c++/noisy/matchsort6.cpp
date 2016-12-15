@@ -1,3 +1,6 @@
+//Reordering for real reads
+
+
 #include <iostream>
 #include <fstream>
 #include <bitset>
@@ -19,6 +22,19 @@
 #define thresh1 24 //thresh for 2nd stage
 #define numdict 2
 
+void generateindexmasks(std::bitset<2*readlen> *mask1)
+//function to generate dictionary index masks
+//should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included), then second should be (readlen-1-end1)-(readlen-1-start1))
+{
+	for(int i = 0; i < numdict; i++)
+		mask1[i].reset();
+	for(int i = 2*30; i < 2*50; i++)
+		mask1[0][i] = 1;
+	for(int i = 2*50; i < 2*70; i++)
+		mask1[1][i] = 1;
+	return;
+}
+
 void stringtobitset(std::string s,std::bitset<2*readlen> &read, std::bitset<2*readlen> &revread);
 
 std::string bitsettostring(std::bitset<2*readlen> b);
@@ -32,6 +48,8 @@ void generateindexmasks(std::bitset<2*readlen> *mask1);
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
 
 void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::unordered_map<int,std::vector<int>> &sortedorder);
+
+void recoversingletons(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::unordered_map<int,std::vector<int>> &sortedorder);
 
 void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::unordered_map<int,std::vector<int>> &sortedorder);
 
@@ -49,6 +67,8 @@ int main()
 	//0th read has prev -1 and last read has next 0
 	std::cout << "Reordering reads\n";
 	reorder(read,revread,dict,sortedorder);
+	std::cout << "Trying to rematch singletons\n";
+	recoversingletons(read,revread,dict,sortedorder);
 	std::cout << "Writing to file\n";
 	writetofile(read,revread,sortedorder);	
 	std::cout << "Done!\n";
@@ -237,12 +257,28 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 		}
 	}
 	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
-	std::cout << "Trying to rematch singleton reads\n";
+	return;
+}
+
+void recoversingletons(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::unordered_map<int,std::vector<int>> &sortedorder)
+{	
+	std::bitset<2*readlen> *mask = new std::bitset<2*readlen> [maxmatch];
+	std::bitset<2*readlen> *revmask = new std::bitset<2*readlen> [maxmatch];
+	generatemasks(mask,revmask);
+	std::bitset<2*readlen> *mask1 = new std::bitset<2*readlen> [numdict];
+	generateindexmasks(mask1);
+	int matched = 0;
+	int flag;
+	//flag to check if match was found or not, revflag to check if the current read is forward or reverse 
+	std::bitset<2*readlen> *b = new std::bitset<2*readlen> [numdict];
+	std::bitset<2*readlen> b1,b2;
+
 	std::cout << "Constructing dictionaries again\n";
 	for(int i = 0; i < numdict; i++)
 		dict[i].clear();
 	constructdictionary(read,dict);
-	current = 0;
+	
+	int current = 0;
 	int next,prev;
 	std::vector<int> currentvec;
 	while(1)
@@ -306,7 +342,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 								sortedorder[k][3] = 0;
 								sortedorder[k][4] = j;
 							}
-							unmatched -= 1;
+							matched += 1;
 							break;
 						}			
 						
@@ -358,7 +394,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 								sortedorder[k][3] = 1;
 								sortedorder[k][4] = j;
 							}
-							unmatched -= 1;
+							matched += 1;
 							break;
 						}
 					}
@@ -371,7 +407,7 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 		}
 		current = next;
 	}
-	std::cout << unmatched <<" reads still unmatched\n";
+	std::cout << matched <<" singleton reads were unmatched\n";
 	return;
 }
 
@@ -390,17 +426,6 @@ void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
 	return;
 }
 
-
-void generateindexmasks(std::bitset<2*readlen> *mask1)
-{
-	for(int i = 0; i < numdict; i++)
-		mask1[i].reset();
-	for(int i = 2*30; i < 2*50; i++)
-		mask1[0][i] = 1;
-	for(int i = 2*50; i < 2*70; i++)
-		mask1[1][i] = 1;
-	return;
-}
 
 void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::unordered_map<int,std::vector<int>> &sortedorder)
 {
