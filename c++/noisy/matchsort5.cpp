@@ -1,5 +1,9 @@
-//Reordering for real reads. First tries to find a read within thresh in the intersection of the dictionaries. Picks the first read belolw thresh. If no read within thresh is found in the intersection, then it takes the union of the reads found in the dictionary bins and looks there. 
+//Reordering for real reads. First tries to find a read within thresh in the intersection of the dictionaries. 
+//Picks the first read belolw thresh. If no read within thresh is found in the intersection, 
+//then it takes the union of the reads found in the dictionary bins and looks there. 
 //The idea was to reduce noise in the high thresh setting. However benefit is negligible and the code runs very slowly.
+
+//Note that reads with N are currently not supported
 
 #include <iostream>
 #include <fstream>
