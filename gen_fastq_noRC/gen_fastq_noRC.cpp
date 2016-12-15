@@ -59,10 +59,10 @@ void generate_fastq(const char* ref_, const long long ref_len_, const long long 
 	seq_sym['G'] = seq_sym['g'] = 1;
 	seq_sym['C'] = seq_sym['c'] = 2;
 	seq_sym['T'] = seq_sym['t'] = 3;
-	rc_sym['A'] = 'T';
-	rc_sym['T'] = 'A';
-	rc_sym['C'] = 'G';
-	rc_sym['G'] = 'C';
+	rc_sym['A'] = 'A';
+	rc_sym['T'] = 'T';
+	rc_sym['C'] = 'C';
+	rc_sym['G'] = 'G';
 
 	char seq_rand_trans[4][4] = {	{'G', 'C', 'T', 'N'},
 									{'A', 'C', 'T', 'N'},
@@ -105,10 +105,10 @@ void generate_fastq(const char* ref_, const long long ref_len_, const long long 
 
 		const char* ref_dna = ref_ + ref_pos;
 
-		if (i & 1)		// try reverse-compliment ?
+		if (i & 1)		
 		{
 			for	(int i = 0; i < read_len_; ++i)
-				read_dna[i] = rc_sym[ref_dna[read_len_-i]];
+				read_dna[i] = rc_sym[ref_dna[i]];
 		}
 		else
 		{
@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 {
 	if (argc < 5)
 	{
-		std::cerr << "Usage: gen_fastq <no_reads> <length> <input_file> <output_file> [-e]\n";
+		std::cerr << "Usage: gen_fastq_noRC <no_reads> <length> <input_file> <output_file> [-e]\n";
 		return 1;
 	}
 
