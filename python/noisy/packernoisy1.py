@@ -1,12 +1,10 @@
-#Maintain reference and find best match with it
-from distance import hamming
+#Encoding for noisy reads. Encodes each read in terms of clean reference (maintained using findmajority function and count array) 
+#Four output files - outfile_seq has the suffix (and newline), outfile_flag has flag (+ or 0)
+#outfile_noise has the base in the current read and a newline after every read that was matched,
+#noisepos file has the noise position delta encoded with 2 digits per position (no newline here)
+#Note that the clean reference never has the N character.
 
-#hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
+from distance import hamming
 
 def char2index(c):
 	if c == 'A':
