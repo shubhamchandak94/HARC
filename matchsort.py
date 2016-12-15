@@ -16,9 +16,9 @@ print "Constructing dictionary"
 d = {}
 for i in range(no_reads):
 	if lines[i][0:matchlen] in d:
-		d[lines[i][0:matchlen]].add(i)
+		d[lines[i][0:matchlen]].append(i)
 	else:
-		d[lines[i][0:matchlen]] = set([i])
+		d[lines[i][0:matchlen]] = [i]
 
 print "Ordering reads and writing to file"
 remainingreads = set([i for i in range(no_reads)])
@@ -37,7 +37,7 @@ while True:
 	if len(d[lines[current][0:matchlen]]) == 0:
 		del d[lines[current][0:matchlen]]
 	else:
-		for i in d[lines[current][0:matchlen]]:
+		for i in range(d[lines[current][0:matchlen]]):
 			if lines[current][matchlen:] == lines[i][matchlen:]:
 				current = i
 				flag = 1
@@ -46,7 +46,7 @@ while True:
 		continue
 	for j in range(1,maxmatch):
 		if lines[current][j:j+matchlen] in d:
-			for i in d[lines[current][j:j+matchlen]]:
+			for i in range(d[lines[current][j:j+matchlen]]):
 				if lines[current][j+matchlen:] == lines[i][matchlen:readlen-j]:
 					current = i
 					flag = 1

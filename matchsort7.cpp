@@ -8,18 +8,18 @@
 #include <algorithm>
 #include <set>
 
-#define infile "SRR065390_clean.dna"
-#define outfile "temp2.dna"
-#define outfileRC "tempRC2.txt"
-#define outfileflag "tempflag2.txt"
-#define readlen 100
-#define maxmatch 20
-#define numreads 67155743
+#define infile "SRR870667_1_clean.dna"
+#define outfile "temp1.dna"
+#define outfileRC "tempRC1.txt"
+#define outfileflag "tempflag1.txt"
+#define readlen 108
+#define maxmatch 40
+#define numreads 68266234
 #define thresh 16
-#define thresh1 24 //thresh for 2nd stage
 #define numdict 2
 
 void stringtobitset(std::string s,std::bitset<2*readlen> &read, std::bitset<2*readlen> &revread);
+
 
 std::string bitsettostring(std::bitset<2*readlen> b);
 
@@ -31,9 +31,12 @@ void generateindexmasks(std::bitset<2*readlen> *mask1);
 
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
 
-void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::unordered_map<int,std::vector<int>> &sortedorder);
+void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int>& flagvec);
 
-void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::unordered_map<int,std::vector<int>> &sortedorder);
+void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec);
+
+void updaterefcount(std::bitset<2*readlen> current, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, int shift);
+
 
 int main()
 {
@@ -45,12 +48,11 @@ int main()
 	std::cout << "Constructing dictionaries\n";
 	std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict = new std::unordered_map<std::bitset<2*readlen>,std::vector<int>> [numdict];
 	constructdictionary(read,dict);
-	std::unordered_map<int,std::vector<int>> sortedorder;//readno - {prev,next,matched?,revflag,offset}
-	//0th read has prev -1 and last read has next 0
+	std::vector<int> sortedorder,revcomp,flagvec;
 	std::cout << "Reordering reads\n";
-	reorder(read,revread,dict,sortedorder);
+	reorder(read,revread,dict,sortedorder,revcomp,flagvec);
 	std::cout << "Writing to file\n";
-	writetofile(read,revread,sortedorder);	
+	writetofile(read,revread,sortedorder,revcomp,flagvec);	
 	std::cout << "Done!\n";
 	return 0;
 }
@@ -126,10 +128,12 @@ void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::b
 	return;
 }
 
-void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::unordered_map<int,std::vector<int>> &sortedorder)
+void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec)
 {	
 	std::bitset<2*readlen> *mask = new std::bitset<2*readlen> [maxmatch];
 	std::bitset<2*readlen> *revmask = new std::bitset<2*readlen> [maxmatch];
+	std::bitset<2*readlen> ref,revref;
+	int count[4][readlen];
 	generatemasks(mask,revmask);
 	std::bitset<2*readlen> *mask1 = new std::bitset<2*readlen> [numdict];
 	generateindexmasks(mask1);
@@ -137,11 +141,14 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 
 	for(int i = 0; i < numreads; i++)
 		remainingreads.insert(i);
-	int unmatched = 1;
+	int unmatched = 0;
 	int current = 0;
-	int flag,revflag = 0;
+	int flag;
 	//flag to check if match was found or not, revflag to check if the current read is forward or reverse 
-	sortedorder[0] = {-1,0,0,0,0};
+	sortedorder.push_back(current);
+	revcomp.push_back(0);//for direct
+	flagvec.push_back(0);//for unmatched
+	updaterefcount(read[current],ref,revref,count,true,0);
 	std::bitset<2*readlen> *b = new std::bitset<2*readlen> [numdict];
 	std::bitset<2*readlen> b1,b2;
 	
@@ -158,19 +165,15 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 			if(dict[l][b[l]].size() == 0)
 				dict[l].erase(b[l]);
 		}
-		if (revflag == 0)	
-		{	b1 = read[current];
-			b2 = revread[current];
-		}
-		else
-		{
-			b1 = revread[current];
-			b2 = read[current];
-		}
+			
+		b1 = ref;
+		b2 = revref;
+		
 		flag = 0;
 		for(int j = 0; j < maxmatch; j++)
 		{
 			std::set<int> s;
+			std::vector<int>::iterator it;
 			for(int l = 0; l < numdict; l++)
 			{
 				b[l] = b1&mask1[l];
@@ -184,11 +187,12 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 					int k = *it;
 					if((b1^(read[k]&mask[j])).count()<=thresh)
 					{
-						flag = 1;
-						revflag = 0;
-						sortedorder[k]={current,0,1,0,j};
-						sortedorder[current][1] = k;
 						current = k;
+						flag = 1;
+						updaterefcount(read[current],ref,revref,count,false,j);
+						revcomp.push_back(0);
+						sortedorder.push_back(current);
+						flagvec.push_back(1);//for matched
 						break;
 					}			
 					
@@ -212,11 +216,12 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 					int k = *it;
 					if((b2^(read[k]&revmask[j])).count()<=thresh)
 					{
-						flag = 1;
-						revflag = 1;
-						sortedorder[k]={current,0,1,1,j};
-						sortedorder[current][1] = k;
 						current = k;
+						flag = 1;
+						updaterefcount(revread[current],ref,revref,count,false,j);
+						revcomp.push_back(1);
+						sortedorder.push_back(current);
+						flagvec.push_back(1);
 						break;
 					}			
 					
@@ -229,149 +234,14 @@ void reorder(std::bitset<2*readlen> *read, std::bitset<2*readlen> *revread, std:
 		if(flag == 0)
 		{
 			unmatched += 1;
-			int k = *remainingreads.begin();
-			revflag = 0;
-		        sortedorder[k] = {current,0,0,0,0};
-			sortedorder[current][1] = k;	
-			current = k;
+			current = *remainingreads.begin();
+			revcomp.push_back(0);
+			updaterefcount(read[current],ref,revref,count,true,0);
+			sortedorder.push_back(current);
+			flagvec.push_back(0);
 		}
 	}
 	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
-	std::cout << "Trying to rematch singleton reads\n";
-	std::cout << "Constructing dictionaries again\n";
-	for(int i = 0; i < numdict; i++)
-		dict[i].clear();
-	constructdictionary(read,dict);
-	current = 0;
-	int next,prev;
-	std::vector<int> currentvec;
-	while(1)
-	{
-		currentvec = sortedorder[current];
-		next = currentvec[1];
-		prev = currentvec[0];
-		if(prev == -1)//first read
-		{
-			current = next;
-			continue;
-		}	
-		if(next == 0)//last read
-			break;
-		if(currentvec[2] == 0 && sortedorder[currentvec[1]][2] == 0)//singleton read
-		{
-			b1 = read[current];
-			b2 = revread[current];
-			flag = 0;
-			for(int j = 0; j < maxmatch; j++)
-			{
-				std::set<int> s;
-				for(int l = 0; l < numdict; l++)
-				{
-					b[l] = b1&mask1[l];
-					if(dict[l].count(b[l]) == 1)
-						s.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
-				}
-				if(s.size() > 0)
-				{
-					for (std::set<int>::iterator it = s.begin() ; it != s.end(); ++it)
-					{
-						int k = *it;
-						if(k==current||(sortedorder[k][2] == 1 && sortedorder[k][4]<j)||sortedorder[k][0]==-1)
-							continue;//if read k is matched with a smaller offset or is the first read, skip
-						if((b1^(read[k]&mask[j])).count()<=thresh1)
-						{
-							flag = 1;
-							if(sortedorder[k][2] == 1)//k was matched to something
-							{
-								sortedorder[prev][1] = next;
-								sortedorder[next][0] = prev;
-								sortedorder[sortedorder[k][0]][1] = current;
-								sortedorder[current][0] = sortedorder[k][0];
-								sortedorder[current][1] = k;
-								sortedorder[current][2] = 1;
-								sortedorder[current][3] = sortedorder[k][3];
-								sortedorder[current][4] = sortedorder[k][4] -j;	
-								sortedorder[k][0] = current;
-								sortedorder[k][4] = j;
-							}
-							else
-							{
-								sortedorder[prev][1] = next;
-								sortedorder[next][0] = prev;
-								sortedorder[sortedorder[k][0]][1] = current;
-								sortedorder[current][0] = sortedorder[k][0];
-								sortedorder[current][1] = k;
-								sortedorder[k][0] = current;
-								sortedorder[k][2] = 1;
-								sortedorder[k][3] = 0;
-								sortedorder[k][4] = j;
-							}
-							unmatched -= 1;
-							break;
-						}			
-						
-					}
-					if(flag == 1)
-						break;
-				}
-				b1>>=2;
-
-				std::set<int> s1;
-				for(int l = 0; l < numdict; l++)
-				{
-					b[l] = b2&mask1[l];
-					if(dict[l].count(b[l]) == 1)
-						s1.insert(dict[l][b[l]].begin(),dict[l][b[l]].end());
-				}
-				if(s1.size() > 0)
-				{
-					for (std::set<int>::iterator it = s1.begin() ; it != s1.end(); ++it)
-					{
-						int k = *it;
-						if(k==current||(sortedorder[k][2] == 1 && sortedorder[k][4]<j)||sortedorder[k][0]==-1)
-							continue;//if read k is matched with a smaller offset or is the first read, skip
-						if((b2^(read[k]&revmask[j])).count()<=thresh1)
-						{
-							flag = 1;
-							if(sortedorder[k][2] == 1)//k was matched to something
-							{
-								sortedorder[prev][1] = next;
-								sortedorder[next][0] = prev;
-								sortedorder[sortedorder[k][0]][1] = current;
-								sortedorder[current][0] = sortedorder[k][0];
-								sortedorder[current][1] = k;
-								sortedorder[current][2] = 1;
-								sortedorder[current][3] = 1 - sortedorder[k][3];
-								sortedorder[current][4] = sortedorder[k][4] -j;	
-								sortedorder[k][0] = current;
-								sortedorder[k][4] = j;
-							}
-							else
-							{
-								sortedorder[prev][1] = next;
-								sortedorder[next][0] = prev;
-								sortedorder[sortedorder[k][0]][1] = current;
-								sortedorder[current][0] = sortedorder[k][0];
-								sortedorder[current][1] = k;
-								sortedorder[k][0] = current;
-								sortedorder[k][2] = 1;
-								sortedorder[k][3] = 1;
-								sortedorder[k][4] = j;
-							}
-							unmatched -= 1;
-							break;
-						}
-					}
-					if(flag == 1)
-						break;
-				}
-				b2<<=2;
-			}	
-					
-		}
-		current = next;
-	}
-	std::cout << unmatched <<" reads still unmatched\n";
 	return;
 }
 
@@ -395,38 +265,33 @@ void generateindexmasks(std::bitset<2*readlen> *mask1)
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
-	for(int i = 2*30; i < 2*50; i++)
+	for(int i = 2*34; i < 2*54; i++)
 		mask1[0][i] = 1;
-	for(int i = 2*50; i < 2*70; i++)
+	for(int i = 2*54; i < 2*74; i++)
 		mask1[1][i] = 1;
+	
 	return;
 }
 
-void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::unordered_map<int,std::vector<int>> &sortedorder)
+void writetofile(std::bitset<2*readlen> *read,std::bitset<2*readlen> *revread, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec)
 {
 	std::ofstream fout(outfile,std::ofstream::out);
 	std::ofstream foutRC(outfileRC,std::ofstream::out);
 	std::ofstream foutflag(outfileflag,std::ofstream::out);
-	int current = 0;
-	std::vector<int> currentvec;
-	while(1)
-	{	
-		currentvec = sortedorder[current];
-		foutflag << currentvec[2];
-		if(currentvec[3] == 0)
+	std::vector<int>::iterator it1,it2,it3;
+	for (it1 = sortedorder.begin(),it2 = revcomp.begin(),it3 = flagvec.begin() ; it1 != sortedorder.end(); ++it1,++it2,++it3)
+	{
+		foutflag << *it3;
+		if(*it2 == 0)
 		{
-			fout<<bitsettostring(read[current])<<"\n";
+			fout<<bitsettostring(read[*it1])<<"\n";
 			foutRC << 'd';
 		}
 		else
 		{
-			fout<<bitsettostring(revread[current])<<"\n";
+			fout<<bitsettostring(revread[*it1])<<"\n";
 			foutRC << 'r';
 		}
-		if (currentvec[1] == 0)//last read
-			break;
-		else
-			current = currentvec[1];
 	}
 	fout.close();
 	foutRC.close();
@@ -460,4 +325,118 @@ std::string bitsettostring(std::bitset<2*readlen> b)
 		}
 	}
 	return s;
+}
+
+
+void updaterefcount(std::bitset<2*readlen> current, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, int shift)
+{
+	if(resetcount == true)
+	{
+		ref = current;	
+		for(int i = 0; i < readlen; i++)
+		{	
+			for(int j = 0; j < 4; j++)
+				count[j][i] = 0;
+			switch(current[2*i])
+			{
+				case 0:	switch(current[2*i+1])
+					{
+						case 0:	count[0][i] = 1;
+							break;
+						case 1:	count[1][i] = 1;
+							break;
+					}		
+					break;
+				case 1:	switch(current[2*i+1])
+					{
+						case 0:	count[2][i] = 1;
+							break;
+						case 1:	count[3][i] = 1;
+							break;
+					}		
+			}
+		}
+
+	}
+	else
+	{
+		for(int i = 0; i < readlen-shift; i++)
+		{	
+			for(int j = 0; j < 4; j++)
+				count[j][i] = count[j][i+shift];
+			switch(current[2*i])
+			{
+				case 0:	switch(current[2*i+1])
+					{
+						case 0:	count[0][i] += 1;
+							break;
+						case 1:	count[1][i] += 1;
+							break;
+					}
+					break;		
+				case 1:	switch(current[2*i+1])
+					{
+						case 0:	count[2][i] += 1;
+							break;
+						case 1:	count[3][i] += 1;
+							break;
+					}		
+			}
+			int max = 0,indmax = 0;
+			for(int j = 0; j < 4; j++)
+				if(count[j][i]>max)
+				{
+					max = count[j][i];
+					indmax = j;
+				}
+			switch(indmax)
+			{
+				case 0: ref[2*i] = 0;
+					ref[2*i+1] = 0;
+					break;			
+				case 1: ref[2*i] = 0;
+					ref[2*i+1] = 1;
+					break;			
+				case 2: ref[2*i] = 1;
+					ref[2*i+1] = 0;
+					break;			
+				case 3: ref[2*i] = 1;
+					ref[2*i+1] = 1;
+					break;			
+			}
+		}
+		
+		for(int i = readlen-shift; i < readlen; i++)
+		{	
+			ref[2*i] = current[2*i];
+			ref[2*i+1] = current[2*i+1];
+			for(int j = 0; j < 4; j++)
+				count[j][i] = 0;
+			switch(current[2*i])
+			{
+				case 0:	switch(current[2*i+1])
+					{
+						case 0:	count[0][i] = 1;
+							break;
+						case 1:	count[1][i] = 1;
+							break;
+					}		
+					break;
+				case 1:	switch(current[2*i+1])
+					{
+						case 0:	count[2][i] = 1;
+							break;
+						case 1:	count[3][i] = 1;
+							break;
+					}		
+			}
+		}
+	}
+	
+	for(int j = 0; j < readlen; j++)
+	{
+		revref[2*j] = 1- ref[2*(readlen-j-1)];
+		revref[2*j+1] = 1 - ref[2*(readlen-j-1) + 1];
+	}
+	return;
 }

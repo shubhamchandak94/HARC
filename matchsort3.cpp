@@ -8,15 +8,15 @@
 #include <algorithm>
 #include <set>
 
-#define infile "SRR554369_clean.dna"
-#define outfile "temp2.dna"
-#define outfileRC "tempRC2.txt"
-#define outfileflag "tempflag2.txt"
-#define readlen 100
-#define maxmatch 40
-#define numreads 3258816
-#define thresh 32
-#define numdict 1
+#define infile "SRR327342_2_clean.dna"
+#define outfile "temp7.dna"
+#define outfileRC "tempRC7.txt"
+#define outfileflag "tempflag7.txt"
+#define readlen 75
+#define maxmatch 23
+#define numreads 14283592
+#define thresh 16
+#define numdict 2
 
 void stringtobitset(std::string s,std::bitset<2*readlen> &read, std::bitset<2*readlen> &revread);
 
@@ -264,8 +264,10 @@ void generateindexmasks(std::bitset<2*readlen> *mask1)
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
-	for(int i = 2*40; i < 2*60; i++)
+	for(int i = 2*23; i < 2*38; i++)
 		mask1[0][i] = 1;
+	for(int i = 2*37; i < 2*52; i++)
+		mask1[1][i] = 1;
 	return;
 }
 

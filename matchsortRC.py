@@ -4,16 +4,16 @@ from Bio.Seq import Seq
 infile = "temp.dna"
 outfile = "temp3.dna"
 readlen = 40
-no_reads = 5372832
-matchlen = 10
-maxmatch = 30
+no_reads = 67617092
+matchlen = 20
+maxmatch = 20
 
 print "Reading file"
 f = open(infile,'r')
 lines = [f.readline().rstrip('\n') for i in range(no_reads)]
 f.close()
 
-
+random.shuffle(lines)
 print "Generating Reverse Complements"
 revlines = [str(Seq(lines[i]).reverse_complement()) for i in range(no_reads)]
 
@@ -22,21 +22,23 @@ d1 = {}
 d2 = {}
 for i in range(no_reads):
 	if lines[i][0:matchlen] in d1:
-		d1[lines[i][0:matchlen]].add(i)
+		d1[lines[i][0:matchlen]].append(i)
 	else:
-		d1[lines[i][0:matchlen]] = set([i])
+		d1[lines[i][0:matchlen]] = [i]
 	
 	if revlines[i][0:matchlen] in d2:
-		d2[revlines[i][0:matchlen]].add(i)
+		d2[revlines[i][0:matchlen]].append(i)
 	else:
-		d2[revlines[i][0:matchlen]] = set([i])
+		d2[revlines[i][0:matchlen]] = [i]
 
 print "Ordering reads and writing to file"
 remainingreads = set([i for i in range(no_reads)])
+
 current = 0
 currentseq = lines[current]
 unmatched = 0
 fout = open(outfile,'w')
+
 while True:
 	flag = 0
 	if len(remainingreads)%1000000 == 0:
@@ -80,6 +82,3 @@ while True:
 
 print "Done, unmatched reads = "+str(unmatched)
 fout.close()
-	
-		
-
