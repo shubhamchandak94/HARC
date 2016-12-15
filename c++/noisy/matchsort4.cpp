@@ -3,6 +3,8 @@
 //otherwise move to next shift/RC.
 //Was intended to reduce noise for high thresholds. However the benefit is negligible.
 
+//Two output files: outfile has the reordered files (one in each line) and outfileRC has 0 (for no RC) and 1 (RC)
+
 //Note that reads with N are currently not supported
 
 #include <iostream>
