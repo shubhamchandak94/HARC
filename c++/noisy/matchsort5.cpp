@@ -3,6 +3,8 @@
 //then it takes the union of the reads found in the dictionary bins and looks there. 
 //The idea was to reduce noise in the high thresh setting. However benefit is negligible and the code runs very slowly.
 
+//Two output files: outfile has the reordered files (one in each line) and outfileRC has 0 (for no RC) and 1 (RC)
+
 //Note that reads with N are currently not supported
 
 #include <iostream>
