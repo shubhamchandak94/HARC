@@ -1,16 +1,16 @@
 //Reordering for real reads
-//Similar to matchsort3 but has a recoversingletons function and a second thresh "thresh1".
-//After reordering is done, the recoversingletons function is called to try and place the singleton read before a matching read.
-//However we try to make sure that the already existing order of the reads is not disrupted too much. 
-//For example if we had read r1 and then r2 shifted by 4. Let r3 was a singleton which matched before r2 but with offset of 5.
-//This is bad because r3 is shifted in the wrong direction with respect to r1.
-//Thus we store the shifts as auxiliary information with the ordering. Since we want to modify the ordering later, 
-//the sortedorder is no longer a simple vector - it is more like a doubly linked list, and with each read we store the previous
-//and the next read, whether it was matched, if yes then whether it was reverse complemented while matching and the shift to its
-//previous read.
+//Similar to matchsort3 but maintains a majority based clean reference read (function updaterefcount). 
+//A count matrix is also maintained which the number of times each base was seen at each position in the current read.
+//The reference (or its RC) is used for looking in the dictionary and for hamming distance threshold.
+//The function updaterefcount is called after every read, it updates the count matrix and the clean reference.
 
 //This does reduce the singleton reads significantly, however the effect on the overall size is small because the noise files 
-//become larger and offset most of the gains in the seq file.
+//become larger and offset most of the gains in the seq file. The function has a resetcount parameter which is made true when
+//we don't a matching read and pick a random read from the remaining reads. In such a situation, the count is first reset to 0
+//and then at each position, the count for the corresponding base is made 1.
+
+//The encoding stage (which also uses reference) can be easily combined with this code. However in that case we can't use 
+//parallelization for the encoding stage
 
 //Note that reads with N are currently not supported
 
@@ -35,6 +35,9 @@
 #define numdict 2
 
 void generateindexmasks(std::bitset<2*readlen> *mask1)
+//function to generate dictionary index masks
+//should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included), 
+//then second should be (readlen-1-end1)-(readlen-1-start1))
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
