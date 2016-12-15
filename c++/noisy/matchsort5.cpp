@@ -28,7 +28,8 @@
 
 void generateindexmasks(std::bitset<2*readlen> *mask1)
 //function to generate dictionary index masks
-//should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included), then second should be (readlen-1-end1)-(readlen-1-start1))
+//should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included),
+//then second should be (readlen-1-end1)-(readlen-1-start1))
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
