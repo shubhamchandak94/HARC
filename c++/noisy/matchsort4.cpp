@@ -1,5 +1,9 @@
-//Reordering for real reads. First union of the bins is taken. After this for each shift, the best match in the union is found, if the bestmatch is below threshold, then we pick the best matching read, otherwise move to next shift/RC.
+//Reordering for real reads. First union of the bins is taken. After this for each shift, 
+//the best match in the union is found, if the bestmatch is below threshold, then we pick the best matching read, 
+//otherwise move to next shift/RC.
 //Was intended to reduce noise for high thresholds. However the benefit is negligible.
+
+//Note that reads with N are currently not supported
 
 #include <iostream>
 #include <fstream>
