@@ -1,5 +1,18 @@
 //Reordering for real reads
+//Similar to matchsort3 but has a recoversingletons function and a second thresh "thresh1".
+//After reordering is done, the recoversingletons function is called to try and place the singleton read before a matching read.
+//However we try to make sure that the already existing order of the reads is not disrupted too much. 
+//For example if we had read r1 and then r2 shifted by 4. Let r3 was a singleton which matched before r2 but with offset of 5.
+//This is bad because r3 is shifted in the wrong direction with respect to r1.
+//Thus we store the shifts as auxiliary information with the ordering. Since we want to modify the ordering later, 
+//the sortedorder is no longer a simple vector - it is more like a doubly linked list, and with each read we store the previous
+//and the next read, whether it was matched, if yes then whether it was reverse complemented while matching and the shift to its
+//previous read.
 
+//This does reduce the singleton reads significantly, however the effect on the overall size is small because the noise files 
+//become larger and offset most of the gains in the seq file.
+
+//Note that reads with N are currently not supported
 
 #include <iostream>
 #include <fstream>
