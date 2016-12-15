@@ -80,6 +80,7 @@ with open('SRR065390_clean.dna','r') as f:
 ```
 
 ##### Compiling and running C++ codes
+First set the parameters at the top of the file.
 ```
 g++ matchsort7.cpp -std=c++11 -o a.out
 ./a.out
@@ -148,3 +149,13 @@ make
 ```
 
 To get reads without reverse complementation, replace gen_fastq by gen_fastq_noRC above.
+
+##### C++ files
+These are the more important files in C++ folder. For the other files, see comments on top of those files. Note that the noisy files are currently unable to handle reads with N. Also read length is assumed to be constant
+###### Noiseless and no RC
+1. matchsort2.cpp - reordering, parameters - matchlen, maxmatch. Generates outfile with reordered reads.
+
+###### Noisy
+1. matchsort3.cpp - v1 reordering described in the report. Tries to find mathces to the current read (no clean reference). Parameters - numdict, dictionary indices, maxmatch, thresh. Generates three files: outfile which has the reordered reads (some of which reverse complemented), outfileRC which has flags (0/1) to tell if the read has been reverse complemented, outfileflag which has the flags (0/1) to tell if the read is matched or not. This information helps packernoisy2_noN.py and packernoisy4_noN.py
+2. matchsort6.cpp - has a recovery step after the reordering which tries to place the singleton reads before a matching read. thresh2 is the threshold for this second stage process. Other parameters and output files are same as matchsort3.
+3. matchsort7.cpp - v2 reordering described in the report. Uses majority-based reference read for the reordering. Parameters and output files are same as matchsort3
