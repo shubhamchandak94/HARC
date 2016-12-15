@@ -106,4 +106,11 @@ tr -cs 0 '\012' < read_flag.txt | awk '/00/{n += length - 1}; END {print n+0}'
 cd gen_fastq
 make
 ./gen_fastq 35000000 100 PATH/chrom22clean.fasta PATH/chrom22_reads.fastq
+```
 
+###### Reads with 1% uniform substitution rate (each base is equally likely to be changed to any of the 4 possibilities e.g. A - C,T,G,N) (with reverse complementation) - 35M reads of length 100 from chrom 22
+```
+./gen_fastq 35000000 100 PATH/chrom22clean.fasta PATH/chrom22_reads.fastq -e
+```
+
+To get reads without reverse complementation, replace gen_fastq by gen_fastq_noRC above.
