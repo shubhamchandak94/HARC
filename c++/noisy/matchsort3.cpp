@@ -1,5 +1,14 @@
-//v1 mentioned in the report. Reordering without using any clean reference. First union of all dictionary bins is taken and then a read in a bin picked if hamming distance is below threshold.
-//generates three output files: outfile has the reordered reads (some might be reverse complemented), outfileRC has 0's and 1's where 0 means that read is not RC and 1 means it is, outfileflag has information which can be useful to the second stage - it contains 0 or 1 depending on whether the read is a matched or not (so second stage immediately realizes if a read is unmatched)
+//v1 mentioned in the report. Reordering without using any clean reference. 
+//First union of all dictionary bins is taken and then a read in a bin picked if hamming distance is below threshold.
+//generates three output files: outfile has the reordered reads (some might be reverse complemented),
+//outfileRC has 0's and 1's where 0 means that read is not RC and 1 means it is, 
+//outfileflag has information which can be useful to the second stage - 
+//it contains 0 or 1 depending on whether the read is a matched or not
+//(so second stage immediately realizes if a read is unmatched)
+
+//Note that reads with N are currently not supported
+
+
 #include <iostream>
 #include <fstream>
 #include <bitset>
