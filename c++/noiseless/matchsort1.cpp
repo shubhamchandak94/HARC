@@ -1,4 +1,5 @@
-//Reordering stage for noiseless reads. Uses bitset of length 2*matchlen as dictionary index. Splice function is used to get substring of bitset.
+//Reordering stage for noiseless reads. Uses bitset of length 2*matchlen as dictionary index. Splice function is used to 
+//get substring of bitset.
 //Slower than matchsort2.cpp but uses slightly less memory.
 
 #include <iostream>
