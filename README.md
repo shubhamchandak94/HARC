@@ -109,7 +109,7 @@ by
 ```cpp
 google::sparse_hash_map<>
 ```
-There should be no need to change anything else. However note that sparsehashmap does not seem to work with bitset as the index. One way to get around this (if the index length is not too large) is to use the bitset.ulong function.
+There should be no need to change anything else. However note that sparsehashmap does not seem to work with bitset as the index. One way to get around this (if the index length is not too large) is to use the bitset::to_ulong function.
 
 ##### Some python packages
 ```
