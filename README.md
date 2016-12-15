@@ -151,7 +151,7 @@ make
 To get reads without reverse complementation, replace gen_fastq by gen_fastq_noRC above.
 
 ##### C++ files
-These are the more important files in C++ folder. For the other files, see comments on top of those files. Note that the noisy files are currently unable to handle reads with N. Also read length is assumed to be constant
+These are the more important files in the C++ folder. For the other files, see comments on top of those files. Note that the noisy files are currently unable to handle reads with N. Also read length is assumed to be constant for all codes.
 ###### Noiseless and no RC
 1. matchsort2.cpp - reordering, parameters - matchlen, maxmatch. Generates outfile with reordered reads.
 
