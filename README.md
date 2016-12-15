@@ -65,3 +65,19 @@ with open('SRR065390_clean.dna','r') as f:
 g++ matchsort7.cpp -std=c++11 -o a.out
 ./a.out
 ```
+
+##### Running Python code
+```
+python matchsortnoisy8.py
+python packernoisy2.py
+```
+
+##### Calculating Number of Hard reads
+```
+grep 0 -o read_flag.txt | wc -l
+```
+
+##### Calculating Number of Singleton reads (i.e. 00's in the flag file) 
+```
+tr -cs 0 '\012' < read_flag.txt | awk '/00/{n += length - 1}; END {print n+0}'
+```
