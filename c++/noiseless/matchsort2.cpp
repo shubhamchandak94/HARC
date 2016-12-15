@@ -1,5 +1,6 @@
 //Reordering stage for noiseless reads. Same functionality as matchsort1.cpp but is faster (with slight memory overhead).
-//Uses bit mask to generate dictionary index (which has length 2*readlen) - AND of read with a mask with 2*matchlen 1's and rest 0's
+//Uses bit mask to generate dictionary index (which has length 2*readlen) - AND of read with a mask with 2*matchlen 1's
+//and rest 0's
 
 #include <iostream>
 #include <fstream>
