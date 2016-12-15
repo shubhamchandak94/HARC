@@ -147,5 +147,4 @@ make
 ./gen_fastq 35000000 100 PATH/chrom22clean.fasta PATH/chrom22_reads.fastq -e
 ```
 
-B
 To get reads without reverse complementation, replace gen_fastq by gen_fastq_noRC above.
