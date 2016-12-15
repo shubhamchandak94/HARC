@@ -1,25 +1,22 @@
-import operator
-from itertools import imap
+#Encoding for noisy reads. Compares each read to the previous read (no clean reference maintained). 
+#Four output files - outfile_seq has the suffix (and newline(, outfile_flag has flag (+ or 0)
+#outfile_noise has the base in the current read and a newline after every read that was matched,
+#noisepos file has the noise position stored in 2 digits per position (no newline here)
 
-#hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
+from distance import hamming
 
 infile = "tempte.dna"
 outfile_seq = "read_seq16.txt"
-outfile_pos = "read_pos16.txt"
+outfile_flag = "read_flag16.txt"
 outfile_noise = "read_noise16.txt"
 outfile_noisepos = "read_noisepos16.txt"
 
 readlen = 100
-minmatch = 28
+maxmatch = 28
 thresh = 20 # maximum number of mismatches allowed 
 
 f_seq = open(outfile_seq,'w')
-f_pos = open(outfile_pos,'w')
+f_flag = open(outfile_flag,'w')
 f_noise = open(outfile_noise,'w')
 f_noisepos = open(outfile_noisepos,'w')
 k = 0
@@ -31,10 +28,10 @@ with open(infile,'r') as f:
 			print str(k//1000000)+'M done'
 		current = line.rstrip('\n')
 		flag = 0
-		for i in range(minmatch):
-			if(hamming2(current[:(readlen-i)],prev[i:])<=thresh):
-				f_pos.write('+')
-				f_seq.write(current[(readlen-i+1):]+'\n')
+		for i in range(maxmatch):
+			if(hamming(current[:(readlen-i)],prev[i:])<=thresh):
+				f_flag.write('+')
+				f_seq.write(current[(readlen-i):]+'\n')
 				for j in range(readlen-i):
 					if current[j]!=prev[i+j]:
 						f_noise.write(current[j])
@@ -45,11 +42,11 @@ with open(infile,'r') as f:
 				break
 		
 		if flag == 0:
-			f_pos.write('0')
+			f_flag.write('0')
 			f_seq.write(current+'\n')
 			prev = current
 f_seq.close()
-f_pos.close()	
+f_flag.close()	
 f_noise.close()
 f_noisepos.close()
 
