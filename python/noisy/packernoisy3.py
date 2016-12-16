@@ -1,3 +1,4 @@
+#Encoding for noisy reads. Similar to 
 #match with previous 8 reads and reference to find best match
 import operator
 from itertools import imap
