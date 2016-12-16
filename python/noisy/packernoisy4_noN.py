@@ -1,4 +1,7 @@
-#find best match with ref or prev - for files with no Ns
+#Similar to packernoisy4.py but for files with no Ns. Is much faster as it uses better findmajority and also needs the flag
+#file to be provided as input (see packernoisy2_noN.py for more on these points). 
+#Noise is now encoded as 1,2 or 3. The mapping to 1,2,3 is based on the paper on Error Profiles. For each original base,
+#the most likely changed base is encoded as a 1 and so on.
 from distance import hamming
 
 char2index = {'A':0,'C':1,'G':2,'T':3}
