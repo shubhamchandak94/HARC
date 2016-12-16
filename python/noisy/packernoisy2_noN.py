@@ -1,5 +1,8 @@
-#find best match with ref or prev - for files with no Ns
-from distance import hamming
+#Encoding for noisy reads. Similar to packernoisy2.py but does not allow for 'N' character.
+#Also, the implementation of findmajority and the count update steps are much faster.
+#Apart from the reordered reads (infile), this also requires the flags (0/1) for unmatched/matched (infile_flag).
+#Generating this flag file is the responsibility of the reordering step (matchsort3,6,7.cpp produce it).
+#This speeds up the packing significantly. Output files are similar to packernoisy2.py
 
 char2index = {'A':0,'C':1,'G':2,'T':3}
 index2char = {0:'A',1:'C',2:'G',3:'T'}
