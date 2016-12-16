@@ -1,3 +1,10 @@
+#Reordering for noiseless reads without RC which have already been reordered by some algorithm.
+#Combines ideas from matchorcom.py and matchsort_skip.py
+#While building the chunks, the last few bases (skipstart:readlen) are not checked. For dictionary construction, bases 
+#rangestart:rangeend are used instead of 0:matchlen. 
+
+#The idea was to use the fact that the middle bases in a read are relatively noiseless and hence maybe a noiseless reordering
+#can work. However it doesn't seem to work well.
 import random
 infile = "temp1.dna"
 outfile = "temp4.dna"
