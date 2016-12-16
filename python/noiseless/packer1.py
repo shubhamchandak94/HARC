@@ -4,6 +4,8 @@
 #outfile_flag which stores 0 for unmatched, + for shifted right and - for shifted left, 
 #Instead of \n in read_seq we have a separate file outfile_pos which stores the offset from previous read
 
+#We expected some improvement in the compression, but the result is slightly worse than packer.py
+
 infile = "temp2.dna"
 outfile_seq = "readseq.txt"
 outfile_match = "readmatch.txt"
