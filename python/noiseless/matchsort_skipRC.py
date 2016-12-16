@@ -1,3 +1,14 @@
+#Similar to matchsort_skip.py but can handle RC.
+
+#Reordering for noiseless reads with RC. Instead of using first matchlen bases as dictionary, it uses the bases from 
+#rangestart to rangeend. Also while comparing current read to reads in the bin, the bases from skipstart-readlen are not
+#considered.
+
+#The idea was to try to utilise the fact that the middle part of real reads is relatively noiseless and hence maybe we can
+#use the noiseless reordering by ignoring the last few bases. However the middle part is not completely noiseless and this 
+#does not work well.
+
+
 import random
 
 infile = "SRR959239.dna"
