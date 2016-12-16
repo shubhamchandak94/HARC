@@ -1,5 +1,5 @@
 #Encoding for noisy reads. Compares each read to the previous read (no clean reference maintained). 
-#Four output files - outfile_seq has the suffix (and newline(, outfile_flag has flag (+ or 0)
+#Four output files - outfile_seq has the suffix (and newline), outfile_flag has flag (+ or 0)
 #outfile_noise has the base in the current read and a newline after every read that was matched,
 #noisepos file has the noise position stored in 2 digits per position (no newline here)
 
