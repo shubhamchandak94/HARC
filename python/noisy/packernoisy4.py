@@ -1,4 +1,5 @@
-#Match with previous and reference. Encode noise using the function encodenoise.
+#Similar to packernoisy2.py but encodes noise using the function encodenoise. The idea is that given the original base, the 
+#noisy base has only 4 possibilities (e.g. if the original base was A, the new base can be C, G, T or N. Thus 
 import operator
 from itertools import imap
 
@@ -94,7 +95,7 @@ def encodenoise(c1,c2):
 
 infile = "tempte8.dna"
 outfile_seq = "read_seq32.txt"
-outfile_pos = "read_pos32.txt"
+outfile_flag = "read_flag32.txt"
 outfile_noise = "read_noise32.txt"
 outfile_noisepos = "read_noisepos32.txt"
 
@@ -103,7 +104,7 @@ minmatch = 20
 thresh = 20 # maximum number of mismatches allowed 
 
 f_seq = open(outfile_seq,'w')
-f_pos = open(outfile_pos,'w')
+f_flag = open(outfile_flag,'w')
 f_noise = open(outfile_noise,'w')
 f_noisepos = open(outfile_noisepos,'w')
 k = 0
@@ -121,7 +122,7 @@ with open(infile,'r') as f:
 		for i in range(minmatch):
 			if(hamming2(current[:(readlen-i)],ref[i:])<=thresh):
 				if(hamming2(current[:(readlen-i)],ref[i:])<=hamming2(current[:(readlen-i)],prev[i:])):
-					f_pos.write('r')
+					f_flag.write('r')
 					f_seq.write(current[(readlen-i+1):]+'\n')
 					prevj = 0;
 					for j in range(readlen-i):
@@ -131,7 +132,7 @@ with open(infile,'r') as f:
 							f_noisepos.write("%02d"%(j-prevj))#delta encoding
 							prevj = j	
 				else:
-					f_pos.write('p')
+					f_flag.write('p')
 					f_seq.write(current[(readlen-i+1):]+'\n')
 					prevj = 0;
 					for j in range(readlen-i):
@@ -152,7 +153,7 @@ with open(infile,'r') as f:
 				break
 		
 		if flag == 0:
-			f_pos.write('0')
+			f_flag.write('0')
 			f_seq.write(current+'\n')
 			count = [[0]*100 for j in range(5)]
 			for j in range(readlen):
@@ -160,7 +161,7 @@ with open(infile,'r') as f:
 			ref = findmajority(count)
 		prev = current						
 f_seq.close()
-f_pos.close()	
+f_flag.close()	
 f_noise.close()
 f_noisepos.close()
 
