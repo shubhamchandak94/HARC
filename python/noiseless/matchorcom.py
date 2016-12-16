@@ -1,4 +1,21 @@
+#Reordering for noiseless reads without RC which have already been reordered by some algorithm.
+#It initially tries to find chunks (note that we say orcom chunks but any other algorithm will also work), where the chunk can
+#have the reads in the right shift or the left shift - the finding chunks part identifies this with the first few reads in the 
+#chunk and then searches only for shift in that direction. For each chunk the index of the first and last read in the chunk is 
+#stored (chunk is reversed if the shift is leftward).
+#After the chunks are identified, the first read in each chunk is indexed by the first matchlen bases and the program tries to 
+#reorder the chunks.
 
+#The idea behind this was to reduce the memory consumption for the dictionary since only the first read of each chunk needs to
+#put in a dictionary.
+
+#Running this on orcom ordered reads (for noiseless noRC reads) produces very good results - slightly better than matchsort.py.
+#The orcom chunks contained around 10 reads/chunk on average.
+#Also due to random shuffling of chunks, running it again and again reduces the number of hard reads up to some low value.
+
+#Unfortunately this idea does not extend well to noisy reads because some reads are left out from inside the chunks and hence
+#reordering the chunk may not help. Also the chunks produced in the noisy case have only2-3 reads on average so the memory 
+#saving is also insignificant.
 
 import random
 infile = "temp3.dna"
