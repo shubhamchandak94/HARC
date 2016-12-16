@@ -125,7 +125,7 @@ with open(infile,'r') as f:
 			if(hamming2(current[:(readlen-i)],ref[i:])<=thresh):
 				if(hamming2(current[:(readlen-i)],ref[i:])<=hamming2(current[:(readlen-i)],prev[i:])):
 					f_flag.write('r')
-					f_seq.write(current[(readlen-i+1):]+'\n')
+					f_seq.write(current[(readlen-i):]+'\n')
 					prevj = 0;
 					for j in range(readlen-i):
 						count[char2index(current[j])][i+j] += 1		
@@ -135,7 +135,7 @@ with open(infile,'r') as f:
 							prevj = j	
 				else:
 					f_flag.write('p')
-					f_seq.write(current[(readlen-i+1):]+'\n')
+					f_seq.write(current[(readlen-i):]+'\n')
 					prevj = 0;
 					for j in range(readlen-i):
 						count[char2index(current[j])][i+j] += 1		
