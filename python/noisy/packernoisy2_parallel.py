@@ -1,4 +1,11 @@
-#find best match with ref or prev
+#Same as packernoisy2 but uses multiple threads, the number of threads is given as a parameter numcores.
+#Supports reads with 'N' and hence is quite slow as compared to packernoisy_noN.py
+#Divides the infile into numcores parts which are then encoded separately, in all the output file, a blank line is placed to 
+#demarcate between the outputs of different threads.
+#It makes sense to keep numcores quite large, maybe larger than the actual number of cores. This is because it allows for 
+#the variable time which might be needed to encode different parts of the reordered file.
+
+
 from joblib import Parallel, delayed
 from distance import hamming
 
@@ -109,7 +116,7 @@ endline = [startline[j+1]-1 for j in range(numcores-1)]
 endline.append(no_reads)
 f = open(infile,'r')
 lines = [f.readline().rstrip('\n') for i in range(no_reads)]
-s = Parallel(n_jobs=numcores)(delayed(pack)(lines[startline[i]:endline[i]+1]) for i in range(numcores))
+s = Parallel(n_jobs=-1)(delayed(pack)(lines[startline[i]:endline[i]+1]) for i in range(numcores))
 print "Packing done, writing to files"
 for i in range(numcores):
   f_seq.write(s[i][0]+'\n')
