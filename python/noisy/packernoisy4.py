@@ -1,5 +1,7 @@
 #Similar to packernoisy2.py but encodes noise using the function encodenoise. The idea is that given the original base, the 
-#noisy base has only 4 possibilities (e.g. if the original base was A, the new base can be C, G, T or N. Thus 
+#noisy base has only 4 possibilities (e.g. if the original base was A, the new base can be C, G, T or N. Thus we can save
+#some space after compression by using a cyclic encoding (look at the function encodenoise)
+#The outfile_noise now contains numbers 1,2,3 or 4 instead of the bases.
 import operator
 from itertools import imap
 
