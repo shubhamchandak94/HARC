@@ -1,4 +1,7 @@
-#Reorders reads from infile and writes reordered reads to outfile. For noiseless reads without RC. Picks the first read found in the bin (does not check if next read matches shifter version of the current read.) 
+#Reorders reads from infile and writes reordered reads to outfile. For noiseless reads without RC. 
+#Picks the first read found in the bin (does not check if next read matches shifted version of the current read.) 
+#One needs to use a noisy packer to encode the reordered reads
+#Depending on genome size and repeats, this can give same or worse compression than matchsort.py
 
 infile = "SRR959239.dna"
 outfile = "temp2.dna"
