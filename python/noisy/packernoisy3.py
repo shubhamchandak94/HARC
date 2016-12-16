@@ -1,5 +1,12 @@
-#Encoding for noisy reads. Similar to 
-#match with previous 8 reads and reference to find best match
+#Encoding for noisy reads. Similar to packernoisy2.py but tries to find match with previous 8 reads and reference to 
+#find best match. outfile_pos stores this information - r for reference, 0 for unmatched, 1 for previous read, 2 for the read
+#before that and so on. Note that the encoding in terms of previous 8 reads is used only if the shift is by 0. Otherwise,
+#we just encode in terms of previous/ref. 
+
+#The idea was to make sure noise does not take up too much space when the threshold is high but the results were not 
+#very encouraging.
+
+
 import operator
 from itertools import imap
 
@@ -103,7 +110,7 @@ with open(infile,'r') as f:
 				else:			
 					if(hamming2(current[:(readlen-i)],ref[i:])<=hamming2(current[:(readlen-i)],prev[0][i:])):
 						f_pos.write('r')
-						f_seq.write(current[(readlen-i+1):]+'\n')
+						f_seq.write(current[(readlen-i):]+'\n')
 						prevj = 0;
 						for j in range(readlen-i):
 							count[char2index(current[j])][i+j] += 1		
@@ -113,7 +120,7 @@ with open(infile,'r') as f:
 								prevj = j	
 					else:
 						f_pos.write('1')
-						f_seq.write(current[(readlen-i+1):]+'\n')
+						f_seq.write(current[(readlen-i):]+'\n')
 						prevj = 0;
 						for j in range(readlen-i):
 							count[char2index(current[j])][i+j] += 1		
