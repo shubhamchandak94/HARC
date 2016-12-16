@@ -1,3 +1,6 @@
+#Reordering for noiseless reads with RC. Reads are written to outfile as they are and hence packer needs to check for RC.
+#Otherwise similar to matchsort.py
+
 import random
 from Bio.Seq import Seq
 
