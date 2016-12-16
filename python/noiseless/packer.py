@@ -1,5 +1,7 @@
-#Second stage encoding for noiseless reads. The variable neg decides whether we want to match the current read with previous read shifted in both directions. 
-#The reordered reads in infile are encoded into outfile_seq (which stores the suffix of the read/full read for unmatched read - 1 line/read) and outfile_flag which stores 0 for unmatched, + for shifted right and - for shifted left.
+#Second stage encoding for noiseless reads. The variable neg decides whether we want to match the current read with
+#previous read shifted in both directions. 
+#The reordered reads in infile are encoded into outfile_seq (which stores the suffix of the read/full read for unmatched read -
+#1 line/read) and outfile_flag which stores 0 for unmatched, + for shifted right and - for shifted left.
 
 infile = "temp3.dna"
 outfile_seq = "read_seq31.txt"
