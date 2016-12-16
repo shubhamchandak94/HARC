@@ -1,3 +1,5 @@
+
+
 import random
 infile = "temp3.dna"
 outfile = "temp1.dna"
