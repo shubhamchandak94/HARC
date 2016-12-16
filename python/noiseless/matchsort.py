@@ -1,4 +1,5 @@
-#Reorders reads from infile and writes reordered reads to outfile. For noiseless reads without RC. Makes sure that the next read matches shifter version of the current read. 
+#Reorders reads from infile and writes reordered reads to outfile. For noiseless reads without RC. 
+#Makes sure that the next read matches shifter version of the current read. 
 
 
 infile = "chrom22_50x_noRC_random.dna"
