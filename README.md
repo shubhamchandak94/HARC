@@ -12,7 +12,6 @@ cat SRR065390_1.fastq SRR065390_2.fastq > SRR065390.fastq
 For some datasets (e.g. SRR327342 and SRR870667), the two fastq files may have reads of different lengths
 
 ###### Metagenomics
-B
 ```
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.1.fq.gz
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.2.fq.gz
