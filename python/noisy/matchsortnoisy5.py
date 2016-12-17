@@ -1,4 +1,4 @@
-#Reordering for noisy reads without RC. Uses best match within bin (if within thresh). 4 dictionaries (ind). 
+#Reordering for noisy reads without RC. Uses best match within bin for a given shift (if within thresh). 4 dictionaries (ind). 
 #Sort of similar to matchsort4.cpp
 
 from distance import hamming
