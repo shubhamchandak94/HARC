@@ -3,7 +3,7 @@
 #symmetric as is the case in the C++ implementation.
 #Also, this implementation does not use bitsets and hence the thresh parameter is the actual threshold. 
 
-#Is much slower and memory-intensive as compared to the C++ implmentation.
+#This was written because matchpacknoisyRC.py was unable to handle SRR065390 but soon we moved to C++
 
 from distance import hamming
 
