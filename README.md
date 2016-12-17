@@ -159,3 +159,23 @@ These are the more important files in the C++ folder. For the other files, see c
 1. matchsort3.cpp - v1 reordering described in the report. Tries to find mathces to the current read (no clean reference). Parameters - numdict, dictionary indices, maxmatch, thresh. Generates three files: outfile which has the reordered reads (some of which reverse complemented), outfileRC which has flags (0/1) to tell if the read has been reverse complemented, outfileflag which has the flags (0/1) to tell if the read is matched or not. This information helps packernoisy2_noN.py and packernoisy4_noN.py
 2. matchsort6.cpp - has a recovery step after the reordering which tries to place the singleton reads before a matching read. thresh2 is the threshold for this second stage process. Other parameters and output files are same as matchsort3.
 3. matchsort7.cpp - v2 reordering described in the report. Uses majority-based reference read for the reordering. Parameters and output files are same as matchsort3
+
+##### Python files
+These are the more important files in the python folder. For the other files, see comments on top of those files. Note that the some of the noisy files can handle reads with N. Also read length is assumed to be constant for all codes.
+###### Noiseless and no RC
+1. matchsort.py - reordering, parameters - matchlen, maxmatch. Generates outfile with reordered reads.
+2. packer.py - encoding, takes infile with reordered reads and generates outfile_seq and outfile_flag. Parameter - maxmatch, neg (whether we want to look for matches with opposite shift as well.
+
+###### Noisy for real data
+1. matchpacknoisyRC.py - v2 reordering described in the report along with encoding. Uses majority-based reference read for the reordering. Parameters - numdict, dictionary indices, maxmatch, thresh. Directly generates encoding in the form of five files - outfile_seq, outfile_flag, outfile_rev, outfile_noise and outfile_noisepos. Works with reads containing N.
+3. packernoisy2.py - encoding for reordered reads as described in report (uses reference). Input - infile containing reordered reads. Parameters - thresh, maxmatch. The reordering should generate the reverse complement flags separately, this does not consider RC. Produces 4 files - outfile_seq, outfile_flag, outfile_noise and outfile_noisepos. The current implementation is slow (due to findmajority function), see packernoisy2_noN.py for faster implementation.
+4. packernoisy2_parallel.py - Parallel implementation of packernoisy2.py using joblib library - see comments on top of file. Leaves a blank line in each output file after each thread. Extra parameter - numthreads. Still slower than packernoisy2_noN.py.
+5. packernoisy4.py - Similar to packernoisy2.py except to encoding of noise. Instead of storing the noisy base, we store cyclic shift using 1,2,3 or 4 (note that N is also a possibility). See function encodenoise for the exact encoding.
+
+###### Encoders for C++ generated reordering (no reads with N)
+1. packernoisy2_noN.py - Similar to packernoisy2.py but can't handle reads with N. Also an extra input file is needed - infile_flag which contains the flags (0/1 - unmatched/matched) produced by the C++ codes (matchsort3,6,7.cpp). Much faster than packernoisy2.py due to the flag file and the better written findmajority function.
+2. packernoisy4_noN.py - Similar to packernoisy4.py but can't handle reads with N. Also an extra input file is needed - infile_flag which contains the flags (0/1 - unmatched/matched) produced by the C++ codes (matchsort3,6,7.cpp). Much faster than packernoisy4.py due to the flag file and the better written findmajority function.
+
+###### Reordering for noisy simulated data without RC
+1. matchsortnoisy2.py - Similar to v1 reordering described in the report. Tries to find matches to the current read (no clean reference). 4 dictionaries. Parameters - matchlen, maxmatch, thresh. Produces outfile with reordered reads. Works with reads containing N.
+2. matchsortnoisy8.py - Similar to v2 reordering described in the report. Tries to find matches to the clean reference. 5 dictionaries. Parameters - matchlen, maxmatch, thresh. Produces outfile with reordered reads. Works with reads containing N.
