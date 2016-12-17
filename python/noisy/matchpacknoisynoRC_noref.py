@@ -1,3 +1,10 @@
+#similar to v1 in the paper but does not support RC, does both the reordering and encoding steps for real data.
+#Works with reads containing 'N'. ind contains the indices in the dictionary - note that here the indices need not be 
+#symmetric as is the case in the C++ implementation.
+#Also, this implementation does not use bitsets and hence the thresh parameter is the actual threshold. 
+
+#Is much slower and memory-intensive as compared to the C++ implmentation.
+
 from distance import hamming
 
 infile = "SRR959239.dna"
