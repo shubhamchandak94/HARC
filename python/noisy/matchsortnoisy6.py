@@ -1,13 +1,8 @@
-from itertools import imap
-import operator
+#Reordering for noisy reads without RC. 4 dictionaries (ind). Tries to find best match for all shifts upto maxmatch.
+#Otherwise same as matchsortnoisy2.py
+#Does very badly - too many hard reads.
 
-# hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
-#	return sum([str1[i]!=str2[i] for i in range(len(str1))])	
+from distance import hamming
 
 infile = "chrom22_50x_noRC_noisy.dna"
 outfile = "tempte2.dna"
@@ -57,33 +52,14 @@ while True:
 		inter = inter.intersection(remainingreads)
 		if len(inter)>0:
 			for j in inter:
-				if(hamming2(lines[current][i:],lines[j][:readlen-i])<bestmatch):
-					bestmatch = hamming2(lines[current][i:],lines[j][:readlen-i])
+				if(hamming(lines[current][i:],lines[j][:readlen-i])<bestmatch):
+					bestmatch = hamming(lines[current][i:],lines[j][:readlen-i])
 					bestmatchindex = j
 	if bestmatch <= thresh:
 		current = bestmatchindex
 		flag = 1
 		continue
 			
-#if len(d[lines[current][0:matchlen]]) == 0:
-#		del d[lines[current][0:matchlen]]
-#	else:
-#		for i in d[lines[current][0:matchlen]]:
-#			if hamming2(lines[current][matchlen:],lines[i][matchlen:]) <= thresh:
-#				current = i
-#				flag = 1
-#				break
-#	if flag == 1:
-#		continue
-#	for j in range(1,maxmatch):
-#		if lines[current][j:j+matchlen] in d:
-#			for i in d[lines[current][j:j+matchlen]]:
-#				if hamming2(lines[current][j+matchlen:],lines[i][matchlen:readlen-j]) <= thresh:
-#					current = i
-#					flag = 1
-#					break
-#			if flag == 1:
-#					break
 	current = remainingreads.pop()
 	remainingreads.add(current)
 
