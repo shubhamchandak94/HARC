@@ -1,6 +1,8 @@
 #Reordering for noisy reads without RC. Similar to v1 in report. Uses four dictionaries (ind) and a threshold.
 #Uses lists inside dictionaries instead of sets to save on memory.
 
+#outfile contains the reordered reads
+
 from distance import hamming
 
 infile = "chrom22_50x_noRC_noisy.dna"
