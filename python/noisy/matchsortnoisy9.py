@@ -1,7 +1,7 @@
 #Similar to matchsortnoisy8.py but tries to find best match for the given shift, if the best match is less than thresh then 
 #pick it or else go ahead.
 
-#The idea was to reduce the noise, but the increase is very marginal.
+#The idea was to reduce the noise, but the decrease is very marginal.
 
 from itertools import imap
 import operator
