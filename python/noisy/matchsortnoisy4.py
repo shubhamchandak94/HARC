@@ -1,14 +1,7 @@
-from itertools import imap
-import operator
-from distance import hamming
-# hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
-#	return sum([str1[i]!=str2[i] for i in range(len(str1))])	
+#Reordering for noisy reads without RC. Similar to matchsort2 but has 5 dictionaries instead of 4.
 
+from distance import hamming
+	
 infile = "SRR959239.dna"
 outfile = "temp3.dna"
 readlen = 98
