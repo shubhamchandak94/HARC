@@ -1,3 +1,9 @@
+#implements v2 in the paper, does both the reordering and encoding steps for real data. Works with reads containing 'N'. ind contains the 
+#indices in the dictionary - note that here the indices need not be symmetric as is the case in the C++ implementation.
+#Also, this implementation does not use bitsets and hence the thresh parameter is the actual threshold. 
+
+#Is much slower and memory-intensive as compared to the C++ implmentation.
+
 from distance import hamming
 from Bio.Seq import Seq
 
@@ -42,7 +48,7 @@ outfile_noise = "read_noise32.txt"
 outfile_noisepos = "read_noisepos32.txt"
 readlen = 98
 no_reads = 5372832
-matchlen = 80
+#matchlen = 80
 maxmatch = 18
 thresh = 10 #maximum number of mismatches allowed
 num_dict = 1 # should divide matchlen
