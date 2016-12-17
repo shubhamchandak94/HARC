@@ -1,8 +1,8 @@
-#Same as packernoisy2 but uses multiple threads, the number of threads is given as a parameter numcores.
+#Same as packernoisy2 but uses multiple threads, the number of threads is given as a parameter numthreads.
 #Supports reads with 'N' and hence is quite slow as compared to packernoisy_noN.py
-#Divides the infile into numcores parts which are then encoded separately, in all the output file, a blank line is placed to 
+#Divides the infile into numthreads parts which are then encoded separately, in all the output file, a blank line is placed to 
 #demarcate between the outputs of different threads.
-#It makes sense to keep numcores quite large, maybe larger than the actual number of cores. This is because it allows for 
+#It makes sense to keep numthreads quite large, maybe larger than the actual number of cores. This is because it allows for 
 #the variable time which might be needed to encode different parts of the reordered file.
 
 
@@ -19,7 +19,7 @@ no_reads = 5128790
 readlen = 98
 maxmatch = 18
 thresh = 20 # maximum number of mismatches allowed 
-numcores = 20
+numthreads = 20
 
 def char2index(c):
 	if c == 'A':
@@ -110,15 +110,15 @@ f_flag = open(outfile_flag,'w')
 f_noise = open(outfile_noise,'w')
 f_noisepos = open(outfile_noisepos,'w')
 
-i = no_reads/numcores
-startline = [i*j for j in range(numcores)]
-endline = [startline[j+1]-1 for j in range(numcores-1)]
+i = no_reads/numthread
+startline = [i*j for j in range(numthreads)]
+endline = [startline[j+1]-1 for j in range(numthreads-1)]
 endline.append(no_reads)
 f = open(infile,'r')
 lines = [f.readline().rstrip('\n') for i in range(no_reads)]
-s = Parallel(n_jobs=-1)(delayed(pack)(lines[startline[i]:endline[i]+1]) for i in range(numcores))
+s = Parallel(n_jobs=-1)(delayed(pack)(lines[startline[i]:endline[i]+1]) for i in range(numthreads))
 print "Packing done, writing to files"
-for i in range(numcores):
+for i in range(numthreads):
   f_seq.write(s[i][0]+'\n')
   f_flag.write(s[i][1]+'\n')
   f_noise.write(s[i][2]+'\n')
