@@ -4,6 +4,8 @@
 
 #Is much slower and memory-intensive as compared to the C++ implmentation.
 
+#Produces 5 output files as mentioned in the report (encoding stage)
+
 from distance import hamming
 from Bio.Seq import Seq
 
