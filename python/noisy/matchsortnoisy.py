@@ -1,13 +1,8 @@
-from itertools import imap
-import operator
+#Reordering for noisy reads without RC. Uses single dictionary 0:matchlen but has a thresh while matching. 
 
-# hamming2 function from http://code.activestate.com/recipes/499304-hamming-distance/
-def hamming2(str1, str2):
-    #assert len(str1) == len(str2)
-    #ne = str.__ne__  ## this is surprisingly slow
-    ne = operator.ne
-    return sum(imap(ne, str1, str2))
-#	return sum([str1[i]!=str2[i] for i in range(len(str1))])	
+#Does not do too well. Lots of Hreads.
+
+from distance import hamming
 
 infile = "chrom22_50x_noRC_noisy.dna"
 outfile = "tempte.dna"
@@ -47,7 +42,7 @@ while True:
 		del d[lines[current][0:matchlen]]
 	else:
 		for i in d[lines[current][0:matchlen]]:
-			if hamming2(lines[current][matchlen:],lines[i][matchlen:]) <= thresh:
+			if hamming(lines[current][matchlen:],lines[i][matchlen:]) <= thresh:
 				current = i
 				flag = 1
 				break
@@ -56,7 +51,7 @@ while True:
 	for j in range(1,maxmatch):
 		if lines[current][j:j+matchlen] in d:
 			for i in d[lines[current][j:j+matchlen]]:
-				if hamming2(lines[current][j+matchlen:],lines[i][matchlen:readlen-j]) <= thresh:
+				if hamming(lines[current][j+matchlen:],lines[i][matchlen:readlen-j]) <= thresh:
 					current = i
 					flag = 1
 					break
