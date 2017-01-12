@@ -8,15 +8,15 @@
 #include <algorithm>
 #include <set>
 
-#define infile "SRR870667_1_clean.dna"
-#define outfile "temp1.dna"
-#define outfileRC "tempRC1.txt"
-#define outfileflag "tempflag1.txt"
-#define readlen 108
-#define maxmatch 34
-#define numreads 68266234
-#define thresh 32
-#define numdict 2
+#define infile "SRR959239.dna"
+#define outfile "temp0.dna"
+#define outfileRC "tempRC0.txt"
+#define outfileflag "tempflag0.txt"
+#define readlen 98
+#define maxmatch 20
+#define numreads 5372832
+#define thresh 8
+#define numdict 3
 
 void stringtobitset(std::string s,std::bitset<4*readlen> &read, std::bitset<4*readlen> &revread);
 
@@ -46,7 +46,7 @@ int main()
 	//using vector instead of list to save some space (at the cost of linear time required to delete elements)
 	readDnaFile(read,revread);
 	std::cout << "Constructing dictionaries\n";
-	std::unordered_map<std::bitset<4*readlen>,std::vector<int>> *dict = new std::unordered_map<std::bitset<2*readlen>,std::vector<int>> [numdict];
+	std::unordered_map<std::bitset<4*readlen>,std::vector<int>> *dict = new std::unordered_map<std::bitset<4*readlen>,std::vector<int>> [numdict];
 	constructdictionary(read,dict);
 	std::vector<int> sortedorder,revcomp,flagvec;
 	std::cout << "Reordering reads\n";
@@ -259,10 +259,12 @@ void generateindexmasks(std::bitset<4*readlen> *mask1)
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
-	for(int i = 4*34; i < 4*54; i++)
+	for(int i = 4*20; i < 4*39; i++)
 		mask1[0][i] = 1;
-	for(int i = 4*54; i < 4*74; i++)
+	for(int i = 4*39; i < 4*59; i++)
 		mask1[1][i] = 1;
+	for(int i = 4*59; i < 4*78; i++)
+		mask1[2][i] = 1;
 	return;
 }
 
@@ -334,6 +336,7 @@ void updaterefcount(std::bitset<4*readlen> current, std::bitset<4*readlen> &ref,
 	}
 	else
 	{
+		ref.reset();
 		for(int i = 0; i < readlen-shift; i++)
 		{	
 			for(int j = 0; j < 4; j++)
@@ -354,10 +357,9 @@ void updaterefcount(std::bitset<4*readlen> current, std::bitset<4*readlen> &ref,
 					max = count[j][i];
 					indmax = j;
 				}
-			ref.reset();
 			switch(indmax)
 			{
-				case 0: ref[4*i] = 0;
+				case 0: ref[4*i] = 1;
 					break;			
 				case 1: ref[4*i+1] = 1;
 					break;			
@@ -390,7 +392,7 @@ void updaterefcount(std::bitset<4*readlen> current, std::bitset<4*readlen> &ref,
 	
 	for(int j = 0; j < readlen; j++)
 	{
-		revref[4*j] = 1- ref[4*(readlen-j-1)];
+		revref[4*j] = 1 - ref[4*(readlen-j-1)];
 		revref[4*j+1] = 1 - ref[4*(readlen-j-1) + 1];
 		revref[4*j+2] = 1 - ref[4*(readlen-j-1) + 2];
 		revref[4*j+3] = 1 - ref[4*(readlen-j-1) + 3];
