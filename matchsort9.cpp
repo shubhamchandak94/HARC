@@ -8,15 +8,15 @@
 #include <algorithm>
 #include <set>
 
-#define infile "SRR959239.dna"
+#define infile "SRR065390.dna"
 #define outfile "temp0.dna"
 #define outfileRC "tempRC0.txt"
 #define outfileflag "tempflag0.txt"
-#define readlen 98
+#define readlen 100
 #define maxmatch 20
-#define numreads 5372832
-#define thresh 8
-#define numdict 3
+#define numreads 67617092
+#define thresh 16
+#define numdict 2
 
 void stringtobitset(std::string s,std::bitset<4*readlen> &read, std::bitset<4*readlen> &revread);
 
@@ -60,7 +60,6 @@ int main()
 
 void stringtobitset(std::string s,std::bitset<4*readlen> &b, std::bitset<4*readlen> &b1)
 {
-	int i;
 	b.reset();
 	b1.reset();
 	for(int i = 0; i < readlen; i++)
@@ -259,12 +258,10 @@ void generateindexmasks(std::bitset<4*readlen> *mask1)
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
-	for(int i = 4*20; i < 4*39; i++)
+	for(int i = 4*30; i < 4*50; i++)
 		mask1[0][i] = 1;
-	for(int i = 4*39; i < 4*59; i++)
+	for(int i = 4*50; i < 4*70; i++)
 		mask1[1][i] = 1;
-	for(int i = 4*59; i < 4*78; i++)
-		mask1[2][i] = 1;
 	return;
 }
 
@@ -389,13 +386,17 @@ void updaterefcount(std::bitset<4*readlen> current, std::bitset<4*readlen> &ref,
 				count[3][i] = 1;
 		}
 	}
-	
+	revref.reset();	
 	for(int j = 0; j < readlen; j++)
-	{
-		revref[4*j] = 1 - ref[4*(readlen-j-1)];
-		revref[4*j+1] = 1 - ref[4*(readlen-j-1) + 1];
-		revref[4*j+2] = 1 - ref[4*(readlen-j-1) + 2];
-		revref[4*j+3] = 1 - ref[4*(readlen-j-1) + 3];
+	{	
+		if(ref[4*j] == 1)
+			revref[4*(readlen-j-1)+3] = 1;
+		else if(ref[4*j+1] == 1)
+			revref[4*(readlen-j-1)+2] = 1;
+		else if(ref[4*j+2] == 1)
+			revref[4*(readlen-j-1)+1] = 1;
+		else if(ref[4*j+3] == 1)
+			revref[4*(readlen-j-1)] = 1;
 	}
 	return;
 }
