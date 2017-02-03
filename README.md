@@ -37,7 +37,7 @@ with open('SRR065390_clean.dna','r') as f:
     fout.write('@\n'+line+'+\n'+line)
 ```
 
-###### Metagenomics
+###### Metagenomics data
 ```
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.1.fq.gz
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.2.fq.gz
@@ -52,6 +52,19 @@ wget -b ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v
 
 Inside this file different chromosomes are demarcated.
 
+##### Generating reads using gen_fastq (from orcom repo)
+###### Error-free reads (without reverse complementation) - 35M reads of length 100 from chrom 22
+```
+cd gen_fastq_noRC
+make
+./gen_fastq_noRC 35000000 100 PATH/chrom22.fasta PATH/chrom22_reads.fastq
+```
+
+###### Reads with 1% uniform substitution rate (each base is equally likely to be changed to any of the 4 possibilities e.g. A - C,T,G,N) (without reverse complementation) - 35M reads of length 100 from chrom 22
+```
+./gen_fastq_noRC 35000000 100 PATH/chrom22.fasta PATH/chrom22_reads.fastq -e
+```
+
 ##### Typical fastq format
 ```
 @seq id
@@ -60,19 +73,19 @@ read
 quality score
 ```
 
-##### Running orcom
+##### Running orcom (boost should be installed)
 ```
 git clone https://github.com/lrog/orcom.git
 cd orcom
 make boost
 cd bin
-./orcom_bin e -iPATH/SRR065390.fastq -oPATH/SRR065390.bin
-./orcom_pack e -iPATH/SRR065390.bin -oPATH/SRR065390.orcom
+./orcom_bin e -iPATH/SRR065390_clean.fastq -oPATH/SRR065390_clean.bin
+./orcom_pack e -iPATH/SRR065390_clean.bin -oPATH/SRR065390_clean.orcom
 ```
 
 ##### Getting orcom ordered file
 ```
-./orcom_pack d -iPATH/SRR065390.orcom -oPATH/SRR065390.dna
+./orcom_pack d -iPATH/SRR065390_clean.orcom -oPATH/SRR065390_clean.dna
 ```
 
 The dna file is of the form:
@@ -82,11 +95,35 @@ read2
 ..
 ```
 
-##### Proposed tool (noiseless)
+##### Some python packages
+```
+sudo pip install distance
+sudo pip install biopython
+sudo pip install joblib
+```
+
+##### Running Proposed tool (noiseless)
 First set the parameters at the top of the files.
 ```
-g++ matchsort7.cpp -std=c++11 -o a.out
+g++ reorderernoiseless.cpp -std=c++11 -o a.out
 ./a.out
+python encodernoiseless.py
+xz -k outfiles
+```
+
+##### Running Proposed tool (noisy)
+First set the parameters at the top of the files.
+```
+g++ reorderernoisy.cpp -std=c++11 -o a.out
+./a.out
+python encodernoisy.py
+xz -k outfiles
+```
+
+##### Decompressing (noisy)
+First set the parameters at the top of the files.
+```
+python decodernosy.py
 ```
 <!---
 ##### Using Google sparsehashmap
@@ -118,19 +155,13 @@ google::sparse_hash_map<>
 There should be no need to change anything else. However note that sparsehashmap does not seem to work with bitset as the index. One way to get around this (if the index length is not too large) is to use the bitset::to_ulong function.
 -->
 
-##### Some python packages
-```
-sudo pip install distance
-sudo pip install biopython
-sudo pip install joblib
-```
+<!--
 
 ##### Running Python code
 ```
 python matchsortnoisy8.py
 python packernoisy2.py
 ```
-<!--
 ##### Calculating Number of Hard reads
 ```
 grep 0 -o read_flag.txt | wc -l
@@ -140,7 +171,6 @@ grep 0 -o read_flag.txt | wc -l
 ```
 tr -cs 0 '\012' < read_flag.txt | awk '/00/{n += length - 1}; END {print n+0}'
 ```
--->
 ##### Generating reads using gen_fastq (from orcom repo)
 ###### Error-free reads (without reverse complementation) - 35M reads of length 100 from chrom 22
 ```
@@ -184,3 +214,4 @@ These are the more important files in the python folder. For the other files, se
 ###### Reordering for noisy simulated data without RC
 1. matchsortnoisy2.py - Similar to v1 reordering described in the report. Tries to find matches to the current read (no clean reference). 4 dictionaries. Parameters - matchlen, maxmatch, thresh. Produces outfile with reordered reads. Works with reads containing N.
 2. matchsortnoisy8.py - Similar to v2 reordering described in the report. Tries to find matches to the clean reference. 5 dictionaries. Parameters - matchlen, maxmatch, thresh. Produces outfile with reordered reads. Works with reads containing N.
+-->
