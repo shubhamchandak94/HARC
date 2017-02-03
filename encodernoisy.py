@@ -1,6 +1,6 @@
 #Encoding stage for noisy reads. 
-#infile - file containing reordered reads produced by reorderernoisy.cpp 
-#infile_flag - file containing flags produced by reorderernoisy.cpp
+#infile - file containing reordered reads produced by reordernoisy.cpp 
+#infile_flag - file containing flags produced by reordernoisy.cpp
 #outfile_... - the encoded files. Compress these and the rev file produced in stage 1 using xz.
 #readlen - length of reads (assumed constant)
 #maxmatch - maxshift in paper (same as that for reordering stage)
