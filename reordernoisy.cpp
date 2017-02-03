@@ -8,20 +8,6 @@
 //numreads - number of reads
 //thresh - hamming threshold. The hamming distance is calculated in the bitset representation.
 //numdict - no. of dictionaries. Set the indices in generateindexmasks(..)
-//
-
-//Similar to matchsort3 but maintains a majority based clean reference read (function updaterefcount). 
-//A count matrix is also maintained which the number of times each base was seen at each position in the current read.
-//The reference (or its RC) is used for looking in the dictionary and for hamming distance threshold.
-//The function updaterefcount is called after every read, it updates the count matrix and the clean reference.
-
-//This does reduce the singleton reads significantly, however the effect on the overall size is small because the noise files 
-//become larger and offset most of the gains in the seq file. The function has a resetcount parameter which is made true when
-//we don't a matching read and pick a random read from the remaining reads. In such a situation, the count is first reset to 0
-//and then at each position, the count for the corresponding base is made 1.
-
-//The encoding stage (which also uses reference) can be easily combined with this code. However in that case we can't use 
-//parallelization for the encoding stage
 
 //Note that reads with N are currently not supported
 
