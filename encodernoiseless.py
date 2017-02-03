@@ -1,5 +1,5 @@
 #Encoding stage for noiseless reads. 
-#infile - file containing reordered reads produced by reorderernoiseless.cpp 
+#infile - file containing reordered reads produced by reordernoiseless.cpp 
 #outfile_seq - the encoded file contaning suffixes. Compress using xz.
 #outfile_flag - the encoded file contaning flags. Compress using xz.
 #readlen - length of reads (assumed constant)
