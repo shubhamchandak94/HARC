@@ -123,7 +123,7 @@ xz -k outfiles
 ##### Decompressing (noisy)
 First set the parameters at the top of the files.
 ```
-python decodernosy.py
+python decodernoisy.py
 ```
 <!---
 ##### Using Google sparsehashmap
