@@ -7,13 +7,6 @@
 //numreads - number of reads
 //
 
-//Note that reads with N are currently not supported
-//Same functionality as matchsort1.cpp but is faster (with slight memory overhead).
-//Uses bit mask to generate dictionary index (which has length 2*readlen) - AND of read with a mask with 2*matchlen 1's
-//and rest 0's
-
-//outfile contains the reordered reads (one on each line)
-
 #include <iostream>
 #include <fstream>
 #include <bitset>
