@@ -1,3 +1,6 @@
+#Decode the reordered reads. readlen is the length of read (assumed constant). the infile's are the 5 encoded files and
+#outfile is the file to which the reordered reads will be written.
+
 from Bio.Seq import Seq
 
 outfile = "temptemp.dna"
