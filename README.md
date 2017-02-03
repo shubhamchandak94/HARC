@@ -105,7 +105,7 @@ sudo pip install joblib
 ##### Running Proposed tool (noiseless)
 First set the parameters at the top of the files.
 ```
-g++ reorderernoiseless.cpp -std=c++11 -o a.out
+g++ reordernoiseless.cpp -std=c++11 -o a.out
 ./a.out
 python encodernoiseless.py
 xz -k outfiles
@@ -114,7 +114,7 @@ xz -k outfiles
 ##### Running Proposed tool (noisy)
 First set the parameters at the top of the files.
 ```
-g++ reorderernoisy.cpp -std=c++11 -o a.out
+g++ reordernoisy.cpp -std=c++11 -o a.out
 ./a.out
 python encodernoisy.py
 xz -k outfiles
