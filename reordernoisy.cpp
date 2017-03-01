@@ -1,16 +1,13 @@
 //Reordering for real reads
-//Similar to matchsort3 but maintains a majority based clean reference read (function updaterefcount). 
-//A count matrix is also maintained which the number of times each base was seen at each position in the current read.
-//The reference (or its RC) is used for looking in the dictionary and for hamming distance threshold.
-//The function updaterefcount is called after every read, it updates the count matrix and the clean reference.
-
-//This does reduce the singleton reads significantly, however the effect on the overall size is small because the noise files 
-//become larger and offset most of the gains in the seq file. The function has a resetcount parameter which is made true when
-//we don't a matching read and pick a random read from the remaining reads. In such a situation, the count is first reset to 0
-//and then at each position, the count for the corresponding base is made 1.
-
-//The encoding stage (which also uses reference) can be easily combined with this code. However in that case we can't use 
-//parallelization for the encoding stage
+//infile - input dna file (not FASTQ). Remove all reads containing 'N's from the file.
+//outfile - output file to which reordered reads will be written (some of them reverse complemented).
+//outfileRC - file to which rev flag will be written (0-no RC, 1-read was RCed).
+//outfileflag - file containing flags indicating whether the read was matched or not. Used by the encoding stage.
+//readlen - length of read (assumed constant)
+//maxmatch - maxshift in the paper. 
+//numreads - number of reads
+//thresh - hamming threshold. The hamming distance is calculated in the bitset representation.
+//numdict - no. of dictionaries. Set the indices in generateindexmasks(..)
 
 //Note that reads with N are currently not supported
 
@@ -24,13 +21,13 @@
 #include <algorithm>
 #include <set>
 
-#define infile "SRR870667_1_clean.dna"
+#define infile "SRR065390_clean.dna"
 #define outfile "temp1.dna"
 #define outfileRC "tempRC1.txt"
 #define outfileflag "tempflag1.txt"
-#define readlen 108
-#define maxmatch 40
-#define numreads 68266234
+#define readlen 100
+#define maxmatch 20
+#define numreads 67155743
 #define thresh 16
 #define numdict 2
 
@@ -38,12 +35,22 @@ void generateindexmasks(std::bitset<2*readlen> *mask1)
 //function to generate dictionary index masks
 //should be symmetric about readlen (e.g. for 2 dicts - if first dict is start1-end1 (both included), 
 //then second should be (readlen-1-end1)-(readlen-1-start1))
+//e.g. if readlen is 100 and we want two dicts with indices 30-49,50-69 (in C++ notation),
+//the loops should look like:
+	/*
+		for(int i = 0; i < numdict; i++)
+			mask1[i].reset();
+		for(int i = 2*30; i < 2*50; i++)
+			mask1[0][i] = 1;
+		for(int i = 2*50; i < 2*70; i++)
+			mask1[1][i] = 1;
+		*/
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
-	for(int i = 2*34; i < 2*54; i++)
+	for(int i = 2*30; i < 2*50; i++)
 		mask1[0][i] = 1;
-	for(int i = 2*54; i < 2*74; i++)
+	for(int i = 2*50; i < 2*70; i++)
 		mask1[1][i] = 1;
 	
 	return;

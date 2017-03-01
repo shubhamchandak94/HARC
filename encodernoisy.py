@@ -1,4 +1,11 @@
-#find best match with ref or prev - for files with no Ns
+#Encoding stage for noisy reads. 
+#infile - file containing reordered reads produced by reordernoisy.cpp 
+#infile_flag - file containing flags produced by reordernoisy.cpp
+#outfile_... - the encoded files. Compress these and the rev file produced in stage 1 using xz.
+#readlen - length of reads (assumed constant)
+#maxmatch - maxshift in paper (same as that for reordering stage)
+#thresh - Hamming threshold - put it equal to that used in reordering stage.
+
 from distance import hamming
 
 char2index = {'A':0,'C':1,'G':2,'T':3,'N':4}
@@ -18,7 +25,7 @@ outfile_noise = "read_noise140.txt"
 outfile_noisepos = "read_noisepos140.txt"
 
 readlen = 100
-maxmatch = 30
+maxmatch = 20
 thresh = 30 # maximum number of mismatches allowed 
 inttoascii = {0:'a',1:'b',2:'c',3:'d',4:'e',5:'f',6:'g',7:'h',8:'i',9:'j',10:'k',11:'l',12:'m',13:'n',14:'o',15:'p',16:'q',17:'r',18:'s',19:'t',20:'u',21:'w',22:'x',23:'y',24:'z',25:'A',26:'B',27:'C',28:'D',29:'E',30:'F',31:'G',32:'H',33:'I',34:'J',35:'K',36:'L',37:'M',38:'N',39:'O',40:'P',readlen:'v'}
 
