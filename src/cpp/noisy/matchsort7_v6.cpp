@@ -8,16 +8,19 @@
 #include <algorithm>
 #include <set>
 #include <cstring>
+#include <string>
+#include "config.h"
 
-#define infile "SRR065390_clean.dna"
-#define outfile "temp0.dna"
-#define outfileRC "tempRC0.txt"
-#define outfileflag "tempflag0.txt"
-#define readlen 100
-#define maxmatch 30
-#define numreads 67155743
-#define thresh 24
-#define numdict 2
+//#define readlen 100
+
+
+int numreads = 0;
+
+std::string infile;
+std::string outfile;
+std::string outfileRC;
+std::string outfileflag;
+
 
 
 void generateindexmasks(std::bitset<2*readlen> *mask1)
@@ -39,6 +42,8 @@ std::string bitsettostring(std::bitset<2*readlen> b);
 
 void readDnaFile(std::bitset<2*readlen> *read);
 
+void getDataParams();
+
 void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict);
 
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
@@ -51,10 +56,17 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 
 std::bitset<2*readlen> reverse_complement(std::bitset<2*readlen> b);
 
-int main()
+int main(int argc, char** argv)
 {
+	std::string basedir = std::string(argv[1]);
+	infile = basedir + "/input_clean.dna";
+	outfile = basedir + "/output/temp0.dna";
+	outfileRC = basedir + "/output/tempRC0.txt";
+	outfileflag = basedir + "/output/tempflag0.txt";
+	getDataParams(); //populate numreads, readlen
+	
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
-	std::cout << "Reading file\n";
+	std::cout << "Reading file: " << infile << std::endl;
 	readDnaFile(read);
 	std::cout << "Constructing dictionaries\n";
 	//using vector instead of list to save some space (at the cost of linear time required to delete elements)
@@ -90,6 +102,34 @@ std::bitset<2*readlen> stringtobitset(std::string s)
 	}
 	return b;
 }
+
+void getDataParams()
+{
+	int number_of_lines = 0;
+    std::string line;
+    std::ifstream myfile(infile, std::ifstream::in);
+    
+    std::getline(myfile, line);
+    int read_length = line.length();
+    std::cout << "Length of file: " << read_length << std::endl;
+    myfile.seekg(0, myfile.beg);
+
+    while (std::getline(myfile, line))
+    {
+        ++number_of_lines;
+    	int _len = line.length(); 
+    	if( _len != read_length) 
+    	{
+    		std::cout << "Read lengths are not the same!: " << read_length << " , " << _len << std::endl;
+    	}
+    }
+    //readlen = read_length;
+    numreads = number_of_lines;
+    std::cout << "Read length: " << read_length << std::endl;
+    std::cout << "Number of reads: " << number_of_lines << std::endl;
+    myfile.close();
+}
+
 
 void readDnaFile(std::bitset<2*readlen> *read)
 {
