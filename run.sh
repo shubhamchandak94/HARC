@@ -53,7 +53,8 @@ compress()
 
 decompress()
 {
-	echo "nothing right now"
+	echo "Decompression ..."
+	python src/decodernoisy.py data/$basename
 }
 
 #Process the arguments
