@@ -58,6 +58,10 @@ compress()
 	mkdir -p data/$basename/output 
 	./src/reorder_noisy.out data/$basename
 	python src/encodernoisy.py data/$basename
+
+	# remove unwanted files
+	rm data/$basename/output/temp0.dna
+	rm data/$basename/output/tempflag0.txt
 }
 
 decompress()

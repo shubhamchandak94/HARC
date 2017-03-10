@@ -4,7 +4,6 @@
 from Bio.Seq import Seq
 import sys
 import os
-<<<<<<< HEAD
 #sys.path.append("..")
 #import config.ini
 
@@ -28,8 +27,9 @@ f_out = open(outfile,'w')
 readlen = 0 
 for line in f_meta:
 	current = line.rstrip('\n')
-	readlen = len(current)
+	readlen = int(current)
 	break
+print("readlen: ", readlen)
 
 asciitoint = {'a':0,'b':1,'c':2,'d':3,'e':4,'f':5,'g':6,'h':7,'i':8,'j':9,'k':10,'l':11,'m':12,'n':13,'o':14,'p':15,'q':16,'r':17,'s':18,'t':19,'u':20,'w':21,'x':22,'y':23,'z':24,'A':25,'B':26,'C':27,'D':28,'E':29,'F':30,'G':31,'H':32,'I':33,'J':34,'K':35,'L':36,'M':37,'N':38,'O':39,'P':40,'v':readlen}
 
