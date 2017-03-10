@@ -4,6 +4,7 @@
 from Bio.Seq import Seq
 import sys
 import os
+<<<<<<< HEAD
 #sys.path.append("..")
 #import config.ini
 
@@ -11,12 +12,12 @@ basename = sys.argv[1]
 basedir = os.path.join(basename,"output") 
 outfile = os.path.join(basedir,"output.dna")
 infile_meta = os.path.join(basedir,"read_meta.txt")
-
 infile_seq = os.path.join(basedir,"read_seq140.txt")
 infile_pos = os.path.join(basedir,"read_pos140.txt")
 infile_noise = os.path.join(basedir,"read_noise140.txt")
 infile_noisepos = os.path.join(basedir,"read_noisepos140.txt")
 infile_rev = os.path.join(basedir,"tempRC0.txt")
+
 f_meta = open(infile_meta,'r')
 f_pos = open(infile_pos,'r')
 f_noise = open(infile_noise,'r')
