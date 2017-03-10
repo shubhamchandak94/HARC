@@ -7,28 +7,54 @@
 #thresh - Hamming threshold - put it equal to that used in reordering stage.
 
 from distance import hamming
+import sys
+import os
+
+sys.path.append( os.path.abspath('.') )
+from config import *
 
 char2index = {'A':0,'C':1,'G':2,'T':3,'N':4}
 index2char = {0:'A',1:'C',2:'G',3:'T',4:'N'}
+
+# maxmatch = 30
+# thresh = 24 # maximum number of mismatches allowed 
+
+basename = sys.argv[1]
+basedir = os.path.join(basename,"output") 
+infile = os.path.join(basedir,"temp0.dna")
+infile_flag = os.path.join(basedir,"tempflag0.txt")
+outfile_seq = os.path.join(basedir,"read_seq140.txt")
+outfile_meta = os.path.join(basedir,"read_meta.txt")
+outfile_pos = os.path.join(basedir,"read_pos140.txt")
+outfile_noise = os.path.join(basedir,"read_noise140.txt")
+outfile_noisepos = os.path.join(basedir,"read_noisepos140.txt")
+
+
+in_flag = open(infile_flag,'r')
+f_seq = open(outfile_seq,'w')
+f_meta = open(outfile_meta,'w')
+f_pos = open(outfile_pos,'w')
+f_noise = open(outfile_noise,'w')
+f_noisepos = open(outfile_noisepos,'w')
+k = 0
+
+readlen = 0
+with open(infile,'r') as f:
+	for line in f:
+		current = line.rstrip('\n')
+		readlen = len(current)
+		break;
+print("readlen: ", readlen)
+
+
+
+inttoascii = {0:'a',1:'b',2:'c',3:'d',4:'e',5:'f',6:'g',7:'h',8:'i',9:'j',10:'k',11:'l',12:'m',13:'n',14:'o',15:'p',16:'q',17:'r',18:'s',19:'t',20:'u',21:'w',22:'x',23:'y',24:'z',25:'A',26:'B',27:'C',28:'D',29:'E',30:'F',31:'G',32:'H',33:'I',34:'J',35:'K',36:'L',37:'M',38:'N',39:'O',40:'P',readlen:'v'}
+
 
 def findmajority(count):
 	maxcount = [max(s) for s in count]
 	l = [index2char[s.index(maxcount[i])] for i,s in zip(range(len(count)),count)]
 	return ''.join(l)
-
-
-infile = "temp5.dna"
-infile_flag = "tempflag5.txt"
-outfile_seq = "read_seq140.txt"
-outfile_pos = "read_pos140.txt"
-outfile_noise = "read_noise140.txt"
-outfile_noisepos = "read_noisepos140.txt"
-
-readlen = 100
-maxmatch = 20
-thresh = 30 # maximum number of mismatches allowed 
-inttoascii = {0:'a',1:'b',2:'c',3:'d',4:'e',5:'f',6:'g',7:'h',8:'i',9:'j',10:'k',11:'l',12:'m',13:'n',14:'o',15:'p',16:'q',17:'r',18:'s',19:'t',20:'u',21:'w',22:'x',23:'y',24:'z',25:'A',26:'B',27:'C',28:'D',29:'E',30:'F',31:'G',32:'H',33:'I',34:'J',35:'K',36:'L',37:'M',38:'N',39:'O',40:'P',readlen:'v'}
-
 
 def buildcontig(reads):
 	if(len(reads) == 1): #singleton read
@@ -86,15 +112,8 @@ def writecontig(ref,pos,reads):
 	f_pos.write('\n')
 	return		
 
-in_flag = open(infile_flag,'r')
-f_seq = open(outfile_seq,'w')
-f_pos = open(outfile_pos,'w')
-f_noise = open(outfile_noise,'w')
-f_noisepos = open(outfile_noisepos,'w')
-k = 0
 
 reads = []
-
 with open(infile,'r') as f:
 	for line in f:
 		k = k + 1
@@ -110,10 +129,15 @@ with open(infile,'r') as f:
 		else:
 			reads.append(current)
 
+
 #last contig
 [ref,pos] = buildcontig(reads)
 writecontig(ref,pos,reads)
+
+# write metadata
+f_meta.write(str(readlen) + "\n")
 f_seq.close()
+f_meta.close()
 f_pos.close()	
 f_noise.close()
 f_noisepos.close()
