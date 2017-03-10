@@ -8,14 +8,16 @@
 #include <algorithm>
 #include <set>
 #include <cstring>
+#include <string>
 
-#define infile "SRR065390_clean.dna"
-#define outfile "temp0.dna"
-#define outfileRC "tempRC0.txt"
-#define outfileflag "tempflag0.txt"
+std::string infile;
+std::string outfile;
+std::string outfileRC;
+std::string outfileflag;
+
 #define readlen 100
 #define maxmatch 30
-#define numreads 67155743
+#define numreads 3258816
 #define thresh 24
 #define numdict 2
 
@@ -51,10 +53,17 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 
 std::bitset<2*readlen> reverse_complement(std::bitset<2*readlen> b);
 
-int main()
+int main(int argc, char** argv)
 {
+	std::string basedir = std::string(argv[1]);
+	infile = basedir + "/input_clean.dna";
+	outfile = basedir + "/output/temp0.dna";
+	outfileRC = basedir + "/output/tempRC0.txt";
+	outfileflag = basedir + "/output/tempflag0.txt";
+
+	
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
-	std::cout << "Reading file\n";
+	std::cout << "Reading file: " << infile << std::endl;
 	readDnaFile(read);
 	std::cout << "Constructing dictionaries\n";
 	//using vector instead of list to save some space (at the cost of linear time required to delete elements)

@@ -8,26 +8,30 @@
 
 from distance import hamming
 
+infile = "../output/temp0.dna"
+infile_flag = "../output/tempflag0.txt"
+outfile_seq = "../output/read_seq140.txt"
+outfile_pos = "../output/read_pos140.txt"
+outfile_noise = "../output/read_noise140.txt"
+outfile_noisepos = "../output/read_noisepos140.txt"
+
+assert os.path.isfile(file_name),"The data did not get generated"
+assert os.path.isfile(val_name),"The data did not get generated"
+assert os.path.isfile(info_file),"The info file did not get created"
+print "Data generated .. "
+
 char2index = {'A':0,'C':1,'G':2,'T':3,'N':4}
 index2char = {0:'A',1:'C',2:'G',3:'T',4:'N'}
+readlen = 100
+maxmatch = 30
+thresh = 24 # maximum number of mismatches allowed 
+inttoascii = {0:'a',1:'b',2:'c',3:'d',4:'e',5:'f',6:'g',7:'h',8:'i',9:'j',10:'k',11:'l',12:'m',13:'n',14:'o',15:'p',16:'q',17:'r',18:'s',19:'t',20:'u',21:'w',22:'x',23:'y',24:'z',25:'A',26:'B',27:'C',28:'D',29:'E',30:'F',31:'G',32:'H',33:'I',34:'J',35:'K',36:'L',37:'M',38:'N',39:'O',40:'P',readlen:'v'}
+
 
 def findmajority(count):
 	maxcount = [max(s) for s in count]
 	l = [index2char[s.index(maxcount[i])] for i,s in zip(range(len(count)),count)]
 	return ''.join(l)
-
-
-infile = "temp5.dna"
-infile_flag = "tempflag5.txt"
-outfile_seq = "read_seq140.txt"
-outfile_pos = "read_pos140.txt"
-outfile_noise = "read_noise140.txt"
-outfile_noisepos = "read_noisepos140.txt"
-
-readlen = 100
-maxmatch = 20
-thresh = 30 # maximum number of mismatches allowed 
-inttoascii = {0:'a',1:'b',2:'c',3:'d',4:'e',5:'f',6:'g',7:'h',8:'i',9:'j',10:'k',11:'l',12:'m',13:'n',14:'o',15:'p',16:'q',17:'r',18:'s',19:'t',20:'u',21:'w',22:'x',23:'y',24:'z',25:'A',26:'B',27:'C',28:'D',29:'E',30:'F',31:'G',32:'H',33:'I',34:'J',35:'K',36:'L',37:'M',38:'N',39:'O',40:'P',readlen:'v'}
 
 
 def buildcontig(reads):
@@ -86,35 +90,40 @@ def writecontig(ref,pos,reads):
 	f_pos.write('\n')
 	return		
 
-in_flag = open(infile_flag,'r')
-f_seq = open(outfile_seq,'w')
-f_pos = open(outfile_pos,'w')
-f_noise = open(outfile_noise,'w')
-f_noisepos = open(outfile_noisepos,'w')
-k = 0
 
-reads = []
+def main():
+	in_flag = open(infile_flag,'r')
+	f_seq = open(outfile_seq,'w')
+	f_pos = open(outfile_pos,'w')
+	f_noise = open(outfile_noise,'w')
+	f_noisepos = open(outfile_noisepos,'w')
+	k = 0
 
-with open(infile,'r') as f:
-	for line in f:
-		k = k + 1
-		if k%1000000 == 0:
-			print str(k//1000000)+'M done'
-		current = line.rstrip('\n')
-		c = in_flag.read(1)
-		if c=='0':
-			if len(reads) != 0:
-				[ref,pos] = buildcontig(reads)
-				writecontig(ref,pos,reads)
-			reads = [current]
-		else:
-			reads.append(current)
+	reads = []
 
-#last contig
-[ref,pos] = buildcontig(reads)
-writecontig(ref,pos,reads)
-f_seq.close()
-f_pos.close()	
-f_noise.close()
-f_noisepos.close()
+	with open(infile,'r') as f:
+		for line in f:
+			k = k + 1
+			if k%1000000 == 0:
+				print str(k//1000000)+'M done'
+			current = line.rstrip('\n')
+			c = in_flag.read(1)
+			if c=='0':
+				if len(reads) != 0:
+					[ref,pos] = buildcontig(reads)
+					writecontig(ref,pos,reads)
+				reads = [current]
+			else:
+				reads.append(current)
 
+	#last contig
+	[ref,pos] = buildcontig(reads)
+	writecontig(ref,pos,reads)
+	f_seq.close()
+	f_pos.close()	
+	f_noise.close()
+	f_noisepos.close()
+
+
+if __name__ == '__main__':
+    main()
