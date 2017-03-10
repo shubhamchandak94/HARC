@@ -2,7 +2,7 @@
 
 # Download data
 # DATA_DIR="data/"
-source config.ini
+source config.py
 
 
 usage()
@@ -15,6 +15,7 @@ OPTIONS:
    -h      Show this message
    -f      download relevant files
    -p      preprocess
+   -g      generateConfig
    -c      compress
    -d      Decompress       
  		
@@ -43,6 +44,14 @@ preprocess()
 	python util/remove_N.py data/$basename/input.dna
 }
 
+generateConfig()
+{
+	echo "#define maxmatch $maxmatch" > src/cpp/noisy/config.h
+	echo "#define thresh $thresh" >> src/cpp/noisy/config.h
+	echo "#define numdict $numdict" >> src/cpp/noisy/config.h
+	readlen="$(wc -L < data/$basename/input_clean.dna)"
+	echo "#define readlen $readlen" >> src/cpp/noisy/config.h
+}
 compress()
 {
 	g++ src/cpp/noisy/matchsort7_v6.cpp -std=c++11 -o src/reorder_noisy.out
@@ -53,16 +62,18 @@ compress()
 
 decompress()
 {
-	echo "nothing right now"
+	echo "Decompression ..."
+	python src/decodernoisy.py data/$basename
 }
 
 #Process the arguments
-while getopts hfpcd opt
+while getopts hfpcdg opt
 do
    case "$opt" in
 	h) usage; exit 1;;
 	f) download;; 
 	p) preprocess;;
+	g) generateConfig;;
 	c) compress;;
 	d) decompress;;
 	?) usage; exit;;

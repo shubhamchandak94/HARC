@@ -9,17 +9,18 @@
 #include <set>
 #include <cstring>
 #include <string>
+#include "config.h"
+
+//#define readlen 100
+
+
+int numreads = 0;
 
 std::string infile;
 std::string outfile;
 std::string outfileRC;
 std::string outfileflag;
 
-#define readlen 100
-#define maxmatch 30
-#define numreads 3258816
-#define thresh 24
-#define numdict 2
 
 
 void generateindexmasks(std::bitset<2*readlen> *mask1)
@@ -41,6 +42,8 @@ std::string bitsettostring(std::bitset<2*readlen> b);
 
 void readDnaFile(std::bitset<2*readlen> *read);
 
+void getDataParams();
+
 void constructdictionary(std::bitset<2*readlen> *read, std::unordered_map<std::bitset<2*readlen>,std::vector<int>> *dict);
 
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
@@ -60,7 +63,7 @@ int main(int argc, char** argv)
 	outfile = basedir + "/output/temp0.dna";
 	outfileRC = basedir + "/output/tempRC0.txt";
 	outfileflag = basedir + "/output/tempflag0.txt";
-
+	getDataParams(); //populate numreads, readlen
 	
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
 	std::cout << "Reading file: " << infile << std::endl;
@@ -99,6 +102,34 @@ std::bitset<2*readlen> stringtobitset(std::string s)
 	}
 	return b;
 }
+
+void getDataParams()
+{
+	int number_of_lines = 0;
+    std::string line;
+    std::ifstream myfile(infile, std::ifstream::in);
+    
+    std::getline(myfile, line);
+    int read_length = line.length();
+    std::cout << "Length of file: " << read_length << std::endl;
+    myfile.seekg(0, myfile.beg);
+
+    while (std::getline(myfile, line))
+    {
+        ++number_of_lines;
+    	int _len = line.length(); 
+    	if( _len != read_length) 
+    	{
+    		std::cout << "Read lengths are not the same!: " << read_length << " , " << _len << std::endl;
+    	}
+    }
+    //readlen = read_length;
+    numreads = number_of_lines;
+    std::cout << "Read length: " << read_length << std::endl;
+    std::cout << "Number of reads: " << number_of_lines << std::endl;
+    myfile.close();
+}
+
 
 void readDnaFile(std::bitset<2*readlen> *read)
 {
