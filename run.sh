@@ -17,7 +17,8 @@ OPTIONS:
    -p      preprocess
    -g      generateConfig
    -c      compress
-   -d      Decompress       
+   -d      Decompress
+   -e      Compute Entropy Bound       
  		
 EOF
 }
@@ -40,7 +41,8 @@ download()
 preprocess()
 {
 	echo "*** Preprocessing ***"
-	sed -n '2~4p' data/$basename/input.fastq > data/$basename/input.dna 
+	sed -n '2~4p' data/$basename/input.fastq > data/$basename/input.dna
+	sed -n '4~4p' data/$basename/input.fastq > data/$basename/input.quality  
 	python util/remove_N.py data/$basename/input.dna
 	sort -o data/$basename/input_N.dna data/$basename/input_N.dna
 }
@@ -89,8 +91,13 @@ decompress()
 	python src/decodernoisy.py data/$basename
 }
 
+compute_entropy()
+{
+	echo "computing Noise entropy"
+	python util/noise_entropy.py data/$basename/input.quality
+}
 #Process the arguments
-while getopts hfpcdg opt
+while getopts hfpcdge opt
 do
    case "$opt" in
 	h) usage; exit 1;;
@@ -99,6 +106,7 @@ do
 	g) generateConfig;;
 	c) compress;;
 	d) decompress;;
+	e) compute_entropy;;
 	?) usage; exit;;
    esac
 done
