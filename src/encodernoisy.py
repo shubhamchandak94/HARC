@@ -21,13 +21,13 @@ index2char = {0:'A',1:'C',2:'G',3:'T',4:'N'}
 
 basename = sys.argv[1]
 basedir = os.path.join(basename,"output") 
-infile = os.path.join(basedir,"temp0.dna")
-infile_flag = os.path.join(basedir,"tempflag0.txt")
-outfile_seq = os.path.join(basedir,"read_seq140.txt")
+infile = os.path.join(basedir,"temp.dna")
+infile_flag = os.path.join(basedir,"tempflag.txt")
+outfile_seq = os.path.join(basedir,"read_seq.txt")
 outfile_meta = os.path.join(basedir,"read_meta.txt")
-outfile_pos = os.path.join(basedir,"read_pos140.txt")
-outfile_noise = os.path.join(basedir,"read_noise140.txt")
-outfile_noisepos = os.path.join(basedir,"read_noisepos140.txt")
+outfile_pos = os.path.join(basedir,"read_pos.txt")
+outfile_noise = os.path.join(basedir,"read_noise.txt")
+outfile_noisepos = os.path.join(basedir,"read_noisepos.txt")
 
 
 in_flag = open(infile_flag,'r')
@@ -129,7 +129,7 @@ with open(infile,'r') as f:
 		else:
 			reads.append(current)
 
-
+print len(reads)
 #last contig
 [ref,pos] = buildcontig(reads)
 writecontig(ref,pos,reads)

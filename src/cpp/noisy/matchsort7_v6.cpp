@@ -60,9 +60,9 @@ int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
 	infile = basedir + "/input_clean.dna";
-	outfile = basedir + "/output/temp0.dna";
-	outfileRC = basedir + "/output/tempRC0.txt";
-	outfileflag = basedir + "/output/tempflag0.txt";
+	outfile = basedir + "/output/temp.dna";
+	outfileRC = basedir + "/output/read_rev.txt";
+	outfileflag = basedir + "/output/tempflag.txt";
 	getDataParams(); //populate numreads, readlen
 	
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
