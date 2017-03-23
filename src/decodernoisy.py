@@ -9,7 +9,7 @@ import os
 
 basename = sys.argv[1]
 basedir = os.path.join(basename,"output") 
-outfile = os.path.join(basedir,"output.dna")
+outfile = os.path.join(basename,"output.dna")
 infile_meta = os.path.join(basedir,"read_meta.txt")
 infile_seq = os.path.join(basedir,"read_seq.txt")
 infile_pos = os.path.join(basedir,"read_pos.txt")
