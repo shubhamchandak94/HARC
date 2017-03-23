@@ -1,9 +1,9 @@
 
-basename="SRR065390"
-URL_1="ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065390/SRR065390_1.fastq.gz"
-URL_2="ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065390/SRR065390_2.fastq.gz"
+basename="SRR554369"
+URL_1="ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_1.fastq.gz"
+URL_2="ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_2.fastq.gz"
 
-URL_genome="ftp://ftp.ensembl.org/pub/release-87/fasta/caenorhabditis_elegans/dna/Caenorhabditis_elegans.WBcel235.dna.toplevel.fa.gz"
+URL_genome="ftp://ftp.ensemblgenomes.org/pub/bacteria/release-34/fasta/bacteria_13_collection/pseudomonas_aeruginosa_pao1/dna/Pseudomonas_aeruginosa_pao1.ASM676v1.dna.toplevel.fa.gz"
 
 maxmatch=30
 thresh=24

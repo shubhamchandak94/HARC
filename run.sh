@@ -31,11 +31,17 @@ download()
 	echo "*** FASTQ Sequences being downloaded ***"
 	mkdir -p data/$basename
 	mkdir -p data/$basename/output
-	wget -O data/$basename/file_1.fastq.gz $URL_1
-	wget -O data/$basename/file_2.fastq.gz $URL_2
-
-	gunzip data/$basename/file_1.fastq.gz data/$basename/file_2.fastq.gz
-	cat data/$basename/file_1.fastq data/$basename/file_2.fastq > data/$basename/input.fastq
+	if [[ -z "${URL_2}" ]]; then
+		wget -O data/$basename/file_1.fastq.gz $URL_1
+		gunzip data/$basename/file_1.fastq.gz 
+		mv data/$basename/file_1.fastq data/$basename/input.fastq
+	else
+		echo "Combining 2 FASTQ files"
+		wget -O data/$basename/file_1.fastq.gz $URL_1
+		wget -O data/$basename/file_2.fastq.gz $URL_2
+		gunzip data/$basename/file_1.fastq.gz data/$basename/file_2.fastq.gz
+		cat data/$basename/file_1.fastq data/$basename/file_2.fastq > data/$basename/input.fastq
+	fi
 }
 
 # Removes quality values and N values from the dna and writes reads with N to a separate file
@@ -94,14 +100,17 @@ decompress()
 
 compute_entropy()
 {
-	echo "computing Noise entropy"
-	python util/noise_entropy.py data/$basename/input.quality
 
 	echo "Downloading the FASTA File"
-
+	wget -O data/$basename/genome_fasta.fa.gz $URL_genome
+	gunzip data/$basename/genome_fasta.fa.gz
+	
     echo "Computing FASTA File entropy"
-    #./util/MFCompressC 
-    #http://sweet.ua.pt/ap/software/mfcompress/MFCompress-linux64-1.01.tgz
+    ./util/MFCompress/MFCompressC -3 data/$basename/genome_fasta.fa
+
+	echo "computing Noise entropy"
+	python util/compute_entropy.py data/$basename/input.quality data/$basename/genome_fasta.fa.mfc data/$basename/genome_fasta.fa data/$basename/output.tar.xz
+
 }
 #Process the arguments
 while getopts hfpcdge opt
