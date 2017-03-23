@@ -100,7 +100,7 @@ decompress()
 
 compute_entropy()
 {
-
+    mkdir -p logs
 	echo "Downloading the FASTA File"
 	wget -O data/$basename/genome_fasta.fa.gz $URL_genome
 	gunzip data/$basename/genome_fasta.fa.gz
@@ -109,7 +109,7 @@ compute_entropy()
     ./util/MFCompress/MFCompressC -3 data/$basename/genome_fasta.fa
 
 	echo "computing Noise entropy"
-	python util/compute_entropy.py data/$basename/input.quality data/$basename/genome_fasta.fa.mfc data/$basename/genome_fasta.fa data/$basename/output.tar.xz | tee data/$basename/entropy_computation.log
+	python util/compute_entropy.py data/$basename/input.quality data/$basename/genome_fasta.fa.mfc data/$basename/genome_fasta.fa data/$basename/output.tar.xz | tee logs/$basename_entropy_computation.log
 
 }
 #Process the arguments
