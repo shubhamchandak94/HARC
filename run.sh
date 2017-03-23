@@ -27,6 +27,7 @@ EOF
 # TODO: Make this more general later
 download()
 {
+   
 	echo "*** FASTQ Sequences being downloaded ***"
 	mkdir -p data/$basename
 	mkdir -p data/$basename/output
@@ -95,6 +96,12 @@ compute_entropy()
 {
 	echo "computing Noise entropy"
 	python util/noise_entropy.py data/$basename/input.quality
+
+	echo "Downloading the FASTA File"
+
+    echo "Computing FASTA File entropy"
+    #./util/MFCompressC 
+    #http://sweet.ua.pt/ap/software/mfcompress/MFCompress-linux64-1.01.tgz
 }
 #Process the arguments
 while getopts hfpcdge opt
