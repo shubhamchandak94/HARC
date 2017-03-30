@@ -6,6 +6,6 @@ for f in config*.py
 do
   cp $f config.py
   echo $f
-  rm config.py
   ./run.sh -fpgcde
+  rm config.py
 done
