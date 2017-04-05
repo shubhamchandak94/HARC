@@ -102,7 +102,7 @@ def writecontig(ref,pos,reads,f_seq,f_pos,f_noise,f_noisepos):
 		for j in range(readlen):
 			if currentread[j]!=ref[currentpos+j]:
 				f_noise.write(currentread[j])
-				f_noisepos.write("%02d"%(j-prevj))#delta encoding
+				f_noisepos.write(str(unichr(j-prevj)))#delta encoding
 				prevj = j
 		f_noise.write('\n')
 		f_pos.write(inttoascii[(currentpos-prevpos)])

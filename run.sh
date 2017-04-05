@@ -84,17 +84,16 @@ compress()
 	rm data/$basename/output/tempflag.txt*
 	rm data/$basename/output/read*txt.*
        #create tarball
+	xz -f data/$basename/output/*
 	tar -cf data/$basename/output.tar data/$basename/output
-	xz -f data/$basename/output.tar
 	rm -r data/$basename/output/
 }
 
 decompress()
 {
 	echo "Decompression ..."
-	xz -dkf data/$basename/output.tar.xz
 	tar -xf data/$basename/output.tar
-	rm data/$basename/output.tar
+	xz -df data/$basename/output/*
 	python src/decodernoisy.py data/$basename
 }
 
@@ -106,10 +105,12 @@ compute_entropy()
 	gunzip data/$basename/genome_fasta.fa.gz
 	
     echo "Computing FASTA File entropy"
+    chmod 741 ./util/MFCompress/MFCompressC
     ./util/MFCompress/MFCompressC -3 data/$basename/genome_fasta.fa
 
 	echo "computing Noise entropy"
-	python util/compute_entropy.py data/$basename/input.quality data/$basename/genome_fasta.fa.mfc data/$basename/genome_fasta.fa data/$basename/output.tar.xz | tee logs/$basename_entropy_computation.log
+        cp config.py logs/"$basename"_entropy_computation.log
+	python util/compute_entropy.py data/$basename/input.quality data/$basename/genome_fasta.fa.mfc data/$basename/genome_fasta.fa data/$basename/output.tar | tee -a logs/"$basename"_entropy_computation.log
 
 }
 #Process the arguments

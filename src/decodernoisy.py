@@ -46,7 +46,7 @@ with open(infile_seq,'r') as f_seq:
 			noise = f_noise.readline().rstrip('\n')
 			prevnoisepos = 0
 			for n in noise:
-				noisepos = int(f_noisepos.read(2))+prevnoisepos
+				noisepos = ord(f_noisepos.read(1))+prevnoisepos
 				currentread = currentread[:noisepos]+n+currentread[noisepos+1:]
 				prevnoisepos = noisepos
 			rev = f_rev.read(1)
