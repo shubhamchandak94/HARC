@@ -73,6 +73,7 @@ compress()
 	./src/reorder_noisy.out data/$basename
 	split -a 4 -d -l $chunksize data/$basename/output/temp.dna data/$basename/output/temp.dna.
 	split -a 4 -d -b $chunksize data/$basename/output/tempflag.txt data/$basename/output/tempflag.txt.
+	split -a 4 -d -l $chunksize data/$basename/output/temppos.txt data/$basename/output/temppos.txt.
 	python src/encodernoisy_parallel.py data/$basename
 	cat data/$basename/output/read_seq.txt.* > data/$basename/output/read_seq.txt
 	cat data/$basename/output/read_pos.txt.* > data/$basename/output/read_pos.txt
@@ -82,6 +83,7 @@ compress()
        # remove unwanted files
 	rm data/$basename/output/temp.dna*
 	rm data/$basename/output/tempflag.txt*
+	rm data/$basename/output/temppos.txt*
 	rm data/$basename/output/read*txt.*
        #create tarball
 	xz -f data/$basename/output/*
