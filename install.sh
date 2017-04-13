@@ -12,6 +12,8 @@ pip install distance biopython joblib tqdm
 wget  http://sweet.ua.pt/ap/software/mfcompress/MFCompress-linux64-1.01.tgz
 tar -zxvf MFCompress-linux64-1.01.tgz
 mkdir -p util/MFCompress
-mv MFCompress-linux64-1.01/* util/MFCompress 
+mv MFCompress-linux64-1.01/* util/MFCompress
+chmod 741 ./util/MFCompress/MFCompressC
+chmod 741 ./util/MFCompress/MFCompressD 
 rm -r MFCompress-linux64-1.01*
 

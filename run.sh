@@ -75,7 +75,8 @@ compress()
 	split -a 4 -d -b $chunksize data/$basename/output/tempflag.txt data/$basename/output/tempflag.txt.
 	split -a 4 -d -l $chunksize data/$basename/output/temppos.txt data/$basename/output/temppos.txt.
 	python src/encodernoisy_parallel.py data/$basename
-	cat data/$basename/output/read_seq.txt.* > data/$basename/output/read_seq.txt
+	echo ">" > data/$basename/output/seq_header
+	cat data/$basename/output/seq_header data/$basename/output/read_seq.txt.* > data/$basename/output/read_seq.txt
 	cat data/$basename/output/read_pos.txt.* > data/$basename/output/read_pos.txt
 	cat data/$basename/output/read_noise.txt.* > data/$basename/output/read_noise.txt
 	cat data/$basename/output/read_noisepos.txt.* > data/$basename/output/read_noisepos.txt
@@ -85,8 +86,17 @@ compress()
 	rm data/$basename/output/tempflag.txt*
 	rm data/$basename/output/temppos.txt*
 	rm data/$basename/output/read*txt.*
+	rm data/$basename/output/seq_header
        #create tarball
-	xz -f data/$basename/output/*
+	
+	7z a data/$basename/output/read_pos.txt.7z data/$basename/output/read_pos.txt
+	7z a data/$basename/output/read_noise.txt.7z data/$basename/output/read_noise.txt
+	7z a data/$basename/output/read_noisepos.txt.7z data/$basename/output/read_noisepos.txt
+	7z a data/$basename/output/input_N.dna.7z data/$basename/output/input_N.dna
+	7z a data/$basename/output/read_meta.txt.7z data/$basename/output/read_meta.txt
+	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt
+	./util/MFCompress/MFCompressC data/$basename/output/read_seq.txt
+	rm data/$basename/output/*.txt data/$basename/output/*.dna
 	tar -cf data/$basename/output.tar data/$basename/output
 	rm -r data/$basename/output/
 }
@@ -95,7 +105,15 @@ decompress()
 {
 	echo "Decompression ..."
 	tar -xf data/$basename/output.tar
-	xz -df data/$basename/output/*
+	7z e data/$basename/output/read_pos.txt.7z -odata/$basename/output/
+	7z e data/$basename/output/read_noise.txt.7z -odata/$basename/output/
+	7z e data/$basename/output/read_noisepos.txt.7z -odata/$basename/output/
+	7z e data/$basename/output/input_N.dna.7z -odata/$basename/output/
+	7z e data/$basename/output/read_meta.txt.7z -odata/$basename/output/
+	7z e data/$basename/output/read_rev.txt.7z -odata/$basename/output/
+	./util/MFCompress/MFCompressD data/$basename/output/read_seq.txt.mfc
+	tr -d '\r\n>' < data/$basename/output/read_seq.txt.mfc.d > data/$basename/output/read_seq.txt
+	rm data/$basename/output/read_seq.txt.mfc.d
 	python src/decodernoisy.py data/$basename
 }
 
@@ -107,7 +125,6 @@ compute_entropy()
 	gunzip data/$basename/genome_fasta.fa.gz
 	
     echo "Computing FASTA File entropy"
-    chmod 741 ./util/MFCompress/MFCompressC
     ./util/MFCompress/MFCompressC -3 data/$basename/genome_fasta.fa
 
 	echo "computing Noise entropy"

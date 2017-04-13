@@ -20,7 +20,7 @@ std::string infile;
 std::string outfile;
 std::string outfileRC;
 std::string outfileflag;
-
+std::string outfilepos;
 
 
 void generateindexmasks(std::bitset<2*readlen> *mask1)
@@ -48,9 +48,9 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<std:
 
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
 
-void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int>& flagvec);
+void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*readlen>,std::vector<int>> *dict,std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int>& flagvec, std::vector<int>& readpos);
 
-void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec);
+void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec, std::vector<int>& readpos);
 
 void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, bool rev, int shift);
 
@@ -63,6 +63,7 @@ int main(int argc, char** argv)
 	outfile = basedir + "/output/temp.dna";
 	outfileRC = basedir + "/output/read_rev.txt";
 	outfileflag = basedir + "/output/tempflag.txt";
+	outfilepos = basedir + "/output/temppos.txt";
 	getDataParams(); //populate numreads, readlen
 	
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
@@ -72,11 +73,11 @@ int main(int argc, char** argv)
 	//using vector instead of list to save some space (at the cost of linear time required to delete elements)
 	spp::sparse_hash_map<std::bitset<2*readlen>,std::vector<int>> *dict = new spp::sparse_hash_map<std::bitset<2*readlen>,std::vector<int>> [numdict];
 	constructdictionary(read,dict);
-	std::vector<int> sortedorder,revcomp,flagvec;
+	std::vector<int> sortedorder,revcomp,flagvec,readpos;
 	std::cout << "Reordering reads\n";
-	reorder(read,dict,sortedorder,revcomp,flagvec);
+	reorder(read,dict,sortedorder,revcomp,flagvec,readpos);
 	std::cout << "Writing to file\n";
-	writetofile(read,sortedorder,revcomp,flagvec);	
+	writetofile(read,sortedorder,revcomp,flagvec,readpos);	
 	std::cout << "Done!\n";
 	return 0;
 }
@@ -169,7 +170,7 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<std:
 	return;
 }
 
-void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec)
+void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*readlen>,std::vector<int>> *dict, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec, std::vector<int>& readpos)
 {	
 	std::bitset<2*readlen> *mask = new std::bitset<2*readlen> [maxmatch];
 	std::bitset<2*readlen> *revmask = new std::bitset<2*readlen> [maxmatch];
@@ -189,6 +190,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*re
 	sortedorder.push_back(current);
 	revcomp.push_back(0);//for direct
 	flagvec.push_back(0);//for unmatched
+	readpos.push_back(readlen);
 	updaterefcount(read[current],ref,revref,count,true,false,0);
 	std::bitset<2*readlen> *b = new std::bitset<2*readlen> [numdict];
 	std::bitset<2*readlen> b1,b2;
@@ -243,6 +245,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*re
 						revcomp.push_back(0);
 						sortedorder.push_back(current);
 						flagvec.push_back(1);//for matched
+						readpos.push_back(j);
 						break;
 					}			
 					
@@ -282,6 +285,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*re
 						revcomp.push_back(1);
 						sortedorder.push_back(current);
 						flagvec.push_back(1);
+						readpos.push_back(j);
 						break;
 					}			
 					
@@ -299,6 +303,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<std::bitset<2*re
 			updaterefcount(read[current],ref,revref,count,true,false,0);
 			sortedorder.push_back(current);
 			flagvec.push_back(0);
+			readpos.push_back(readlen);
 		}
 	}
 	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
@@ -322,15 +327,17 @@ void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
 
 
 
-void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec)
+void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder,std::vector<int> &revcomp,std::vector<int> &flagvec, std::vector<int>& readpos)
 {
 	std::ofstream fout(outfile,std::ofstream::out);
 	std::ofstream foutRC(outfileRC,std::ofstream::out);
 	std::ofstream foutflag(outfileflag,std::ofstream::out);
-	std::vector<int>::iterator it1,it2,it3;
-	for (it1 = sortedorder.begin(),it2 = revcomp.begin(),it3 = flagvec.begin() ; it1 != sortedorder.end(); ++it1,++it2,++it3)
+	std::ofstream foutpos(outfilepos,std::ofstream::out);
+	std::vector<int>::iterator it1,it2,it3,it4;
+	for (it1 = sortedorder.begin(),it2 = revcomp.begin(),it3 = flagvec.begin(),it4 = readpos.begin(); it1 != sortedorder.end(); ++it1,++it2,++it3,++it4)
 	{
 		foutflag << *it3;
+		foutpos << *it4 << "\n";
 		if(*it2 == 0)
 		{
 			fout<<bitsettostring(read[*it1])<<"\n";
