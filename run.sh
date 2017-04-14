@@ -68,7 +68,7 @@ generateConfig()
 }
 compress()
 {
-	g++ src/cpp/noisy/matchsort7_v8.cpp -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
+	g++ src/cpp/noisy/matchsort7_v9.cpp -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
 	mkdir -p data/$basename/output 
 	./src/reorder_noisy.out data/$basename
 	split -a 4 -d -l $chunksize data/$basename/output/temp.dna data/$basename/output/temp.dna.
