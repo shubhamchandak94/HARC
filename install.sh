@@ -6,7 +6,7 @@ mkdir -p data
 # Install Sparsepp
 git clone https://github.com/shubhamchandak94/sparsepp src/cpp/noisy/sparsepp
 
-pip install distance biopython joblib tqdm
+pip install --user distance biopython joblib tqdm
 
 # Install MFCompress
 wget  http://sweet.ua.pt/ap/software/mfcompress/MFCompress-linux64-1.01.tgz
