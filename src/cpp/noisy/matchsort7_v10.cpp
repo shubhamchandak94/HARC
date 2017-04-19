@@ -22,6 +22,7 @@ std::string outfilepos;
 
 
 void generateindexmasks(std::bitset<2*readlen> *mask1)
+//masks for dictionary positions
 {
 	for(int i = 0; i < numdict; i++)
 		mask1[i].reset();
@@ -49,18 +50,21 @@ void getDataParams();
 void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict);
 
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
+//mask for zeroing the end bits (needed while reordering to compute Hamming distance between shifted reads)
 
 void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict,std::vector<uint32_t> &sortedorder,std::vector<bool> &revcomp,std::vector<bool>& flagvec, std::vector<uint32_t>& readpos);
 
 void writetofile(std::bitset<2*readlen> *read, std::vector<uint32_t> &sortedorder,std::vector<bool> &revcomp,std::vector<bool> &flagvec, std::vector<uint32_t>& readpos);
 
 void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, bool rev, int shift);
+//update the clean reference and count matrix
 
 void reverse_complement(char *s, char *s1);
 
 std::bitset<2*readlen> chartobitset(char &s);
 
 void setglobalarrays();
+//setting arrays like chartoint etc.
 
 int main(int argc, char** argv)
 {
@@ -179,6 +183,7 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint
 	int dict_start[2] = {dict1_start,dict2_start};
 	for(int j = 0; j < numdict; j++)
 	{
+		//find number of times each key occurs
 		for(uint32_t i = 0; i < numreads; i++)
 		{
 			b = read[i]&mask[j];
@@ -191,6 +196,7 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint
 				(*dict[j][ull]) = 1;
 			}
 		}
+		//allocate memory for each bin (number of reads with given key + 1) 1 for storing the length
 		for(auto it = dict[j].begin(); it !=  dict[j].end(); ++it)
 		{
 			uint32_t binsize = *(it->second);
@@ -198,6 +204,8 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint
 			dict[j][it->first] =  new uint32_t[binsize+1];
 			dict[j][it->first][0] = 1;
 		}
+		//fill in the read ids in each bin, dict[j][ull][0] stores the position where next id is put - at the
+		//end it stores the size of the array
 		for(uint32_t i = 0; i < numreads; i++)
 		{
 			b = read[i]&mask[j];
@@ -221,37 +229,39 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 	generateindexmasks(mask1);
 	bool *remainingreads = new bool[numreads];
 	std::fill(remainingreads, remainingreads+numreads,1);
-	uint32_t remainingpos = numreads-2;
+	uint32_t remainingpos = numreads-2;//used for searching next unmatched read when no match is found
+	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
 	int dict_start[2] = {dict1_start,dict2_start};
 	uint32_t unmatched = 0;
-	uint32_t current = numreads-1;
+	uint32_t current = numreads-1;//picking last read as that speeds up deletion from bin arrays
 	bool flag = 0;
 	//flag to check if match was found or not
 	sortedorder[0] = current;
 	revcomp[0] = 0;//for direct
 	flagvec[0] = 0;//for unmatched
-	readpos[0] = readlen;
+	readpos[0] = readlen;//shift wrt previous read (always readlen for unmatched reads)
 	updaterefcount(read[current],ref,revref,count,true,false,0);
 	std::bitset<2*readlen> b;
 	uint64_t ull;
 	std::bitset<2*readlen> b1,b2;
-	long long hammingcount = 0;
+	long long hammingcount = 0;//number of hamming distance computations performed
 	for(uint32_t i = 1; i < numreads; i++)
 	{
 		if(i%1000000 == 0)
 			std::cout<< i/1000000 << "M reads done. Hamming count = "<< hammingcount <<"\n";
 		remainingreads[current] = 0;
+		//delete the read from the corresponding dictionary bins
 		for(int l = 0; l < numdict; l++)
 		{	b = read[current]&mask1[l];
 			ull = (b>>2*dict_start[l]).to_ullong();
-			if(flag==1)//if unmatched, we always get last read in bin
+			if(flag==1)//if unmatched, we always get last read in bin (so no need to shift)
 			{
 				uint32_t pos = std::lower_bound(dict[l][ull]+1,dict[l][ull]+dict[l][ull][0],current)-dict[l][ull];
-			//binary search since dict[b] is sorted
+			//binary search since dict[l][ull] is sorted array
 				std::move(dict[l][ull]+pos+1,dict[l][ull]+dict[l][ull][0],dict[l][ull]+pos);
 			}
-			dict[l][ull][0]--;
-			if(dict[l][ull][0] == 1)
+			dict[l][ull][0]--;//decrement number of elements
+			if(dict[l][ull][0] == 1)//empty (1 to store the size)
 			{
 				delete[] dict[l][ull];
 				dict[l].erase(ull);
@@ -265,6 +275,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 		for(int j = 0; j < maxmatch; j++)
 		{
 			std::vector<uint32_t> s;
+			//take union of reads in different dictionary bins
 			for(int l = 0; l < numdict; l++)
 			{
 				b = b1&mask1[l];
@@ -305,7 +316,8 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 					break;
 			}
 			b1>>=2;
-
+			
+			//look in reverse complement if nothing found yet
 			std::vector<uint32_t> s1;
 			for(int l = 0; l < numdict; l++)
 			{
@@ -347,7 +359,8 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 			}
 			b2<<=2;
 		}	
-		if(flag == 0)
+		
+		if(flag == 0)//no match found
 		{
 			unmatched += 1;
 			for(uint32_t j = remainingpos; ; j--)
@@ -364,6 +377,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 			readpos[i] = readlen;
 		}
 	}
+	//remove last read and deallocate remainingreads pointer
 	remainingreads[current] = 0;
 	for(int l = 0; l < numdict; l++)
 	{	b = read[current]&mask1[l];
@@ -475,7 +489,7 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 		current = s1;
 	}
 
-	if(resetcount == true)
+	if(resetcount == true)//resetcount - unmatched read so start over
 	{
 		std::memset(count, 0, sizeof(count[0][0]) * 4 * readlen);	
 		for(int i = 0; i < readlen; i++)
@@ -486,6 +500,7 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 	}
 	else
 	{
+		//shift count and find current by max
 		for(int i = 0; i < readlen-shift; i++)
 		{	
 			for(int j = 0; j < 4; j++)
@@ -501,7 +516,7 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 				}
 			current[i] = inttochar[indmax];
 		}
-		
+		//for the new positions make current same as the current read and count to 1
 		for(int i = readlen-shift; i < readlen; i++)
 		{	
 			for(int j = 0; j < 4; j++)

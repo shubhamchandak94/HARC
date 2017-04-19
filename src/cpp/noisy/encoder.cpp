@@ -144,7 +144,8 @@ void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string>
 	if(reads.size() == 1)
 	{
 		f_noise << "\n";
-		c = readlen;//pos[0]; (to handle breaks in read sequence due to limit on reads.size()
+		c = readlen;//(not pos[0] to handle breaks in read sequence due to limit on reads.size() - can't
+				//assume  pos[0] = readlen)
 		f_pos << c;
 		return;
 	}
@@ -158,7 +159,7 @@ void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string>
 			prevj = j;
 		}
 	f_noise << "\n";
-	c = pos[0];
+	c = readlen;// (to handle breaks in read sequence due to limit on reads.size()
 	f_pos << c;
 	long prevpos = 0,currentpos;
 	for(long i = 1; i < reads.size(); i++)
@@ -183,6 +184,7 @@ void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string>
 
 void setglobalarrays()
 {
+	//enc_noise uses substitution statistics from Minoche et al. 
 	enc_noise['A']['C'] = '0';
 	enc_noise['A']['G'] = '1';
 	enc_noise['A']['T'] = '2';
@@ -222,5 +224,3 @@ void getDataParams()
 	std::cout << "Read length: " << readlen << std::endl;
 	myfile.close();
 }
-
-
