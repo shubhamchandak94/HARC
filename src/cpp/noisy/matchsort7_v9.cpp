@@ -118,12 +118,13 @@ void setglobalarrays()
 std::bitset<2*readlen> stringtobitset(std::string s)
 {
 	char *s2 = &(s[0]);
-	char s1[2*readlen];
+	char s1[2*readlen+1];
 	for(int i = 0; i < readlen; i++)
 	{
 		s1[2*(readlen-i-1)+1] = chartobit[s2[i]][0];
 		s1[2*(readlen-i-1)] = chartobit[s2[i]][1];
 	}
+	s1[2*readlen] = '\0';
 	std::bitset<2*readlen> b(s1);
 	return b;
 }
@@ -358,7 +359,9 @@ void writetofile(std::bitset<2*readlen> *read, std::vector<int> &sortedorder,std
 	std::ofstream foutflag(outfileflag,std::ofstream::out);
 	std::ofstream foutpos(outfilepos,std::ofstream::out);
 	std::vector<int>::iterator it1,it2,it3,it4;
-	char s[readlen],s1[readlen];
+	char s[readlen+1],s1[readlen+1];
+	s[readlen] = '\0';
+	s1[readlen] = '\0';
 	for (it1 = sortedorder.begin(),it2 = revcomp.begin(),it3 = flagvec.begin(),it4 = readpos.begin(); it1 != sortedorder.end(); ++it1,++it2,++it3,++it4)
 	{
 		foutflag << *it3;
@@ -393,12 +396,13 @@ void bitsettostring(std::bitset<2*readlen> b,char *s)
 
 std::bitset<2*readlen> chartobitset(char *s)
 {
-	char s1[2*readlen];
+	char s1[2*readlen+1];
 	for(int i = 0; i < readlen; i++)
 	{
 		s1[2*(readlen-i-1)+1] = chartobit[s[i]][0];
 		s1[2*(readlen-i-1)] = chartobit[s[i]][1];
 	}
+	s1[2*readlen] = '\0';
 	std::bitset<2*readlen> b(s1);
 	return b;
 }
@@ -412,7 +416,7 @@ void reverse_complement(char* s, char* s1)
 
 void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, bool rev, int shift)
 {
-	char s[readlen],s1[readlen],*current;
+	char s[readlen+1],s1[readlen+1],*current;
 	bitsettostring(cur,s);
 	if(rev == false)
 		current = s;
@@ -457,7 +461,7 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 		}
 	}
 	ref = chartobitset(current);
-	char revcurrent[readlen];
+	char revcurrent[readlen+1];
 	reverse_complement(current,revcurrent);
 	revref = chartobitset(revcurrent);
 	return;

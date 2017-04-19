@@ -68,25 +68,30 @@ generateConfig()
 }
 compress()
 {
-	g++ src/cpp/noisy/matchsort7_v9.cpp -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
+	g++ src/cpp/noisy/matchsort7_v10.cpp -march=native -O3 -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
 	mkdir -p data/$basename/output 
 	./src/reorder_noisy.out data/$basename
-	split -a 4 -d -l $chunksize data/$basename/output/temp.dna data/$basename/output/temp.dna.
-	split -a 4 -d -b $chunksize data/$basename/output/tempflag.txt data/$basename/output/tempflag.txt.
-	split -a 4 -d -l $chunksize data/$basename/output/temppos.txt data/$basename/output/temppos.txt.
-	python src/encodernoisy_parallel.py data/$basename
-	echo ">" > data/$basename/output/seq_header
-	cat data/$basename/output/seq_header data/$basename/output/read_seq.txt.* > data/$basename/output/read_seq.txt
-	cat data/$basename/output/read_pos.txt.* > data/$basename/output/read_pos.txt
-	cat data/$basename/output/read_noise.txt.* > data/$basename/output/read_noise.txt
-	cat data/$basename/output/read_noisepos.txt.* > data/$basename/output/read_noisepos.txt
+#	split -a 4 -d -l $chunksize data/$basename/output/temp.dna data/$basename/output/temp.dna.
+#	split -a 4 -d -b $chunksize data/$basename/output/tempflag.txt data/$basename/output/tempflag.txt.
+#	split -a 4 -d -l $chunksize data/$basename/output/temppos.txt data/$basename/output/temppos.txt.
+#	python src/encodernoisy_parallel.py data/$basename
+#	echo ">" > data/$basename/output/seq_header
+#	cat data/$basename/output/seq_header data/$basename/output/read_seq.txt.* > data/$basename/output/read_seq.txt
+#	cat data/$basename/output/read_pos.txt.* > data/$basename/output/read_pos.txt
+#	cat data/$basename/output/read_noise.txt.* > data/$basename/output/read_noise.txt
+#	cat data/$basename/output/read_noisepos.txt.* > data/$basename/output/read_noisepos.txt
 	cp data/$basename/input_N.dna data/$basename/output/input_N.dna
        # remove unwanted files
-	rm data/$basename/output/temp.dna*
-	rm data/$basename/output/tempflag.txt*
-	rm data/$basename/output/temppos.txt*
-	rm data/$basename/output/read*txt.*
-	rm data/$basename/output/seq_header
+#	rm data/$basename/output/temp.dna*
+#	rm data/$basename/output/tempflag.txt*
+#	rm data/$basename/output/temppos.txt*
+#	rm data/$basename/output/read*txt.*
+	./src/encoder.out data/$basename
+	sed -i '1s/^/>\n/' data/$basename/output/read_seq.txt
+	rm data/$basename/output/temp.dna
+	rm data/$basename/output/tempflag.txt
+	rm data/$basename/output/temppos.txt
+#	rm data/$basename/output/seq_header
        #create tarball
 	
 	7z a data/$basename/output/read_pos.txt.7z data/$basename/output/read_pos.txt
@@ -114,7 +119,8 @@ decompress()
 	./util/MFCompress/MFCompressD data/$basename/output/read_seq.txt.mfc
 	tr -d '\r\n>' < data/$basename/output/read_seq.txt.mfc.d > data/$basename/output/read_seq.txt
 	rm data/$basename/output/read_seq.txt.mfc.d
-	python src/decodernoisy.py data/$basename
+#	python src/decodernoisy.py data/$basename
+	./src/decoder.out data/$basename
 }
 
 compute_entropy()

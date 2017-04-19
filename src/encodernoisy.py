@@ -154,7 +154,6 @@ with open(infile,'r') as f:
 			reads.append(current)
 			pos.append(p)
 
-print len(reads)
 #last contig
 ref = buildcontig(reads,pos)
 writecontig(ref,pos,reads)
@@ -166,5 +165,5 @@ f_meta.close()
 f_pos.close()	
 f_noise.close()
 f_noisepos.close()
-infile_flag.close()
-infile_pos.close()
+in_flag.close()
+in_pos.close()
