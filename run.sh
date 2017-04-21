@@ -68,7 +68,7 @@ generateConfig()
 }
 compress()
 {
-	g++ src/cpp/noisy/matchsort7_v10.cpp -march=native -O3 -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
+	g++ src/cpp/noisy/matchsort7_v12.cpp -march=native -O3 -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
 	mkdir -p data/$basename/output 
 	./src/reorder_noisy.out data/$basename
 #	split -a 4 -d -l $chunksize data/$basename/output/temp.dna data/$basename/output/temp.dna.
@@ -87,8 +87,8 @@ compress()
 #	rm data/$basename/output/temppos.txt*
 #	rm data/$basename/output/read*txt.*
 	./src/encoder.out data/$basename
-	cat seq_header.txt read_seq.txt > read_seq.txt.1
-	mv read_seq.txt.1 read_seq.txt
+	cat data/$basename/output/seq_header.txt data/$basename/output/read_seq.txt > data/$basename/output/read_seq.txt.1
+	mv data/$basename/output/read_seq.txt.1 data/$basename/output/read_seq.txt
 #	sed -i '1s/^/>\n/' data/$basename/output/read_seq.txt
 	rm data/$basename/output/temp.dna
 	rm data/$basename/output/tempflag.txt
