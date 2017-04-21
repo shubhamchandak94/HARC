@@ -75,7 +75,7 @@ compress()
 #	split -a 4 -d -b $chunksize data/$basename/output/tempflag.txt data/$basename/output/tempflag.txt.
 #	split -a 4 -d -l $chunksize data/$basename/output/temppos.txt data/$basename/output/temppos.txt.
 #	python src/encodernoisy_parallel.py data/$basename
-#	echo ">" > data/$basename/output/seq_header
+	echo ">" > data/$basename/output/seq_header.txt
 #	cat data/$basename/output/seq_header data/$basename/output/read_seq.txt.* > data/$basename/output/read_seq.txt
 #	cat data/$basename/output/read_pos.txt.* > data/$basename/output/read_pos.txt
 #	cat data/$basename/output/read_noise.txt.* > data/$basename/output/read_noise.txt
@@ -87,7 +87,9 @@ compress()
 #	rm data/$basename/output/temppos.txt*
 #	rm data/$basename/output/read*txt.*
 	./src/encoder.out data/$basename
-	sed -i '1s/^/>\n/' data/$basename/output/read_seq.txt
+	cat seq_header.txt read_seq.txt > read_seq.txt.1
+	mv read_seq.txt.1 read_seq.txt
+#	sed -i '1s/^/>\n/' data/$basename/output/read_seq.txt
 	rm data/$basename/output/temp.dna
 	rm data/$basename/output/tempflag.txt
 	rm data/$basename/output/temppos.txt
