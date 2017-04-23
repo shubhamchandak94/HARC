@@ -345,15 +345,15 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 	generatemasks(mask,revmask);
 	std::bitset<2*readlen> mask1[numdict];
 	generateindexmasks(mask1);
-	bool *remainingreads = new bool[numreads];
+	std::atomic<bool> *remainingreads = new std::atomic<bool>[numreads];
 	std::fill(remainingreads, remainingreads+numreads,1);
-	uint32_t remainingpos = numreads-1;//used for searching next unmatched read when no match is found
+	std::atomic<uint32_t> remainingpos(numreads-1);//used for searching next unmatched read when no match is found
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
 	int dict_start[2] = {dict1_start,dict2_start};
 //	auto num_thr = omp_get_max_threads();
 	std::vector<uint32_t> sortedorder_thr[num_thr], readpos_thr[num_thr];
 	std::vector<bool> revcomp_thr[num_thr], flagvec_thr[num_thr];
-	uint32_t *activearrays[num_thr] = {};
+	uint32_t *beingwritten[num_thr] = {}, *beingread[num_thr] = {};
 	uint32_t firstread = 0;
 	#pragma omp parallel
 	{	
@@ -391,16 +391,19 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 			auto dictbin = dict[l][ull];
 			//check if any other thread is modifying dictbin
 			int i;
-			bool success = 0;
 			while(1)
 			{
 				omp_set_lock(&bindelete);
 				for(i=0;i<num_thr;i++)
-					if(activearrays[i]==dictbin)
+				{
+					if(beingwritten[i]==dictbin)
 						break;
+					if(beingread[i]==dictbin)
+						break;
+				}
 				if(i==num_thr)
 				{
-					activearrays[tid] = dictbin;
+					beingwritten[tid] = dictbin;
 					omp_unset_lock(&bindelete);
 					break;
 				}
@@ -429,18 +432,20 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 				}
 			}
 */
-	//		#pragma omp critical			
-			{if(flag==1)//if unmatched, we always get last read in bin (so no need to shift)
-			{
-				uint32_t pos = std::lower_bound(dictbin+1,dictbin+dictbin[0],current)-dictbin;
+	//		#pragma omp critical		
+//			if(flag==1)//if unmatched, we always get last read in bin (so no need to shift)
+//			{
+				uint32_t pos = std::lower_bound(dictbin+1,dictbin+dictbin[0],current)-dictbin; 
 			//binary search since dict[l][ull] is sorted array
 				std::move(dictbin+pos+1,dictbin+dictbin[0],dictbin+pos);
-			}
+//			}
+//			std::cout << tid << ":" << dictbin[0]<<"\n";
 			dictbin[0]--;//decrement number of elements}
+//			std::cout << tid << ":" << dictbin[0]<<"\n";
 			omp_set_lock(&bindelete);
-			activearrays[tid] = NULL;
+			beingwritten[tid] = NULL;
 			omp_unset_lock(&bindelete);
-		}}
+		}
 		flag = 0;
 		uint32_t k=numreads;
 		for(int j = 0; j < maxmatch; j++)
@@ -457,25 +462,18 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 			{int i;
 				omp_set_lock(&bindelete);
 				for(i=0;i<num_thr;i++)
-					if(activearrays[i]==s)
+					if(beingwritten[i]==s)
 						break;
 				if(i==num_thr)
 				{
-					activearrays[tid] = s;
+					beingread[tid] = s;
 					omp_unset_lock(&bindelete);
 					break;
 				}
 				omp_unset_lock(&bindelete);
 			}						
-					auto N = s[0]-1;
-					if(N==0)
-					{
-						omp_set_lock(&bindelete);
-						activearrays[tid] = NULL;
-						omp_unset_lock(&bindelete);
-						continue;
-					}
-					for (uint32_t i = N ; i >= 1; i--)
+					long N = s[0]-1;
+					for (long i = N ; i >= 1; i--)
 						if((ref^(read[s[i]]&mask[j])).count()<=thresh)
 						{	
 							omp_set_lock(&readfound);
@@ -490,7 +488,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 								omp_unset_lock(&readfound);
 						}
 					omp_set_lock(&bindelete);
-					activearrays[tid] = NULL;
+					beingread[tid] = NULL;
 					omp_unset_lock(&bindelete);
 				}
 				
@@ -524,25 +522,18 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 				int i;
 				omp_set_lock(&bindelete);
 				for(i=0;i<num_thr;i++)
-					if(activearrays[i]==s)
+					if(beingwritten[i]==s)
 						break;
 				if(i==num_thr)
 				{
-					activearrays[tid] = s;
+					beingread[tid] = s;
 					omp_unset_lock(&bindelete);
 					break;
 				}
 				omp_unset_lock(&bindelete);
 			}						
-					auto N = s[0]-1;
-					if(N==0)
-					{
-						omp_set_lock(&bindelete);
-						activearrays[tid] = NULL;
-						omp_unset_lock(&bindelete);
-						continue;
-					}
-					for (uint32_t i = N ; i >= 1; i--)
+					long N = s[0]-1;
+					for (long i = N ; i >= 1; i--)
 						if((revref^(read[s[i]]&revmask[j])).count()<=thresh)
 						{	
 							omp_set_lock(&readfound);
@@ -557,7 +548,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 								omp_unset_lock(&readfound);
 						}
 					omp_set_lock(&bindelete);
-					activearrays[tid] = NULL;
+					beingread[tid] = NULL;
 					omp_unset_lock(&bindelete);
 				}
 				if(k != numreads)
@@ -578,10 +569,10 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 		}	
 		if(flag == 0)//no match found
 		{
-		//	long j = remainingpos;
+			long j = remainingpos;
 			bool localflag = 0;
 
-/*			for(; j>=0; j--)
+			for(; j>=0; j--)
 				if(remainingreads[j] == 1)
 				{
 					omp_set_lock(&readfound);
@@ -600,7 +591,9 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 					else
 						omp_unset_lock(&readfound);
 				}//searching from behind to speed up erase in bin
-*/omp_set_lock(&readfound);			for(long j = remainingpos; j>=0; j--)
+/*omp_set_lock(&readfound);		
+
+for(long j = remainingpos; j>=0; j--)
 				if(remainingreads[j] == 1)
 				{
 						current = j;
@@ -612,7 +605,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 						localflag = 1;
 						break;
 					}omp_unset_lock(&readfound);
-			//searching from behind to speed up erase in bin
+*/			//searching from behind to speed up erase in bin
 			if(localflag == 0)
 				done = 1;//no reads left
 			else
