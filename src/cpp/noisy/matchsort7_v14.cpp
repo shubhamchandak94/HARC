@@ -345,7 +345,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 	generatemasks(mask,revmask);
 	std::bitset<2*readlen> mask1[numdict];
 	generateindexmasks(mask1);
-	volatile std::atomic<bool> *remainingreads = new std::atomic<bool>[numreads];
+	bool *remainingreads = new bool[numreads];
 	std::fill(remainingreads, remainingreads+numreads,1);
 	uint32_t remainingpos = numreads-1;//used for searching next unmatched read when no match is found
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
@@ -353,7 +353,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 //	auto num_thr = omp_get_max_threads();
 	std::vector<uint32_t> sortedorder_thr[num_thr], readpos_thr[num_thr];
 	std::vector<bool> revcomp_thr[num_thr], flagvec_thr[num_thr];
-	volatile uint32_t *activearrays[num_thr] = {};
+	uint32_t *activearrays[num_thr] = {};
 	uint32_t firstread = 0;
 	#pragma omp parallel
 	{	
@@ -437,7 +437,9 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 				std::move(dictbin+pos+1,dictbin+dictbin[0],dictbin+pos);
 			}
 			dictbin[0]--;//decrement number of elements}
+			omp_set_lock(&bindelete);
 			activearrays[tid] = NULL;
+			omp_unset_lock(&bindelete);
 		}}
 		flag = 0;
 		uint32_t k=numreads;
@@ -468,7 +470,9 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 					auto N = s[0]-1;
 					if(N==0)
 					{
+						omp_set_lock(&bindelete);
 						activearrays[tid] = NULL;
+						omp_unset_lock(&bindelete);
 						continue;
 					}
 					for (uint32_t i = N ; i >= 1; i--)
@@ -485,7 +489,9 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 							else
 								omp_unset_lock(&readfound);
 						}
+					omp_set_lock(&bindelete);
 					activearrays[tid] = NULL;
+					omp_unset_lock(&bindelete);
 				}
 				
 				if(k != numreads)
@@ -531,7 +537,9 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 					auto N = s[0]-1;
 					if(N==0)
 					{
+						omp_set_lock(&bindelete);
 						activearrays[tid] = NULL;
+						omp_unset_lock(&bindelete);
 						continue;
 					}
 					for (uint32_t i = N ; i >= 1; i--)
@@ -548,7 +556,9 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 							else
 								omp_unset_lock(&readfound);
 						}
+					omp_set_lock(&bindelete);
 					activearrays[tid] = NULL;
+					omp_unset_lock(&bindelete);
 				}
 				if(k != numreads)
 				{
@@ -568,10 +578,10 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 		}	
 		if(flag == 0)//no match found
 		{
-			long j = remainingpos;
+		//	long j = remainingpos;
 			bool localflag = 0;
 
-			for(; j>=0; j--)
+/*			for(; j>=0; j--)
 				if(remainingreads[j] == 1)
 				{
 					omp_set_lock(&readfound);
@@ -590,7 +600,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 					else
 						omp_unset_lock(&readfound);
 				}//searching from behind to speed up erase in bin
-/*omp_set_lock(&readfound);			for(; j>=0; j--)
+*/omp_set_lock(&readfound);			for(long j = remainingpos; j>=0; j--)
 				if(remainingreads[j] == 1)
 				{
 						current = j;
@@ -602,7 +612,7 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 						localflag = 1;
 						break;
 					}omp_unset_lock(&readfound);
-*/			//searching from behind to speed up erase in bin
+			//searching from behind to speed up erase in bin
 			if(localflag == 0)
 				done = 1;//no reads left
 			else
