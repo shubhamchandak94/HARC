@@ -9,9 +9,9 @@
 #include <string>
 #include "config.h"
 #include <omp.h>
-
+#include <atomic>
 //#define readlen 100
-
+//#define num_thr 8
 
 uint32_t numreads = 0;
 
@@ -20,25 +20,18 @@ std::string outfile;
 std::string outfileRC;
 std::string outfileflag;
 std::string outfilepos;
+std::string outfileorder;
 
-
-void generateindexmasks(std::bitset<2*readlen> *mask1)
-//masks for dictionary positions
-{
-	for(int i = 0; i < numdict; i++)
-		mask1[i].reset();
-	for(int i = 2*dict1_start; i < 2*(dict1_end+1); i++)
-		mask1[0][i] = 1;
-	for(int i = 2*dict2_start; i < 2*(dict2_end+1); i++)
-		mask1[1][i] = 1;
-	return;
-}
-
+//Some global arrays (some initialized in setglobalarrays())
+char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
 char inttochar[] = {'A','C','G','T'};
-char chartorevchar[128];
-int chartoint[128];
-char chartobit[128][2];
-int charinttoint[128];
+char chartorevchar[128];//A-T etc for reverse complement
+int chartoint[128];//A-0,C-1 etc. used in updaterefcount 
+std::bitset<2*readlen> basemask[readlen][128];//bitset for A,G,C,T at each position 
+//used in stringtobitset, chartobitset and bitsettostring
+std::bitset<2*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
+//used in bitsettostring
+std::bitset<2*readlen> mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
 
 std::bitset<2*readlen> stringtobitset(std::string s);
 
@@ -52,14 +45,6 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint
 
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
 //mask for zeroing the end bits (needed while reordering to compute Hamming distance between shifted reads)
-
-uint32_t findread(std::vector<uint32_t> &s, std::bitset<2*readlen> *read, std::bitset<2*readlen> &b, std::bitset<2*readlen> &mask);
-//search for read matching current read
-
-uint32_t findread_parallel(std::vector<uint32_t> &s, std::bitset<2*readlen> *read, std::bitset<2*readlen> &b, std::bitset<2*readlen> &mask);
-
-std::vector<uint32_t> dict_union(std::bitset<2*readlen> &b1, spp::sparse_hash_map<uint64_t,uint32_t*> *dict, int* dict_start, std::bitset<2*readlen>* mask);
-//take union of reads in different dictionary bins
 
 void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict,std::vector<uint32_t> &sortedorder,std::vector<bool> &revcomp,std::vector<bool>& flagvec, std::vector<uint32_t>& readpos);
 
@@ -83,8 +68,9 @@ int main(int argc, char** argv)
 	outfileRC = basedir + "/output/read_rev.txt";
 	outfileflag = basedir + "/output/tempflag.txt";
 	outfilepos = basedir + "/output/temppos.txt";
+	outfileorder = basedir + "/output/read_order.bin";
 	getDataParams(); //populate numreads, readlen
-	
+	omp_set_num_threads(num_thr);	
 	setglobalarrays();
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
 	std::cout << "Reading file: " << infile << std::endl;
@@ -92,8 +78,8 @@ int main(int argc, char** argv)
 	std::cout << "Constructing dictionaries\n";
 	spp::sparse_hash_map<uint64_t,uint32_t*> dict[numdict];
 	constructdictionary(read,dict);
-	std::vector<uint32_t> sortedorder(numreads),readpos(numreads);
-	std::vector<bool> revcomp(numreads),flagvec(numreads);
+	std::vector<uint32_t> sortedorder,readpos;
+	std::vector<bool> revcomp,flagvec;
 	std::cout << "Reordering reads\n";
 	reorder(read,dict,sortedorder,revcomp,flagvec,readpos);
 	std::cout << "Writing to file\n";
@@ -113,31 +99,30 @@ void setglobalarrays()
 	chartoint['C'] = 1;
 	chartoint['G'] = 2;
 	chartoint['T'] = 3;
-	charinttoint['0'] = 0;
-	charinttoint['1'] = 1;
-	chartobit['A'][0] = '0';
-	chartobit['A'][1] = '0';
-	chartobit['C'][0] = '0';
-	chartobit['C'][1] = '1';
-	chartobit['G'][0] = '1';
-	chartobit['G'][1] = '0';
-	chartobit['T'][0] = '1';
-	chartobit['T'][1] = '1';
+	for(int i = 0; i < readlen; i++)
+	{
+		if(i < 64)
+			mask64[i] = 1;
+		basemask[i]['A'][2*i] = 0;
+		basemask[i]['A'][2*i+1] = 0;
+		basemask[i]['C'][2*i] = 0;
+		basemask[i]['C'][2*i+1] = 1;
+		basemask[i]['G'][2*i] = 1;
+		basemask[i]['G'][2*i+1] = 0;
+		basemask[i]['T'][2*i] = 1;
+		basemask[i]['T'][2*i+1] = 1;
+		positionmask[i][2*i] = 1;
+		positionmask[i][2*i+1] = 1;
+	}		
 	return;
 }
 	
 
 std::bitset<2*readlen> stringtobitset(std::string s)
 {
-	char *s2 = &(s[0]);
-	char s1[2*readlen+1];
+	std::bitset<2*readlen> b;
 	for(int i = 0; i < readlen; i++)
-	{
-		s1[2*(readlen-i-1)+1] = chartobit[s2[i]][0];
-		s1[2*(readlen-i-1)] = chartobit[s2[i]][1];
-	}
-	s1[2*readlen] = '\0';
-	std::bitset<2*readlen> b(s1);
+		b |= basemask[i][s[i]];
 	return b;
 }
 
@@ -182,16 +167,33 @@ void readDnaFile(std::bitset<2*readlen> *read)
 	return;
 }
 		
+void generateindexmasks(std::bitset<2*readlen> *mask1)
+//masks for dictionary positions
+{
+	for(int i = 0; i < numdict; i++)
+		mask1[i].reset();
+	for(int i = 2*dict1_start; i < 2*(dict1_end+1); i++)
+		mask1[0][i] = 1;
+	for(int i = 2*dict2_start; i < 2*(dict2_end+1); i++)
+		mask1[1][i] = 1;
+	return;
+}
+
 
 void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict)
 {
-	std::bitset<2*readlen> b;
-	uint64_t ull;
+
 	std::bitset<2*readlen> mask[numdict];
 	generateindexmasks(mask);
 	int dict_start[2] = {dict1_start,dict2_start};
-	for(int j = 0; j < numdict; j++)
+	//Parallelizing construction of the multiple dictionaries
+	#pragma omp parallel num_threads(numdict)
 	{
+	#pragma omp for
+	for(int j = 0; j < numdict; j++)
+	{	
+		std::bitset<2*readlen> b;
+		uint64_t ull;
 		//find number of times each key occurs
 		for(uint32_t i = 0; i < numreads; i++)
 		{
@@ -223,208 +225,260 @@ void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint
 		}
 
 	}
+	}
 	return;
 }
 
-uint32_t findread_parallel(std::vector<uint32_t> &s, std::bitset<2*readlen> *read, std::bitset<2*readlen> &b, std::bitset<2*readlen> &mask)
-//based on http://stackoverflow.com/questions/9793791/parallel-openmp-loop-with-break-statement
-{
-	auto N = s.size();
-	if(N < 100)
-		return findread(s,read,b,mask);
-	bool done = false;
-	uint32_t give = 0,k = numreads;
-	#pragma omp parallel
-	{
-		uint32_t i, stop;
-		#pragma omp critical
-		{
-			i = give;
-			give += N/omp_get_num_threads();
-			stop = give;
-		
-	
-			if(omp_get_thread_num() == omp_get_num_threads()-1)
-				stop = N;
-		}
-		while(i<stop && !done)
-		{
-			if((b^(read[s[i]]&mask)).count()<=thresh)
-			{
-				#pragma omp critical
-				if(done == false)
-				{
-					done = true;
-					k = s[i];
-				}			
-			}
-			i++;
-		}
-	}
-	return k;
-}
-
-
-uint32_t findread(std::vector<uint32_t> &s, std::bitset<2*readlen> *read, std::bitset<2*readlen> &b, std::bitset<2*readlen> &mask)
-{
-	for (auto it = s.rbegin() ; it != s.rend(); ++it)
-		if((b^(read[*it]&mask)).count()<=thresh)
-			return *it;
-	return numreads;
-}
-
-
-std::vector<uint32_t> dict_union(std::bitset<2*readlen> &b1, spp::sparse_hash_map<uint64_t,uint32_t*> *dict, int* dict_start, std::bitset<2*readlen>* mask)
-{
-	uint64_t ull;
-	std::vector<uint32_t> s;
-	std::bitset<2*readlen> b;
-	//take union of reads in different dictionary bins
-	for(int l = 0; l < numdict; l++)
-	{
-		b = b1&mask[l];
-		ull = (b>>2*dict_start[l]).to_ullong();
-		if(dict[l].count(ull) == 1)
-		{
-			if(s.empty())
-				s.insert(s.end(),dict[l][ull]+1,dict[l][ull]+dict[l][ull][0]);
-			else
-			{
-				std::vector<uint32_t> temp;
-				std::set_union(s.begin(),s.end(),dict[l][ull]+1,dict[l][ull]+dict[l][ull][0],std::back_inserter(temp));
-				s = temp;
-			}
-		}
-	}
-	return s;
-}
-
 void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict, std::vector<uint32_t> &sortedorder,std::vector<bool> &revcomp,std::vector<bool> &flagvec, std::vector<uint32_t>& readpos)
-{	
+{
 	std::bitset<2*readlen> mask[maxmatch];
 	std::bitset<2*readlen> revmask[maxmatch];
-	std::bitset<2*readlen> ref,revref;
-	int count[4][readlen];
 	generatemasks(mask,revmask);
 	std::bitset<2*readlen> mask1[numdict];
 	generateindexmasks(mask1);
-	bool *remainingreads = new bool[numreads];
+	std::atomic<bool> *remainingreads = new std::atomic<bool>[numreads];
 	std::fill(remainingreads, remainingreads+numreads,1);
-	uint32_t remainingpos = numreads-2;//used for searching next unmatched read when no match is found
+	std::atomic<int64_t> remainingpos(numreads-1);//used for searching next unmatched read when no match is found
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
 	int dict_start[2] = {dict1_start,dict2_start};
-	uint32_t unmatched = 0;
-	uint32_t current = numreads-1;//picking last read as that speeds up deletion from bin arrays
-	bool flag = 0;
-	//flag to check if match was found or not
-	sortedorder[0] = current;
-	revcomp[0] = 0;//for direct
-	flagvec[0] = 0;//for unmatched
-	readpos[0] = readlen;//shift wrt previous read (always readlen for unmatched reads)
-	updaterefcount(read[current],ref,revref,count,true,false,0);
-	std::bitset<2*readlen> b;
+	std::vector<uint32_t> sortedorder_thr[num_thr], readpos_thr[num_thr];
+	std::vector<bool> revcomp_thr[num_thr], flagvec_thr[num_thr];
+	uint32_t *beingwritten[num_thr] = {}, *beingread[num_thr] = {};
+	uint32_t firstread = 0;
+	#pragma omp parallel
+	{	
+	std::bitset<2*readlen> ref,revref,b;
+	int count[4][readlen];
+	bool flag = 0, done = 0;
+	int tid = omp_get_thread_num();
+	uint32_t current;
 	uint64_t ull;
-	std::bitset<2*readlen> b1,b2;
-	for(uint32_t i = 1; i < numreads; i++)
-	{
-		if(i%1000000 == 0)
-			std::cout<< i/1000000 << "M reads done. \n";
+	//flag to check if match was found or not
+	
+	#pragma omp critical
+	{//doing initial setup and first read
+		current = firstread;	
+		firstread += numreads/omp_get_num_threads();//spread out first read equally
 		remainingreads[current] = 0;
+	}	
+	updaterefcount(read[current],ref,revref,count,true,false,0);
+	revcomp_thr[tid].push_back(0);
+	sortedorder_thr[tid].push_back(current);
+	flagvec_thr[tid].push_back(0);//for unmatched
+	readpos_thr[tid].push_back(readlen);
+	uint32_t numdone= 0;
+	while(!done)
+	{	numdone++;
+		if(numdone%1000000==0)
+			std::cout<<tid<<":"<<numdone<<"\n";
 		//delete the read from the corresponding dictionary bins
 		for(int l = 0; l < numdict; l++)
 		{	b = read[current]&mask1[l];
 			ull = (b>>2*dict_start[l]).to_ullong();
-			if(flag==1)//if unmatched, we always get last read in bin (so no need to shift)
+			auto dictbin = dict[l][ull];
+			//check if any other thread is modifying dictbin
+			int i;
+			bool go_on = 0; 
+			while(!go_on)//make sure no other thread is reading or writing to dictbin
 			{
-				uint32_t pos = std::lower_bound(dict[l][ull]+1,dict[l][ull]+dict[l][ull][0],current)-dict[l][ull];
+				#pragma omp critical (dictbin)
+				{
+					for(i=0;i<num_thr;i++)
+						if(beingwritten[i]==dictbin || beingread[i]==dictbin)
+							break;
+					if(i==num_thr)
+					{
+						beingwritten[tid] = dictbin;
+						go_on = 1;
+					}
+				}
+			}						
+			uint32_t pos = std::lower_bound(dictbin+1,dictbin+dictbin[0],current)-dictbin; 
 			//binary search since dict[l][ull] is sorted array
-				std::move(dict[l][ull]+pos+1,dict[l][ull]+dict[l][ull][0],dict[l][ull]+pos);
-			}
-			dict[l][ull][0]--;//decrement number of elements
-			if(dict[l][ull][0] == 1)//empty (1 to store the size)
-			{
-				delete[] dict[l][ull];
-				dict[l].erase(ull);
-			}
+			std::move(dictbin+pos+1,dictbin+dictbin[0],dictbin+pos);
+			dictbin[0]--;//decrement number of elements
+			#pragma omp atomic write
+			beingwritten[tid] = NULL;
 		}
-			
-		b1 = ref;
-		b2 = revref;
-		
 		flag = 0;
+		uint32_t k;
 		for(int j = 0; j < maxmatch; j++)
 		{
-			std::vector<uint32_t> s = dict_union(b1,dict,dict_start,mask1);
-			if(!s.empty())
+			//find forward match
+			for(int l = 0; l < numdict; l++)
 			{
-				uint32_t k = findread(s,read,b1,mask[j]);
-				if(k != numreads)
+				b = ref&mask1[l];
+				ull = (b>>2*dict_start[l]).to_ullong();
+				if(dict[l].count(ull) == 1)
+				{
+					auto s = dict[l][ull];
+					int i;
+					bool go_on = 0;
+					while(!go_on)//make sure no other thread is writing to s
+					{
+						#pragma omp critical (dictbin)
+						{
+							for(i=0;i<num_thr;i++)
+								if(beingwritten[i]==s)
+									break;
+							if(i==num_thr)
+							{
+								beingread[tid] = s;
+								go_on = 1;
+							}
+						}
+					}						
+					long N = s[0]-1;
+					for (long i = N ; i >= 1; i--)
+						if((ref^(read[s[i]]&mask[j])).count()<=thresh)
+						{	
+							#pragma omp critical (readfound)
+							if(remainingreads[s[i]])
+							{
+								remainingreads[s[i]]=0;
+								k = s[i];
+								flag = 1;
+							}
+							if(flag == 1)
+								break;
+						}
+					#pragma omp atomic write
+					beingread[tid] = NULL;
+				}
+				
+				if(flag == 1)
 				{
 					current = k;
-					flag = 1;
 					updaterefcount(read[current],ref,revref,count,false,false,j);
-					revcomp[i] = 0;
-					sortedorder[i] = current;
-					flagvec[i] = 1;//for matched
-					readpos[i] = j;
-					break;
-				}	
-			}
-			b1>>=2;
-			
-			//look in reverse complement if nothing found yet
-			std::vector<uint32_t> s1 = dict_union(b2,dict,dict_start,mask1);
-			if(!s1.empty())
-			{
-				uint32_t k = findread(s1,read,b2,revmask[j]);
-				if(k != numreads)
-				{
-					current = k;
-					flag = 1;
-					updaterefcount(read[current],ref,revref,count,false,true,j);
-					revcomp[i] = 1;
-					sortedorder[i] = current;
-					flagvec[i] = 1;
-					readpos[i] = j;
+					revcomp_thr[tid].push_back(0);
+					sortedorder_thr[tid].push_back(current);
+					flagvec_thr[tid].push_back(1);//for matched
+					readpos_thr[tid].push_back(j);
 					break;
 				}
+				
 			}
-			b2<<=2;
-		}	
+			if(flag==1)
+				break;	
+
+			//find reverse match
+			for(int l = 0; l < numdict; l++)
+			{
+				b = revref&mask1[l];
+				ull = (b>>2*dict_start[l]).to_ullong();
+				if(dict[l].count(ull) == 1)
+				{
+					auto s = dict[l][ull];
+					int i;
+					bool go_on = 0;
+					while(!go_on)//make sure no other thread is writing to s
+					{
+						#pragma omp critical (dictbin)
+						{
+							for(i=0;i<num_thr;i++)
+								if(beingwritten[i]==s)
+									break;
+							if(i==num_thr)
+							{
+								beingread[tid] = s;
+								go_on = 1;
+							}
+						}
+					}						
+					long N = s[0]-1;
+					for (long i = N ; i >= 1; i--)
+						if((revref^(read[s[i]]&revmask[j])).count()<=thresh)
+						{	
+							#pragma omp critical (readfound)
+							if(remainingreads[s[i]])
+							{
+								remainingreads[s[i]]=0;
+								k = s[i];
+								flag = 1;
+							}
+							if(flag == 1)
+								break;
+						}
+					#pragma omp atomic write
+					beingread[tid] = NULL;
+				}
+				if(flag == 1)
+				{
+					current = k;
+					updaterefcount(read[current],ref,revref,count,false,true,j);
+					revcomp_thr[tid].push_back(1);
+					sortedorder_thr[tid].push_back(current);
+					flagvec_thr[tid].push_back(1);//for matched
+					readpos_thr[tid].push_back(j);
+					break;
+				}
+			}	
+			if(flag==1)
+				break;
 		
+			revref<<=2;
+			ref>>=2;
+		}	
 		if(flag == 0)//no match found
 		{
-			unmatched += 1;
-			for(uint32_t j = remainingpos; ; j--)
+			for(int64_t j = remainingpos; j>=0; j--)
+			
 				if(remainingreads[j] == 1)
 				{
-					current = j;
-					remainingpos = j-1;
-					break;
-				}//searching from behind to speed up erase in bin
-			revcomp[i] = 0;
-			updaterefcount(read[current],ref,revref,count,true,false,0);
-			sortedorder[i] = current;
-			flagvec[i] = 0;
-			readpos[i] = readlen;
+					#pragma omp critical (readfound)	
+					if(remainingreads[j])//checking again inside critical block
+					{
+						current = j;
+						remainingpos = j-1;
+						remainingreads[j] = 0;
+						flag = 1;
+					}
+					if(flag == 1)
+						break;
+				}
+					
+			if(flag == 0)
+				done = 1;//no reads left
+			else
+			{
+				updaterefcount(read[current],ref,revref,count,true,false,0);
+				revcomp_thr[tid].push_back(0);
+				sortedorder_thr[tid].push_back(current);
+				flagvec_thr[tid].push_back(0);//for unmatched
+				readpos_thr[tid].push_back(readlen);
+			}
 		}
-	}
-	//remove last read and deallocate remainingreads pointer
-	remainingreads[current] = 0;
-	for(int l = 0; l < numdict; l++)
-	{	b = read[current]&mask1[l];
-		ull = (b>>2*dict_start[l]).to_ullong();
-		uint32_t pos = std::lower_bound(dict[l][ull]+1,dict[l][ull]+dict[l][ull][0],current)-dict[l][ull];
-		//binary search since dict[b] is sorted
-		std::move(dict[l][ull]+pos+1,dict[l][ull]+dict[l][ull][0],dict[l][ull]+pos);
-		dict[l][ull][0]--;
-		if(dict[l][ull][0] == 1)
+	}//while(!done) end
+
+	std::cout << tid << ":Done"<<"\n";
+	}//parallel end
+
+	//delete stuff
+	for(int j = 0; j < numdict; j++)
+		for(auto it = dict[j].begin(); it !=  dict[j].end(); ++it)
 		{
-			delete[] dict[l][ull];
-			dict[l].erase(ull);
+			delete[] it->second;
 		}
-	}
+		
 	delete[] remainingreads;
+		
+	//Combine sortedorder etc. from different threads
+	for(int i = 0; i < num_thr; i++)
+	{
+		sortedorder.insert(sortedorder.end(),sortedorder_thr[i].begin(),sortedorder_thr[i].end());
+		flagvec.insert(flagvec.end(),flagvec_thr[i].begin(),flagvec_thr[i].end());
+		revcomp.insert(revcomp.end(),revcomp_thr[i].begin(),revcomp_thr[i].end());
+		readpos.insert(readpos.end(),readpos_thr[i].begin(),readpos_thr[i].end());
+		//free memory
+		std::vector<uint32_t>().swap(sortedorder_thr[i]);
+		std::vector<uint32_t>().swap(readpos_thr[i]);
+		std::vector<bool>().swap(flagvec_thr[i]);
+		std::vector<bool>().swap(revcomp_thr[i]);
+	}
+	uint32_t unmatched = numreads;
+	for(uint32_t i = 0; i < numreads; i++)
+		unmatched -= flagvec[i];
+
 	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
 	return;
 }
@@ -452,6 +506,7 @@ void writetofile(std::bitset<2*readlen> *read, std::vector<uint32_t> &sortedorde
 	std::ofstream foutRC(outfileRC,std::ofstream::out);
 	std::ofstream foutflag(outfileflag,std::ofstream::out);
 	std::ofstream foutpos(outfilepos,std::ofstream::out);
+	std::ofstream foutorder(outfileorder,std::ofstream::out|std::ios::binary);
 	std::vector<uint32_t>::iterator it1,it4;
 	std::vector<bool>::iterator it2,it3;
 	char s[readlen+1],s1[readlen+1];
@@ -459,6 +514,8 @@ void writetofile(std::bitset<2*readlen> *read, std::vector<uint32_t> &sortedorde
 	s1[readlen] = '\0';
 	for (it1 = sortedorder.begin(),it2 = revcomp.begin(),it3 = flagvec.begin(),it4 = readpos.begin(); it1 != sortedorder.end(); ++it1,++it2,++it3,++it4)
 	{
+		
+		foutorder.write ((char*)&(*it1), sizeof (uint32_t));
 		foutflag << *it3;
 		foutpos << *it4 << "\n";
 		bitsettostring(read[*it1],s);
@@ -477,28 +534,34 @@ void writetofile(std::bitset<2*readlen> *read, std::vector<uint32_t> &sortedorde
 	fout.close();
 	foutRC.close();
 	foutflag.close();
+	foutorder.close();
+	foutpos.close();
 	return;
 }
 
+
+
 void bitsettostring(std::bitset<2*readlen> b,char *s)
 {
-	std::string s1 = b.to_string();
-	char *s2 = &(s1[0]);
-	for(int i = 0; i < readlen; i++)
-		s[i] = inttochar[2*charinttoint[s2[2*(readlen-i-1)+1]]+charinttoint[s2[2*(readlen-i-1)]]];
+	unsigned long long ull,rem;
+	for(int i = 0; i < 2*readlen/64+1; i++)
+	{	
+		ull = (b&mask64).to_ullong();
+		b>>=64;
+		for(int j = 32*i  ; j < 32*i+32 && j < readlen ; j++)
+		{
+			s[j] = revinttochar[ull%4];	
+			ull/=4;
+		}
+	}
 	return;
 }
 
 std::bitset<2*readlen> chartobitset(char *s)
 {
-	char s1[2*readlen+1];
+	std::bitset<2*readlen> b;
 	for(int i = 0; i < readlen; i++)
-	{
-		s1[2*(readlen-i-1)+1] = chartobit[s[i]][0];
-		s1[2*(readlen-i-1)] = chartobit[s[i]][1];
-	}
-	s1[2*readlen] = '\0';
-	std::bitset<2*readlen> b(s1);
+		b |= basemask[i][s[i]];
 	return b;
 }
 
