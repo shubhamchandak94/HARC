@@ -260,7 +260,8 @@ void reorder(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_
 		current = firstread;	
 		firstread += numreads/omp_get_num_threads();//spread out first read equally
 		remainingreads[current] = 0;
-	}	
+	}
+	#pragma omp barrier	
 	updaterefcount(read[current],ref,revref,count,true,false,0);
 	revcomp_thr[tid].push_back(0);
 	sortedorder_thr[tid].push_back(current);

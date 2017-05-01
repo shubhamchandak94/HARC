@@ -59,26 +59,32 @@ generateConfig()
 	echo "#define maxmatch $maxmatch" > src/cpp/noisy/config.h
 	echo "#define thresh $thresh" >> src/cpp/noisy/config.h
 	echo "#define numdict $numdict" >> src/cpp/noisy/config.h
-	echo "#define dict1_start $dict1start" >> src/cpp/noisy/config.h
-	echo "#define dict1_end $dict1end" >> src/cpp/noisy/config.h
-	echo "#define dict2_start $dict2start" >> src/cpp/noisy/config.h
-	echo "#define dict2_end $dict2end" >> src/cpp/noisy/config.h
-	readlen="$(wc -L < data/$basename/input_clean.dna)"
+	if [  ${dict1start+x} ]; then echo "#define dict1_start $dict1start" >> src/cpp/noisy/config.h; fi
+	if [  ${dict1end+x} ]; then echo "#define dict1_end $dict1end" >> src/cpp/noisy/config.h; fi
+	if [  ${dict2start+x} ]; then echo "#define dict2_start $dict2start" >> src/cpp/noisy/config.h; fi
+	if [  ${dict2end+x} ]; then echo "#define dict2_end $dict2end" >> src/cpp/noisy/config.h; fi
+	if [  ${dict3start+x} ]; then echo "#define dict3_start $dict3start" >> src/cpp/noisy/config.h; fi
+	if [  ${dict3end+x} ]; then echo "#define dict3_end $dict3end" >> src/cpp/noisy/config.h; fi
+	if [  ${dict4start+x} ]; then echo "#define dict4_start $dict4start" >> src/cpp/noisy/config.h; fi
+	if [  ${dict4end+x} ]; then echo "#define dict4_end $dict4end" >> src/cpp/noisy/config.h; fi
+	#readlen="$(wc -L < data/$basename/input_clean.dna)"
+	readlen="$(head data/$basename/input_clean.dna | wc -L)"
 	echo "#define readlen $readlen" >> src/cpp/noisy/config.h
 	echo "#define num_thr $num_thr" >> src/cpp/noisy/config.h
 }
 compress()
 {
-	g++ src/cpp/noisy/matchsort7_v11.cpp -march=native -O3 -fopenmp -Isrc/cpp/noisy/sparsepp/ -std=c++11 -o src/reorder_noisy.out
+	g++ src/cpp/noisy/matchsort7_v13.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder_noisy.out
 	mkdir -p data/$basename/output 
 	./src/reorder_noisy.out data/$basename
 	cp data/$basename/input_N.dna data/$basename/output/input_N.dna
+	g++ src/cpp/noisy/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
 	./src/encoder.out data/$basename
 
 	# add > to top of read_seq.txt (needed for MFCompress)	
-	echo ">" > data/$basename/output/seq_header.txt
-	cat data/$basename/output/seq_header.txt data/$basename/output/read_seq.txt > data/$basename/output/read_seq.txt.1
-	mv data/$basename/output/read_seq.txt.1 data/$basename/output/read_seq.txt
+	#echo ">" > data/$basename/output/seq_header.txt
+	#cat data/$basename/output/seq_header.txt data/$basename/output/read_seq.txt > data/$basename/output/read_seq.txt.1
+	#mv data/$basename/output/read_seq.txt.1 data/$basename/output/read_seq.txt
 	
 	#remove temporary files
 	rm data/$basename/output/temp.dna
@@ -92,8 +98,9 @@ compress()
 	7z a data/$basename/output/input_N.dna.7z data/$basename/output/input_N.dna
 	7z a data/$basename/output/read_meta.txt.7z data/$basename/output/read_meta.txt
 	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt
-	./util/MFCompress/MFCompressC data/$basename/output/read_seq.txt
-	rm data/$basename/output/*.txt data/$basename/output/*.dna
+	7z a -mm=PPMd -mo=12 -mmem=31 data/$basename/output/read_seq.txt.7z data/$basename/output/read_seq.txt
+	#./util/MFCompress/MFCompressC data/$basename/output/read_seq.txt
+	rm data/$basename/output/*.txt data/$basename/output/*.dna  data/$basename/output/*.bin
 	tar -cf data/$basename/output.tar data/$basename/output
 	rm -r data/$basename/output/
 }
@@ -108,9 +115,10 @@ decompress()
 	7z e data/$basename/output/input_N.dna.7z -odata/$basename/output/
 	7z e data/$basename/output/read_meta.txt.7z -odata/$basename/output/
 	7z e data/$basename/output/read_rev.txt.7z -odata/$basename/output/
-	./util/MFCompress/MFCompressD data/$basename/output/read_seq.txt.mfc
-	tr -d '\r\n>' < data/$basename/output/read_seq.txt.mfc.d > data/$basename/output/read_seq.txt
-	rm data/$basename/output/read_seq.txt.mfc.d
+	7z e data/$basename/output/read_seq.txt.7z -odata/$basename/output/
+	#./util/MFCompress/MFCompressD data/$basename/output/read_seq.txt.mfc
+	#tr -d '\r\n>' < data/$basename/output/read_seq.txt.mfc.d > data/$basename/output/read_seq.txt
+	#rm data/$basename/output/read_seq.txt.mfc.d
 #	python src/decodernoisy.py data/$basename
 	./src/decoder.out data/$basename
 }

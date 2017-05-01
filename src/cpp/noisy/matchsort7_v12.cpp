@@ -25,7 +25,8 @@ class bbhashdict
 	uint32_t numkeys;
 	uint32_t *startpos;
 	uint32_t *read_id;
-	bool findpos(uint32_t *dictidx, uint32_t &startposidx, uint64_t ull);
+	bool *empty_bin;
+	void findpos(uint32_t *dictidx, uint32_t &startposidx);
 	void remove(uint32_t *dictidx, uint32_t &startposidx, uint32_t current);
 	bbhashdict()
 	{
@@ -55,7 +56,9 @@ std::string outdir;
 char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
 char inttochar[] = {'A','C','G','T'};
 char chartorevchar[128];//A-T etc for reverse complement
-int chartoint[128];//A-0,C-1 etc. used in updaterefcount 
+int chartoint[128];//A-0,C-1 etc. used in updaterefcount
+int *dict_start;
+int *dict_end; 
 std::bitset<2*readlen> basemask[readlen][128];//bitset for A,G,C,T at each position 
 //used in stringtobitset, chartobitset and bitsettostring
 std::bitset<2*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
@@ -129,6 +132,47 @@ void setglobalarrays()
 	chartoint['C'] = 1;
 	chartoint['G'] = 2;
 	chartoint['T'] = 3;
+	#if numdict == 1
+	{
+		dict_start = new int[1];
+		dict_end = new int[1];
+		dict_start[0] = dict1_start;
+		dict_end[0] = dict1_end;
+	}
+	#elif numdict == 2
+	{
+		dict_start = new int[2];
+		dict_end = new int[2];
+		dict_start[0] = dict1_start;
+		dict_end[0] = dict1_end;
+		dict_start[1] = dict2_start;
+		dict_end[1] = dict2_end;
+	}
+	#elif numdict == 3
+	{
+		dict_start = new int[3];
+		dict_end = new int[3];
+		dict_start[0] = dict1_start;
+		dict_end[0] = dict1_end;
+		dict_start[1] = dict2_start;
+		dict_end[1] = dict2_end;
+		dict_start[2] = dict3_start;
+		dict_end[2] = dict3_end;
+	}
+	#elif numdict == 4
+	{
+		dict_start = new int[4];
+		dict_end = new int[4];
+		dict_start[0] = dict1_start;
+		dict_end[0] = dict1_end;
+		dict_start[1] = dict2_start;
+		dict_end[1] = dict2_end;
+		dict_start[2] = dict3_start;
+		dict_end[2] = dict3_end;
+		dict_start[3] = dict4_start;
+		dict_end[3] = dict4_end;
+	}
+	#endif
 	for(int i = 0; i < readlen; i++)
 	{
 		if(i < 64)
@@ -181,21 +225,7 @@ void getDataParams()
 	std::cout << "Number of reads: " << number_of_lines << std::endl;
 	myfile.close();
 }
-/*
-void readDnaFile(std::bitset<2*readlen> *read)
-{
-	std::ifstream f(infile, std::ifstream::in);
-	f.seekg(0, f.beg);
-	std::string s;
-	for(uint32_t i = 0; i < numreads; i++)
-	{
-		f >> s;
-		read[i] = stringtobitset(s);
-	}
-	f.close();
-	return;
-}
-*/
+
 void readDnaFile(std::bitset<2*readlen> *read)
 {
 	#pragma omp parallel
@@ -203,8 +233,8 @@ void readDnaFile(std::bitset<2*readlen> *read)
 	int tid = omp_get_thread_num();
 	uint32_t i, stop;	
 	//doing initial setup and first read
-	i = tid*numreads/omp_get_num_threads();//spread out first read equally
-	stop = (tid+1)*numreads/omp_get_num_threads();
+	i = uint64_t(tid)*numreads/omp_get_num_threads();//spread out first read equally
+	stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
 	if(tid == omp_get_num_threads()-1)
 		stop = numreads;
 	std::ifstream f(infile, std::ifstream::in);
@@ -224,12 +254,11 @@ void readDnaFile(std::bitset<2*readlen> *read)
 void generateindexmasks(std::bitset<2*readlen> *mask1)
 //masks for dictionary positions
 {
-	for(int i = 0; i < numdict; i++)
-		mask1[i].reset();
-	for(int i = 2*dict1_start; i < 2*(dict1_end+1); i++)
-		mask1[0][i] = 1;
-	for(int i = 2*dict2_start; i < 2*(dict2_end+1); i++)
-		mask1[1][i] = 1;
+	for(int j = 0; j < numdict; j++)
+		mask1[j].reset();
+	for(int j = 0; j < numdict; j++)
+		for(int i = 2*dict_start[j]; i < 2*(dict_end[j]+1); i++)
+			mask1[j][i] = 1;
 	return;
 }
 
@@ -238,7 +267,6 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 {
 	std::bitset<2*readlen> mask[numdict];
 	generateindexmasks(mask);
-	int dict_start[2] = {dict1_start,dict2_start};
 	omp_set_num_threads(std::min(numdict,num_thr));
 	//Parallelizing construction of the multiple dictionaries
 	#pragma omp parallel 
@@ -266,14 +294,14 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 		dict[j].numkeys = k+1;
 		//construct mphf
 		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(ull), static_cast<const u_int64_t*>(ull+dict[j].numkeys));
-		double gammaFactor = 2.0;//reasonable balance between speed and memory
-		dict[j].bphf = new boomphf::mphf<u_int64_t,hasher_t>(dict[j].numkeys,data_iterator,std::max(1,num_thr/numdict),gammaFactor,false,false);
+		double gammaFactor = 5.0;//balance between speed and memory
+		dict[j].bphf = new boomphf::mphf<u_int64_t,hasher_t>(dict[j].numkeys,data_iterator,std::max(1,num_thr/numdict),gammaFactor,true,false);
 	
 		delete[] ull;
 
 		//fill startpos by first storing numbers and then doing cumulative sum
 		dict[j].startpos = new uint32_t[dict[j].numkeys+1];//1 extra to store end pos of last key
-		std::fill(dict[j].startpos,dict[j].startpos+dict[j].numkeys,0);
+		std::fill(dict[j].startpos,dict[j].startpos+dict[j].numkeys+1,0);
 		std::ifstream finkey(outdir+std::string("keys.bin.")+std::to_string(j),std::ifstream::in|std::ios::binary);
 		uint64_t currentkey;
 		for(uint32_t i = 0; i < numreads; i++)
@@ -281,7 +309,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 			finkey.read((char*)&currentkey, sizeof(uint64_t));
 			dict[j].startpos[((dict[j].bphf)->lookup(currentkey))+1]++;	
 		}
-		
+		dict[j].empty_bin = new bool[dict[j].numkeys]();
 		for(uint32_t i = 1; i < dict[j].numkeys; i++)
 			dict[j].startpos[i] =  dict[j].startpos[i] +  dict[j].startpos[i-1];
 
@@ -309,62 +337,8 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 	return;
 }
 
-/*
-void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict)
+void bbhashdict::findpos(uint32_t *dictidx, uint32_t &startposidx)
 {
-
-	std::bitset<2*readlen> mask[numdict];
-	generateindexmasks(mask);
-	int dict_start[2] = {dict1_start,dict2_start};
-	//Parallelizing construction of the multiple dictionaries
-	#pragma omp parallel num_threads(numdict)
-	{
-	#pragma omp for
-	for(int j = 0; j < numdict; j++)
-	{	
-		std::bitset<2*readlen> b;
-		uint64_t ull;
-		//find number of times each key occurs
-		for(uint32_t i = 0; i < numreads; i++)
-		{
-			b = read[i]&mask[j];
-			ull = (b>>2*dict_start[j]).to_ullong();
-			if(dict[j].count(ull) == 1)
-				(*dict[j][ull])++;
-			else
-			{
-				dict[j][ull]=new uint32_t;
-				(*dict[j][ull]) = 1;
-			}
-		}
-		//allocate memory for each bin (number of reads with given key + 1) 1 for storing the length
-		for(auto it = dict[j].begin(); it !=  dict[j].end(); ++it)
-		{
-			uint32_t binsize = *(it->second);
-			delete it->second;
-			dict[j][it->first] =  new uint32_t[binsize+1];
-			dict[j][it->first][0] = 1;
-		}
-		//fill in the read ids in each bin, dict[j][ull][0] stores the position where next id is put - at the
-		//end it stores the size of the array
-		for(uint32_t i = 0; i < numreads; i++)
-		{
-			b = read[i]&mask[j];
-			ull = (b>>2*dict_start[j]).to_ullong();
-			dict[j][ull][dict[j][ull][0]++] = i;
-		}
-
-	}
-	}
-	return;
-}
-*/
-
-bool bbhashdict::findpos(uint32_t *dictidx, uint32_t &startposidx, uint64_t ull)
-{
-	startposidx = bphf->lookup(ull);
-	if(startposidx >= numkeys)
-		return 0;//failed to look up key
 	dictidx[0] = startpos[startposidx];
 	auto endidx = startpos[startposidx+1];
 	if(read_id[endidx-1] == numreads)//means exactly one read has been removed
@@ -373,24 +347,27 @@ bool bbhashdict::findpos(uint32_t *dictidx, uint32_t &startposidx, uint64_t ull)
 		dictidx[1] = dictidx[0] + read_id[endidx-2];
 	else
 		dictidx[1] = endidx;//no read deleted
-	return 1;
+	return;
 }
 
 void bbhashdict::remove(uint32_t *dictidx, uint32_t &startposidx, uint32_t current)
 {
-	if(dictidx[1] == dictidx[0] + 1)//just one read left in bin
+	auto size = dictidx[1] - dictidx[0];
+	if(size == 1)//just one read left in bin
+	{
+		empty_bin[startposidx] = 1;
 		return; //need to keep one read to check during matching
-
-	uint32_t pos = std::lower_bound(&(read_id[dictidx[0]]),&(read_id[dictidx[1]]),current)-&(read_id[dictidx[0]]);
-	//binary search since dict[l].read_id is sorted for each key
-	std::move(&(read_id[dictidx[0]])+pos+1,&(read_id[dictidx[1]]),&(read_id[dictidx[0]])+pos);
+	}
+	uint32_t pos = std::lower_bound(read_id+dictidx[0],read_id+dictidx[1],current)-(read_id+dictidx[0]);
+	
+	std::move(read_id+dictidx[0]+pos+1,read_id+dictidx[1],read_id+dictidx[0]+pos);
 	auto endidx = startpos[startposidx+1];
 	if(dictidx[1] == endidx)//this is first read to be deleted
 		read_id[endidx-1] = numreads;
 	else if(read_id[endidx-1] == numreads)//exactly one read has been deleted till now
 	{
 		read_id[endidx-1] = numreads + 1;
-		read_id[endidx-2] = dictidx[1] - dictidx[0] - 1;//number of reads left in bin
+		read_id[endidx-2] = size - 1;//number of reads left in bin
 	}
 	else//more than two reads have been deleted
 		read_id[endidx-2]--;
@@ -403,6 +380,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	omp_lock_t dict_lock[numdict];//one lock for each dict
 	for(int j = 0; j < numdict; j++)
 		omp_init_lock(&dict_lock[j]);
+	uint8_t _readlen = readlen;//used for writing to binary file
 	std::bitset<2*readlen> mask[maxmatch];
 	std::bitset<2*readlen> revmask[maxmatch];
 	generatemasks(mask,revmask);
@@ -412,13 +390,12 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::fill(remainingreads, remainingreads+numreads,1);
 	std::atomic<int64_t> remainingpos(numreads-1);//used for searching next unmatched read when no match is found
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
-	int dict_start[2] = {dict1_start,dict2_start};
-	int64_t beingwritten[numdict][num_thr], beingread[numdict][num_thr];
+	uint32_t beingwritten[numdict][num_thr], beingread[numdict][num_thr];
 	for(int j = 0; j <numdict; j++)
 		for(int i = 0; i <num_thr; i++)
 		{
-			beingwritten[j][i] = -1;//-1 means not writing anywhere right now
-			beingread[j][i] = -1;
+			beingwritten[j][i] = numreads;//numreads means not writing anywhere right now
+			beingread[j][i] = numreads;
 		}
 	uint32_t firstread = 0,unmatched = 0;
 	#pragma omp parallel
@@ -427,7 +404,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::string tid_str = std::to_string(tid);	
 	std::ofstream foutRC(outfileRC + '.' + tid_str,std::ofstream::out);
 	std::ofstream foutflag(outfileflag + '.' + tid_str,std::ofstream::out);
-	std::ofstream foutpos(outfilepos + '.' + tid_str,std::ofstream::out);
+	std::ofstream foutpos(outfilepos + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder(outfileorder + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::bitset<2*readlen> ref,revref,b;
 	int count[4][readlen];
@@ -445,43 +422,44 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		remainingreads[current] = 0;
 		unmatched++;
 	}
+	#pragma omp barrier
 	updaterefcount(read[current],ref,revref,count,true,false,0);
 	foutRC << 'd';
 	foutorder.write((char*)&current,sizeof(uint32_t));
 	foutflag << 0;//for unmatched
-	foutpos << readlen << "\n";
+	foutpos.write((char*)&_readlen,sizeof(uint8_t));
 	uint32_t numdone= 0;
 	while(!done)
-	{	numdone++;
+	{
+		numdone++;
 		if(numdone%1000000==0)
 			std::cout<<tid<<":"<<numdone<<"\n";
 		//delete the read from the corresponding dictionary bins
 		for(int l = 0; l < numdict; l++)
 		{	b = read[current]&mask1[l];
 			ull = (b>>2*dict_start[l]).to_ullong();
-			dict[l].findpos(dictidx,startposidx,ull);
+			startposidx = dict[l].bphf->lookup(ull);
 			//check if any other thread is modifying same dictpos
 			int i;
 			bool go_on = 0; 
 			while(!go_on)//make sure no other thread is reading or writing to dictbin
 			{
 				omp_set_lock(&dict_lock[l]);
+				for(i=0;i<num_thr;i++)
+					if(beingwritten[l][i]==startposidx || beingread[l][i]==startposidx)
+						break;
+				if(i==num_thr)
 				{
-					for(i=0;i<num_thr;i++)
-						if(beingwritten[l][i]==dictidx[0] || beingread[l][i]==dictidx[0])
-							break;
-					if(i==num_thr)
-					{
-						beingwritten[l][tid] = dictidx[0];
-						go_on = 1;
-					}
+					beingwritten[l][tid] = startposidx;
+					go_on = 1;
 				}
 				omp_unset_lock(&dict_lock[l]);
 			}
+			dict[l].findpos(dictidx,startposidx);
 			dict[l].remove(dictidx,startposidx,current);
 
 			#pragma omp atomic write
-			beingwritten[l][tid] = -1;
+			beingwritten[l][tid] = numreads;
 		}
 		flag = 0;
 		uint32_t k;
@@ -492,31 +470,36 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			{
 				b = ref&mask1[l];
 				ull = (b>>2*dict_start[l]).to_ullong();
-				if(!dict[l].findpos(dictidx,startposidx,ull))
+				startposidx = dict[l].bphf->lookup(ull);
+				if(startposidx >= dict[l].numkeys)//not found
 					continue;
-				if(!remainingreads[dict[l].read_id[dictidx[0]]])//bin is empty
+				//check if any other thread is modifying same dictpos
+				int i;
+				bool go_on = 0; 
+				while(!go_on)//make sure no other thread is reading or writing to dictbin
+				{
+					omp_set_lock(&dict_lock[l]);
+					for(i=0;i<num_thr;i++)
+						if(beingwritten[l][i]==startposidx)
+							break;
+					if(i==num_thr)
+					{
+						beingread[l][tid] = startposidx;
+						go_on = 1;
+					}
+					omp_unset_lock(&dict_lock[l]);
+				}
+				dict[l].findpos(dictidx,startposidx);
+				if(dict[l].empty_bin[startposidx])//bin is empty
+				{
+					#pragma omp atomic write
+					beingread[l][tid] = numreads;
 					continue;
+				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
 				if(ull == ull1)//checking if ull is actually the key for this bin
-				{
-					int i;
-					bool go_on = 0; 
-					while(!go_on)//make sure no other thread is reading or writing to dictbin
-					{
-						omp_set_lock(&dict_lock[l]);
-						{
-							for(i=0;i<num_thr;i++)
-								if(beingwritten[l][i]==dictidx[0])
-									break;
-							if(i==num_thr)
-							{
-								beingread[l][tid] = dictidx[0];
-								go_on = 1;
-							}
-						}
-						omp_unset_lock(&dict_lock[l]);
-					}
-					for (long i = dictidx[1] - 1 ; i >= dictidx[0] ; i--)
+				{	
+					for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] ; i--)
 					{
 						auto rid = dict[l].read_id[i];
 						if((ref^(read[rid]&mask[j])).count()<=thresh)
@@ -532,9 +515,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 								break;
 						}
 					}
-					#pragma omp atomic write
-					beingread[l][tid] = -1;
 				}
+				#pragma omp atomic write
+				beingread[l][tid] = numreads;
 				
 				if(flag == 1)
 				{
@@ -543,7 +526,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					foutRC << 'd';
 					foutorder.write((char*)&current,sizeof(uint32_t));
 					foutflag << 1;//for matched
-					foutpos << j << "\n";
+					foutpos.write((char*)&j,sizeof(uint8_t));
 					break;
 				}
 				
@@ -556,31 +539,36 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			{
 				b = revref&mask1[l];
 				ull = (b>>2*dict_start[l]).to_ullong();
-				if(!dict[l].findpos(dictidx,startposidx,ull))
+				startposidx = dict[l].bphf->lookup(ull);
+				if(startposidx >= dict[l].numkeys)//not found
 					continue;
-				if(!remainingreads[dict[l].read_id[dictidx[0]]])//bin is empty
+				//check if any other thread is modifying same dictpos
+				int i;
+				bool go_on = 0; 
+				while(!go_on)//make sure no other thread is reading or writing to dictbin
+				{
+					omp_set_lock(&dict_lock[l]);
+					for(i=0;i<num_thr;i++)
+						if(beingwritten[l][i]==startposidx)
+							break;
+					if(i==num_thr)
+					{
+						beingread[l][tid] = startposidx;
+						go_on = 1;
+					}
+					omp_unset_lock(&dict_lock[l]);
+				}
+				dict[l].findpos(dictidx,startposidx);
+				if(dict[l].empty_bin[startposidx])//bin is empty
+				{	
+					#pragma omp atomic write
+					beingread[l][tid] = numreads;
 					continue;
+				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
 				if(ull == ull1)//checking if ull is actually the key for this bin
 				{
-					int i;
-					bool go_on = 0; 
-					while(!go_on)//make sure no other thread is reading or writing to dictbin
-					{
-						omp_set_lock(&dict_lock[l]);
-						{
-							for(i=0;i<num_thr;i++)
-								if(beingwritten[l][i]==dictidx[0])
-									break;
-							if(i==num_thr)
-							{
-								beingread[l][tid] = dictidx[0];
-								go_on = 1;
-							}
-						}
-						omp_unset_lock(&dict_lock[l]);
-					}
-					for (long i = dictidx[1] - 1 ; i >= dictidx[0] ; i--)
+					for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] ; i--)
 					{
 						auto rid = dict[l].read_id[i];
 						if((revref^(read[rid]&revmask[j])).count()<=thresh)
@@ -596,9 +584,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 								break;
 						}
 					}
-					#pragma omp atomic write
-					beingread[l][tid] = -1;
 				}
+				#pragma omp atomic write
+				beingread[l][tid] = numreads;
 				if(flag == 1)
 				{
 					current = k;
@@ -606,7 +594,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					foutRC << 'r';
 					foutorder.write((char*)&current,sizeof(uint32_t));
 					foutflag << 1;//for matched
-					foutpos << j << "\n";
+					foutpos.write((char*)&j,sizeof(uint8_t));
 					break;
 				}
 			}	
@@ -615,7 +603,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		
 			revref<<=2;
 			ref>>=2;
-		}	
+		}
 		if(flag == 0)//no match found
 		{
 			for(int64_t j = remainingpos; j>=0; j--)
@@ -643,7 +631,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 				foutRC << 'd';
 				foutorder.write((char*)&current,sizeof(uint32_t));
 				foutflag << 0;//for unmatched
-				foutpos << readlen << "\n";
+				foutpos.write((char*)&_readlen,sizeof(uint8_t));
 			}
 		}
 	}//while(!done) end
@@ -720,7 +708,7 @@ void writetofile(std::bitset<2*readlen> *read)
 	std::ofstream fout(outfile,std::ofstream::out);
 	std::ofstream foutRC(outfileRC,std::ofstream::out);
 	std::ofstream foutflag(outfileflag,std::ofstream::out);
-	std::ofstream foutpos(outfilepos,std::ofstream::out);
+	std::ofstream foutpos(outfilepos,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder(outfileorder,std::ofstream::out|std::ios::binary);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
@@ -728,7 +716,7 @@ void writetofile(std::bitset<2*readlen> *read)
 		std::ifstream fin(outfile + '.' + tid_str,std::ifstream::in);
 		std::ifstream finRC(outfileRC + '.' + tid_str,std::ifstream::in);
 		std::ifstream finflag(outfileflag + '.' + tid_str,std::ifstream::in);
-		std::ifstream finpos(outfilepos + '.' + tid_str,std::ifstream::in);
+		std::ifstream finpos(outfilepos + '.' + tid_str,std::ifstream::in|std::ios::binary);
 		std::ifstream finorder(outfileorder + '.' + tid_str,std::ifstream::in|std::ios::binary);
 		
 		fout << fin.rdbuf();//write entire file
@@ -756,8 +744,6 @@ void writetofile(std::bitset<2*readlen> *read)
 	foutpos.close();
 	return;
 }
-
-
 
 void bitsettostring(std::bitset<2*readlen> b,char *s)
 {

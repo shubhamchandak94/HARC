@@ -17,6 +17,5 @@ chmod 741 ./util/MFCompress/MFCompressC
 chmod 741 ./util/MFCompress/MFCompressD 
 rm -r MFCompress-linux64-1.01*
 
-#Compiling encoder and decoder
-g++ src/cpp/noisy/encoder.cpp -O3 -march=native -std=c++11 -o src/encoder.out
+#Compiling decoder
 g++ src/cpp/noisy/decoder.cpp -O3 -march=native -std=c++11 -o src/decoder.out

@@ -5,9 +5,12 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <numeric>
+#include <cstdio>
+#include <omp.h>
+#include "config.h"
 
-
-long readlen;
+uint32_t numreads;
 
 std::string infile;
 std::string infile_flag;
@@ -46,6 +49,7 @@ int main(int argc, char** argv)
 	outfile_pos = basedir + "/output/read_pos.txt";
 	outfile_noise = basedir + "/output/read_noise.txt";
 	outfile_noisepos = basedir + "/output/read_noisepos.txt";
+	omp_set_num_threads(num_thr);
 	getDataParams(); //populate readlen
 	setglobalarrays();
 	encode();
@@ -55,24 +59,36 @@ int main(int argc, char** argv)
 void encode()
 {
 	std::cout<<"Encoding reads\n";
+	#pragma omp parallel 
+	{
+	int tid = omp_get_thread_num();
 	std::ifstream f(infile);
 	std::ifstream in_flag(infile_flag);
-	std::ifstream in_pos(infile_pos);
-	std::ofstream f_seq(outfile_seq);
-	std::ofstream f_meta(outfile_meta);
-	std::ofstream f_pos(outfile_pos);
-	std::ofstream f_noise(outfile_noise);
-	std::ofstream f_noisepos(outfile_noisepos);
+	std::ifstream in_pos(infile_pos,std::ios::binary);
+	std::ofstream f_seq(outfile_seq+'.'+std::to_string(tid));
+	std::ofstream f_pos(outfile_pos+'.'+std::to_string(tid));
+	std::ofstream f_noise(outfile_noise+'.'+std::to_string(tid));
+	std::ofstream f_noisepos(outfile_noisepos+'.'+std::to_string(tid));
 	
+	uint64_t i, stop;	
+	//doing initial setup and first read
+	i = uint64_t(tid)*numreads/omp_get_num_threads();//spread out first read equally
+	stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
+	if(tid == omp_get_num_threads()-1)
+		stop = numreads;
+	f.seekg(uint64_t(i)*(readlen+1), f.beg);
+	in_flag.seekg(i, in_flag.beg);
+	in_pos.seekg(i*sizeof(uint8_t),in_pos.beg);
 	std::string current,ref;
 	char c;
 	std::vector<std::string> reads;
 	std::vector<long> pos;
-	long p;
-	while(std::getline(f,current))
+	uint8_t p;
+	while(i < stop)
 	{
+		std::getline(f,current);
 		c = in_flag.get();
-		in_pos>>p;
+		in_pos.read((char*)&p,sizeof(uint8_t));
 		if(c=='0'||reads.size()>10000000)//so that reads vector doesn't get too large
 		{
 			if(reads.size()!=0)
@@ -87,15 +103,44 @@ void encode()
 		{
 			reads.push_back(current);
 			pos.push_back(p);
-		}	
+		}
+		i++;	
 					
 	}
 	ref = buildcontig(reads,pos);
 	writecontig(ref,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
-	f_meta << readlen << "\n";
+
 	f.close();
 	in_flag.close();
 	in_pos.close();
+	f_seq.close();
+	f_pos.close();
+	f_noise.close();
+	f_noisepos.close();
+	}
+	
+	//Combine files produced by the threads
+	std::ofstream f_seq(outfile_seq);
+	std::ofstream f_pos(outfile_pos);
+	std::ofstream f_noise(outfile_noise);
+	std::ofstream f_noisepos(outfile_noisepos);
+	std::ofstream f_meta(outfile_meta);
+	for(int tid = 0; tid < num_thr; tid++)
+	{
+		std::ifstream in_seq(outfile_seq+'.'+std::to_string(tid));
+		std::ifstream in_pos(outfile_pos+'.'+std::to_string(tid));
+		std::ifstream in_noise(outfile_noise+'.'+std::to_string(tid));
+		std::ifstream in_noisepos(outfile_noisepos+'.'+std::to_string(tid));
+		f_seq << in_seq.rdbuf();
+		f_pos << in_pos.rdbuf();
+		f_noise << in_noise.rdbuf();
+		f_noisepos << in_noisepos.rdbuf();
+		remove((outfile_seq+'.'+std::to_string(tid)).c_str());
+		remove((outfile_pos+'.'+std::to_string(tid)).c_str());
+		remove((outfile_noise+'.'+std::to_string(tid)).c_str());
+		remove((outfile_noisepos+'.'+std::to_string(tid)).c_str());
+	}
+	f_meta << readlen << "\n";
 	f_seq.close();
 	f_meta.close();
 	f_pos.close();
@@ -116,8 +161,8 @@ std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos)
 	long prevpos = 0,currentpos;
 	for(long j = 1; j < reads.size(); j++)
 	{
-		currentpos = prevpos + pos[j];
 		count.insert(count.end(),pos[j],{0,0,0,0});
+		currentpos = prevpos + pos[j];
 		for(long i = 0; i < readlen; i++)
 			count[currentpos+i][chartolong[reads[j][i]]] += 1;
 		prevpos = currentpos;
@@ -216,11 +261,15 @@ void setglobalarrays()
 
 void getDataParams()
 {
+	uint32_t number_of_lines = 0; 
 	std::string line;
 	std::ifstream myfile(infile, std::ifstream::in);
 
-	std::getline(myfile, line);
-	readlen = line.length();
+	while (std::getline(myfile, line))
+		++number_of_lines;
+	//readlen = read_length;
+	numreads = number_of_lines;
 	std::cout << "Read length: " << readlen << std::endl;
+	std::cout << "Number of reads: " << number_of_lines << std::endl;
 	myfile.close();
 }
