@@ -98,7 +98,7 @@ compress()
 	7z a data/$basename/output/input_N.dna.7z data/$basename/output/input_N.dna
 	7z a data/$basename/output/read_meta.txt.7z data/$basename/output/read_meta.txt
 	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt
-	7z a -mm=PPMd -mo=12 -mmem=31 data/$basename/output/read_seq.txt.7z data/$basename/output/read_seq.txt
+	7z a -m0=PPMd -mo=12 -mmem=31 data/$basename/output/read_seq.txt.7z data/$basename/output/read_seq.txt
 	#./util/MFCompress/MFCompressC data/$basename/output/read_seq.txt
 	rm data/$basename/output/*.txt data/$basename/output/*.dna  data/$basename/output/*.bin
 	tar -cf data/$basename/output.tar data/$basename/output
