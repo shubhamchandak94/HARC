@@ -173,10 +173,10 @@ void setglobalarrays()
 		dict_end[3] = dict4_end;
 	}
 	#endif
+	for(int i = 0; i < 64; i++)
+		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)
 	{
-		if(i < 64)
-			mask64[i] = 1;
 		basemask[i]['A'][2*i] = 0;
 		basemask[i]['A'][2*i+1] = 0;
 		basemask[i]['C'][2*i] = 0;

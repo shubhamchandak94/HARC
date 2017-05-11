@@ -29,6 +29,8 @@ char enc_noise[128][128];
 
 void encode();
 
+void packbits();
+
 std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos);
 
 void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos);
@@ -43,7 +45,7 @@ int main(int argc, char** argv)
 	infile = basedir + "/output/temp.dna";
 	infile_pos = basedir + "/output/temppos.txt";
 	infile_flag = basedir + "/output/tempflag.txt";
-	
+		
 	outfile_seq = basedir + "/output/read_seq.txt";
 	outfile_meta = basedir + "/output/read_meta.txt";
 	outfile_pos = basedir + "/output/read_pos.txt";
@@ -146,7 +148,76 @@ void encode()
 	f_pos.close();
 	f_noise.close();
 	f_noisepos.close();
+	packbits();
 	std::cout << "Encoding done\n";
+	return;
+}
+
+void packbits()
+{
+	std::ifstream in_seq(outfile_seq);
+	std::ifstream in_noise(outfile_noise);
+	std::ofstream f_seq(outfile_seq+".tmp",std::ios::binary);
+	std::ofstream f_seq_tail(outfile_seq+".tail");
+	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);
+	std::ofstream f_noise_tail(outfile_noise+".tail");
+	uint64_t file_len=0;
+	char c;
+	while(in_seq >> std::noskipws >> c)
+		file_len++;
+	uint8_t basetoint[128];
+	basetoint['A'] = 0;
+	basetoint['C'] = 1;
+	basetoint['G'] = 2;
+	basetoint['T'] = 3;
+	
+	in_seq.close();
+	in_seq.open(outfile_seq);
+	char dnabase[4];
+	uint8_t dnabin;
+	for(uint64_t i = 0; i < file_len/4; i++)
+	{
+		in_seq.read(dnabase,4);
+		
+		dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
+			basetoint[dnabase[1]]+basetoint[dnabase[0]];
+		f_seq.write((char*)&dnabin,sizeof(uint8_t));
+	}
+	f_seq.close();
+	in_seq.read(dnabase,file_len%4);
+	for(int i=0; i<file_len%4;i++)
+		f_seq_tail << dnabase[i];
+	f_seq_tail.close();
+	in_seq.close();
+	remove(outfile_seq.c_str());
+	rename((outfile_seq+".tmp").c_str(),outfile_seq.c_str());		
+	
+	//noise
+	file_len=0;
+	while(in_noise >> std::noskipws >> c)
+		file_len++;
+	basetoint['0'] = 0;
+	basetoint['1'] = 1;
+	basetoint['2'] = 2;
+	basetoint['\n'] = 3;
+	
+	in_noise.close();
+	in_noise.open(outfile_noise);
+	for(uint64_t i = 0; i < file_len/4; i++)
+	{
+		in_noise.read(dnabase,4);
+		dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
+			basetoint[dnabase[1]]+basetoint[dnabase[0]];
+		f_noise.write((char*)&dnabin,sizeof(uint8_t));
+	}
+	f_noise.close();
+	in_noise.read(dnabase,file_len%4);
+	for(int i=0; i<file_len%4;i++)
+		f_noise_tail << dnabase[i];
+	f_noise_tail.close();
+	remove(outfile_noise.c_str());
+	rename((outfile_noise+".tmp").c_str(),outfile_noise.c_str());
+	
 	return;
 }
 

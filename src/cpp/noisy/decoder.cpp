@@ -26,6 +26,8 @@ char chartorevchar[128];
 
 void decode();
 
+void unpackbits();
+
 void reverse_complement(char* s, char* s1);
 std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos);
 
@@ -56,6 +58,7 @@ int main(int argc, char** argv)
 void decode()
 {
 	std::cout << "Decoding reads\n";
+	unpackbits();
 	std::ofstream f(outfile);
 	std::ifstream f_seq(infile_seq);
 	std::ifstream f_pos(infile_pos);
@@ -108,6 +111,69 @@ void decode()
 	f_rev.close();
 	f_N.close();
 	std::cout<<"Decoding done\n";
+	return;
+}
+
+void unpackbits()
+{
+	std::ifstream in_seq(infile_seq,std::ios::binary);
+	std::ifstream in_noise(infile_noise,std::ios::binary);
+	std::ofstream f_seq(infile_seq+".tmp");
+	std::ifstream in_seq_tail(infile_seq+".tail");
+	std::ofstream f_noise(infile_noise+".tmp");
+	std::ifstream in_noise_tail(infile_noise+".tail");
+	char inttobase[4];
+	inttobase[0] = 'A';
+	inttobase[1] = 'C';
+	inttobase[2] = 'G';
+	inttobase[3] = 'T';
+	
+	uint8_t dnabin;
+	in_seq.read((char*)&dnabin,sizeof(uint8_t));
+	while(!in_seq.eof())
+	{	
+		f_seq << inttobase[dnabin%4];
+		dnabin/=4; 	
+		f_seq << inttobase[dnabin%4];
+		dnabin/=4; 	
+		f_seq << inttobase[dnabin%4];
+		dnabin/=4; 	
+		f_seq << inttobase[dnabin%4];
+		in_seq.read((char*)&dnabin,sizeof(uint8_t));
+	}
+	in_seq.close();
+	f_seq << in_seq_tail.rdbuf();
+	in_seq_tail.close();
+	f_seq.close();
+	remove(infile_seq.c_str());
+	remove((infile_seq+".tail").c_str());
+	rename((infile_seq+".tmp").c_str(),infile_seq.c_str());		
+	
+	//noise
+	inttobase[0] = '0';
+	inttobase[1] = '1';
+	inttobase[2] = '2';
+	inttobase[3] = '\n';
+	
+	in_noise.read((char*)&dnabin,sizeof(uint8_t));
+	while(!in_noise.eof())
+	{	
+		f_noise << inttobase[dnabin%4];
+		dnabin/=4; 	
+		f_noise << inttobase[dnabin%4];
+		dnabin/=4; 	
+		f_noise << inttobase[dnabin%4];
+		dnabin/=4; 	
+		f_noise << inttobase[dnabin%4];
+		in_noise.read((char*)&dnabin,sizeof(uint8_t));
+	}
+	in_noise.close();
+	f_noise << in_noise_tail.rdbuf();
+	in_noise_tail.close();
+	f_noise.close();
+	remove((infile_noise+".tail").c_str());
+	rename((infile_noise+".tmp").c_str(),infile_noise.c_str());		
+	
 	return;
 }
 

@@ -174,10 +174,11 @@ void setglobalarrays()
 		dict_end[3] = dict4_end;
 	}
 	#endif
+	
+	for(int i = 0; i < 64; i++)
+		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)
 	{
-		if(i < 64)
-			mask64[i] = 1;
 		basemask[i]['A'][2*i] = 0;
 		basemask[i]['A'][2*i+1] = 0;
 		basemask[i]['C'][2*i] = 0;
@@ -209,7 +210,8 @@ void getDataParams()
 
 	std::getline(myfile, line);
 	int read_length = line.length();
-	myfile.seekg(0, myfile.beg);
+	myfile.close();
+	myfile.open(infile);
 
 	while (std::getline(myfile, line))
 	{
@@ -679,7 +681,6 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	foutorder.close();
 	foutflag.close();
 	foutpos.close();
-	std::cout << tid << ":Done"<<"\n";
 	}//parallel end
 		
 	delete[] remainingreads;
@@ -784,10 +785,11 @@ void writetofile(std::bitset<2*readlen> *read)
 	return;
 }
 
+
 void bitsettostring(std::bitset<2*readlen> b,char *s)
 {
 	unsigned long long ull,rem;
-	for(int i = 0; i < 2*readlen/64+1; i++)
+	for(int i = 0; i < (2*readlen)/64+1; i++)
 	{	
 		ull = (b&mask64).to_ullong();
 		b>>=64;
@@ -799,6 +801,7 @@ void bitsettostring(std::bitset<2*readlen> b,char *s)
 	}
 	return;
 }
+
 
 std::bitset<2*readlen> chartobitset(char *s)
 {

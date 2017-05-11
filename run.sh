@@ -48,10 +48,8 @@ download()
 preprocess()
 {
 	echo "*** Preprocessing ***"
-	sed -n '2~4p' data/$basename/input.fastq > data/$basename/input.dna
-	sed -n '4~4p' data/$basename/input.fastq > data/$basename/input.quality  
-	python util/remove_N.py data/$basename/input.dna
-	sort -o data/$basename/input_N.dna data/$basename/input_N.dna
+	./src/preprocess.out data/$basename
+	#sort -o data/$basename/input_N.dna data/$basename/input_N.dna -T.
 }
 
 generateConfig()
@@ -80,11 +78,6 @@ compress()
 	cp data/$basename/input_N.dna data/$basename/output/input_N.dna
 	g++ src/cpp/noisy/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
 	./src/encoder.out data/$basename
-
-	# add > to top of read_seq.txt (needed for MFCompress)	
-	#echo ">" > data/$basename/output/seq_header.txt
-	#cat data/$basename/output/seq_header.txt data/$basename/output/read_seq.txt > data/$basename/output/read_seq.txt.1
-	#mv data/$basename/output/read_seq.txt.1 data/$basename/output/read_seq.txt
 	
 	#remove temporary files
 	rm data/$basename/output/temp.dna
@@ -92,14 +85,13 @@ compress()
 	rm data/$basename/output/temppos.txt
        	
 	#compress and create tarball
-	7z a data/$basename/output/read_pos.txt.7z data/$basename/output/read_pos.txt
-	7z a data/$basename/output/read_noise.txt.7z data/$basename/output/read_noise.txt
-	7z a data/$basename/output/read_noisepos.txt.7z data/$basename/output/read_noisepos.txt
-	7z a data/$basename/output/input_N.dna.7z data/$basename/output/input_N.dna
-	7z a data/$basename/output/read_meta.txt.7z data/$basename/output/read_meta.txt
-	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt
-	7z a -mm=PPMd -mo=12 -mmem=31 data/$basename/output/read_seq.txt.7z data/$basename/output/read_seq.txt
-	#./util/MFCompress/MFCompressC data/$basename/output/read_seq.txt
+	7z a data/$basename/output/read_pos.txt.7z data/$basename/output/read_pos.txt -mmt=$num_thr
+	7z a data/$basename/output/read_noise.txt.7z data/$basename/output/read_noise.txt -mmt=$num_thr
+	7z a data/$basename/output/read_noisepos.txt.7z data/$basename/output/read_noisepos.txt -mmt=$numt_thr
+	7z a data/$basename/output/input_N.dna.7z data/$basename/output/input_N.dna -mmt=$numt_thr
+	7z a data/$basename/output/read_meta.txt.7z data/$basename/output/read_meta.txt -mmt=$numt_thr
+	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt -mmt=$num_thr
+	./src/libbsc/bsc e data/$basename/output/read_seq.txt  data/$basename/output/read_seq.txt.bsc -b512p -tT #-tT for single thread - uses too much memory in multi-threaded
 	rm data/$basename/output/*.txt data/$basename/output/*.dna  data/$basename/output/*.bin
 	tar -cf data/$basename/output.tar data/$basename/output
 	rm -r data/$basename/output/
@@ -108,6 +100,7 @@ compress()
 decompress()
 {
 	echo "Decompression ..."
+	ls -all data/$basename/output.tar
 	tar -xf data/$basename/output.tar
 	7z e data/$basename/output/read_pos.txt.7z -odata/$basename/output/
 	7z e data/$basename/output/read_noise.txt.7z -odata/$basename/output/
@@ -115,16 +108,16 @@ decompress()
 	7z e data/$basename/output/input_N.dna.7z -odata/$basename/output/
 	7z e data/$basename/output/read_meta.txt.7z -odata/$basename/output/
 	7z e data/$basename/output/read_rev.txt.7z -odata/$basename/output/
-	7z e data/$basename/output/read_seq.txt.7z -odata/$basename/output/
-	#./util/MFCompress/MFCompressD data/$basename/output/read_seq.txt.mfc
-	#tr -d '\r\n>' < data/$basename/output/read_seq.txt.mfc.d > data/$basename/output/read_seq.txt
-	#rm data/$basename/output/read_seq.txt.mfc.d
-#	python src/decodernoisy.py data/$basename
+	./src/libbsc/bsc d data/$basename/output/read_seq.txt.bsc data/$basename/output/read_seq.txt -tT
 	./src/decoder.out data/$basename
 }
 
 compute_entropy()
 {
+	pip install --user tqdm
+
+	# MFCompress permissions
+	chmod 741 ./util/MFCompress/MFCompressC
     mkdir -p logs
 	echo "Downloading the FASTA File"
 	wget -O data/$basename/genome_fasta.fa.gz $URL_genome
@@ -138,8 +131,25 @@ compute_entropy()
 	python util/compute_entropy.py data/$basename/input.quality data/$basename/genome_fasta.fa.mfc data/$basename/genome_fasta.fa data/$basename/output.tar | tee -a logs/"$basename"_entropy_computation.log
 
 }
+
+run_others()
+{
+	/usr/bin/time -v ./../leon/leon -c -file data/$basename/input.fastq -nb-cores $num_thr -seq-only -verbose 0 #produces input.fastq.leon
+	ls -all data/$basename/input.fastq.leon
+	/usr/bin/time -v ./../leon/leon -d -file data/$basename/input.fastq.leon -nb-cores $num_thr -seq-only -verbose 0 #produces input.fasta.d
+
+	/usr/bin/time -v ./../orcom/bin/orcom_bin e -idata/$basename/input.fastq -odata/$basename/input.bin -t$num_thr
+	/usr/bin/time -v ./../orcom/bin/orcom_pack e -idata/$basename/input.bin -odata/$basename/input.orcom -t$num_thr
+	ls -all data/$basename/input.orcom.cdna
+	/usr/bin/time -v ./../orcom/bin/orcom_pack d -idata/$basename/input.orcom -odata/$basename/input_orcom.dna -t$num_thr
+
+	/usr/bin/time -v ./../pigz-2.3.4/pigz -f -p $num_thr data/$basename/input.dna
+	ls -all data/$basename/input.dna.gz
+	/usr/bin/time -v ./../pigz-2.3.4/unpigz -f -p $num_thr data/$basename/input.dna.gz
+}
+
 #Process the arguments
-while getopts hfpcdge opt
+while getopts hfpcdgeo opt
 do
    case "$opt" in
 	h) usage; exit 1;;
@@ -149,6 +159,7 @@ do
 	c) compress;;
 	d) decompress;;
 	e) compute_entropy;;
+	o) run_others;;
 	?) usage; exit;;
    esac
 done
