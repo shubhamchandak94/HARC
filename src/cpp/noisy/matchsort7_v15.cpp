@@ -59,18 +59,20 @@ char inttochar[] = {'A','C','G','T'};
 char chartorevchar[128];//A-T etc for reverse complement
 int chartoint[128];//A-0,C-1 etc. used in updaterefcount
 int *dict_start;
-int *dict_end; 
+int *dict_end;
+int *hamming16; 
 std::bitset<2*readlen> basemask[readlen][128];//bitset for A,G,C,T at each position 
 //used in stringtobitset, chartobitset and bitsettostring
 std::bitset<2*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
 //used in bitsettostring
 std::bitset<2*readlen> mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
+std::bitset<2*readlen> first16,last16;
 
 std::bitset<2*readlen> stringtobitset(std::string s);
 
 void bitsettostring(std::bitset<2*readlen> b,char *s);
 
-void readDnaFile(std::bitset<2*readlen> *read);
+void readDnaFile(std::bitset<2*readlen> *read, uint16_t *read1, uint16_t* read2);
 
 void getDataParams();
 
@@ -81,7 +83,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict);
 void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
 //mask for zeroing the end bits (needed while reordering to compute Hamming distance between shifted reads)
 
-void reorder(std::bitset<2*readlen> *read, bbhashdict *dict);
+void reorder(std::bitset<2*readlen> *read, uint16_t *read1, uint16_t* read2, bbhashdict *dict);
 
 void writetofile(std::bitset<2*readlen> *read);
 
@@ -109,16 +111,18 @@ int main(int argc, char** argv)
 	omp_set_num_threads(num_thr);	
 	setglobalarrays();
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
+	uint16_t *read1 = new uint16_t [numreads];
+	uint16_t *read2 = new uint16_t [numreads];
 	std::cout << "Reading file: " << infile << std::endl;
-	readDnaFile(read);
+	readDnaFile(read, read1, read2);
 	bbhashdict dict[numdict];
 	std::cout << "Constructing dictionaries\n";
 	constructdictionary(read,dict);
 	std::cout << "Reordering reads\n";
-	reorder(read,dict);
+	reorder(read,read1, read2, dict);
 	std::cout << "Writing to file\n";
 	writetofile(read);	
-	delete[] read;
+	delete[] read,read1,read2;
 	std::cout << "Done!\n";
 	return 0;
 }
@@ -174,7 +178,16 @@ void setglobalarrays()
 		dict_end[3] = dict4_end;
 	}
 	#endif
-	
+	hamming16 = new int[65536];
+	for(int i = 0; i < 65536; i++)
+	{
+		std::bitset<16> b(i);
+		hamming16[i] = b.count();
+	}
+	for(int i = 0; i < 16; i++)
+		first16[i] = 1;
+	for(int i = 2*readlen - 1; i >= 2*readlen -16; i--)
+		last16[i] = 1; 	
 	for(int i = 0; i < 64; i++)
 		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)
@@ -229,7 +242,7 @@ void getDataParams()
 	myfile.close();
 }
 
-void readDnaFile(std::bitset<2*readlen> *read)
+void readDnaFile(std::bitset<2*readlen> *read, uint16_t *read1, uint16_t* read2)
 {
 	#pragma omp parallel
 	{
@@ -247,6 +260,8 @@ void readDnaFile(std::bitset<2*readlen> *read)
 	{
 		std::getline(f,s);
 		read[i] = stringtobitset(s);
+		read1[i] = (read[i]&first16).to_ullong();
+		read2[i] = ((read[i]&last16)>>(2*readlen-16)).to_ullong();
 		i++;
 	}
 	f.close();
@@ -378,7 +393,7 @@ void bbhashdict::remove(uint32_t *dictidx, uint32_t &startposidx, uint32_t curre
 	return;	
 }
 
-void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
+void reorder(std::bitset<2*readlen> *read, uint16_t *read1, uint16_t* read2, bbhashdict *dict)
 {
 	omp_lock_t dict_lock[numdict];//one lock for each dict
 	for(int j = 0; j < numdict; j++)
@@ -387,6 +402,15 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::bitset<2*readlen> mask[maxmatch];
 	std::bitset<2*readlen> revmask[maxmatch];
 	generatemasks(mask,revmask);
+	uint16_t maskfirst[maxmatch], masklast[maxmatch], revmaskfirst[maxmatch], revmasklast[maxmatch];
+	for (int i = 0; i < maxmatch; i++)
+	{
+		maskfirst[i] = (mask[i]&first16).to_ullong();
+		revmaskfirst[i] = (revmask[i]&first16).to_ullong();
+		masklast[i] = ((mask[i]&last16)>>(2*readlen-16)).to_ullong();
+		revmasklast[i] = ((revmask[i]&last16)>>(2*readlen-16)).to_ullong();
+	}	
+
 	std::bitset<2*readlen> mask1[numdict];
 	generateindexmasks(mask1);
 	std::atomic<bool> *remainingreads = new std::atomic<bool>[numreads];
@@ -410,6 +434,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::ofstream foutpos(outfilepos + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder(outfileorder + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::bitset<2*readlen> ref,revref,b;
+	uint16_t ref1,ref2,revref1,revref2;
 	int count[4][readlen];
 	uint32_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
@@ -468,6 +493,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		}
 		flag = 0;
 		uint32_t k;
+
 		for(int j = 0; j < maxmatch; j++)
 		{
 			it_start = it_end = dictunion[0].begin();
@@ -530,10 +556,14 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 				beingread[l][tid] = numreads;
 			}
 			if(it_start!=it_end)//non-empty
+			{
+				ref1 = (ref&first16).to_ullong();
+				ref2 = ((ref&last16)>>(2*readlen-16)).to_ullong();
 				for (auto it = it_end; it != it_start ;)
 				{
 					--it;
 					auto rid = *it;
+					if(hamming16[ref1^(read1[rid]&maskfirst[j])]+hamming16[ref2^(read2[rid]&masklast[j])] <= thresh)
 					if((ref^(read[rid]&mask[j])).count()<=thresh)
 					{	
 						#pragma omp critical (readfound)
@@ -547,6 +577,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 							break;
 					}
 				}
+			}
 				
 			if(flag == 1)
 			{
@@ -618,10 +649,14 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 				beingread[l][tid] = numreads;
 			}
 			if(it_start!=it_end)//non-empty
+			{
+				revref1 = (revref&first16).to_ullong();
+				revref2 = ((revref&last16)>>(2*readlen-16)).to_ullong();
 				for (auto it = it_end; it != it_start ;)
 				{
 					--it;
 					auto rid = *it;
+					if(hamming16[revref1^(read1[rid]&revmaskfirst[j])]+hamming16[revref2^(read2[rid]&revmasklast[j])] <= thresh)
 					if((revref^(read[rid]&revmask[j])).count()<=thresh)
 					{	
 						#pragma omp critical (readfound)
@@ -635,7 +670,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 							break;
 					}
 				}
-				
+			}	
 			if(flag == 1)
 			{
 				current = k;
