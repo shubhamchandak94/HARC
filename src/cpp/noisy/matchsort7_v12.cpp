@@ -208,7 +208,8 @@ void getDataParams()
 
 	std::getline(myfile, line);
 	int read_length = line.length();
-	myfile.seekg(0, myfile.beg);
+	myfile.close();
+	myfile.open(infile);
 
 	while (std::getline(myfile, line))
 	{
@@ -468,6 +469,8 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			//find forward match
 			for(int l = 0; l < numdict; l++)
 			{
+				if(dict_end[l]+j >= readlen)
+					continue;
 				b = ref&mask1[l];
 				ull = (b>>2*dict_start[l]).to_ullong();
 				startposidx = dict[l].bphf->lookup(ull);
@@ -537,6 +540,8 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			//find reverse match
 			for(int l = 0; l < numdict; l++)
 			{
+				if(dict_start[l] <= j)
+					continue;
 				b = revref&mask1[l];
 				ull = (b>>2*dict_start[l]).to_ullong();
 				startposidx = dict[l].bphf->lookup(ull);
