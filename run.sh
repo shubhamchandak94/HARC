@@ -48,7 +48,7 @@ download()
 preprocess()
 {
 	echo "*** Preprocessing ***"
-	./src/preprocess.out data/$basename
+	./src/preprocess.out data/$basename/input.fastq data/$basename
 	#sort -o data/$basename/input_N.dna data/$basename/input_N.dna -T.
 }
 
@@ -57,6 +57,7 @@ generateConfig()
 	echo "#define maxmatch $maxmatch" > src/cpp/noisy/config.h
 	echo "#define thresh $thresh" >> src/cpp/noisy/config.h
 	echo "#define numdict $numdict" >> src/cpp/noisy/config.h
+	echo "#define maxsearch $maxsearch" >> src/cpp/noisy/config.h
 	if [  ${dict1start+x} ]; then echo "#define dict1_start $dict1start" >> src/cpp/noisy/config.h; fi
 	if [  ${dict1end+x} ]; then echo "#define dict1_end $dict1end" >> src/cpp/noisy/config.h; fi
 	if [  ${dict2start+x} ]; then echo "#define dict2_start $dict2start" >> src/cpp/noisy/config.h; fi
@@ -72,7 +73,7 @@ generateConfig()
 }
 compress()
 {
-	g++ src/cpp/noisy/matchsort7_v13.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder_noisy.out
+	g++ src/cpp/noisy/matchsort7_v14.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder_noisy.out
 	mkdir -p data/$basename/output 
 	./src/reorder_noisy.out data/$basename
 	cp data/$basename/input_N.dna data/$basename/output/input_N.dna
@@ -92,6 +93,7 @@ compress()
 	7z a data/$basename/output/read_meta.txt.7z data/$basename/output/read_meta.txt -mmt=$numt_thr
 	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt -mmt=$num_thr
 	./src/libbsc/bsc e data/$basename/output/read_seq.txt  data/$basename/output/read_seq.txt.bsc -b512p -tT #-tT for single thread - uses too much memory in multi-threaded
+	mv data/$basename/output/read_order.bin data/$basename/
 	rm data/$basename/output/*.txt data/$basename/output/*.dna  data/$basename/output/*.bin
 	tar -cf data/$basename/output.tar data/$basename/output
 	rm -r data/$basename/output/

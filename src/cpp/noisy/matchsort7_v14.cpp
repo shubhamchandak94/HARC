@@ -11,7 +11,6 @@
 #include <omp.h>
 #include <atomic>
 #include <cstdio>
-#include <iterator>
 
 //#define readlen 100
 //#define num_thr 8
@@ -27,8 +26,8 @@ class bbhashdict
 	uint32_t *startpos;
 	uint32_t *read_id;
 	bool *empty_bin;
-	void findpos(uint32_t *dictidx, uint32_t &startposidx);
-	void remove(uint32_t *dictidx, uint32_t &startposidx, uint32_t current);
+	void findpos(int64_t *dictidx, uint32_t &startposidx);
+	void remove(int64_t *dictidx, uint32_t &startposidx, uint32_t current);
 	bbhashdict()
 	{
 		bphf = NULL;
@@ -174,7 +173,6 @@ void setglobalarrays()
 		dict_end[3] = dict4_end;
 	}
 	#endif
-	
 	for(int i = 0; i < 64; i++)
 		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)
@@ -340,7 +338,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 	return;
 }
 
-void bbhashdict::findpos(uint32_t *dictidx, uint32_t &startposidx)
+void bbhashdict::findpos(int64_t *dictidx, uint32_t &startposidx)
 {
 	dictidx[0] = startpos[startposidx];
 	auto endidx = startpos[startposidx+1];
@@ -353,7 +351,7 @@ void bbhashdict::findpos(uint32_t *dictidx, uint32_t &startposidx)
 	return;
 }
 
-void bbhashdict::remove(uint32_t *dictidx, uint32_t &startposidx, uint32_t current)
+void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t current)
 {
 	auto size = dictidx[1] - dictidx[0];
 	if(size == 1)//just one read left in bin
@@ -411,11 +409,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::ofstream foutorder(outfileorder + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::bitset<2*readlen> ref,revref,b;
 	int count[4][readlen];
-	uint32_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
+	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
 	bool flag = 0, done = 0;
-	std::vector<uint32_t> dictunion[numdict];//to store union of dict of searching
-	std::vector<uint32_t>::iterator dictunionend[numdict],it_start,it_end;
 	uint32_t current;
 	uint64_t ull;
 	//flag to check if match was found or not
@@ -436,9 +432,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	uint32_t numdone= 0;
 	while(!done)
 	{
-		numdone++;
-		if(numdone%1000000==0)
-			std::cout<<tid<<":"<<numdone<<"\n";
+//		numdone++;
+//		if(numdone%1000000==0)
+//			std::cout<<tid<<":"<<numdone<<"\n";
 		//delete the read from the corresponding dictionary bins
 		for(int l = 0; l < numdict; l++)
 		{	b = read[current]&mask1[l];
@@ -470,12 +466,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		uint32_t k;
 		for(int j = 0; j < maxmatch; j++)
 		{
-			it_start = it_end = dictunion[0].begin();
 			//find forward match
 			for(int l = 0; l < numdict; l++)
 			{
-
-				dictunionend[l] = dictunion[l].begin();
 				if(dict_end[l]+j >= readlen)
 					continue;
 				b = ref&mask1[l];
@@ -508,62 +501,45 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
 				if(ull == ull1)//checking if ull is actually the key for this bin
-				{
-					if(l==0)
+				{	
+					for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
 					{
-						if(dictidx[1]-dictidx[0] > dictunion[l].size())//need to  resize
-							
-							dictunion[l].insert(dictunion[l].end(),dictidx[1]-dictidx[0] - dictunion[l].size(),0);
-						dictunionend[l] = std::copy(&dict[l].read_id[dictidx[0]],&dict[l].read_id[dictidx[1]],dictunion[l].begin());
+						auto rid = dict[l].read_id[i];
+						if((ref^(read[rid]&mask[j])).count()<=thresh)
+						{	
+							#pragma omp critical (readfound)
+							if(remainingreads[rid])
+							{
+								remainingreads[rid]=0;
+								k = rid;
+								flag = 1;
+							}
+							if(flag == 1)
+								break;
+						}
 					}
-					if(l>0)
-					{
-						if(dictidx[1]-dictidx[0] + (dictunionend[l-1] - dictunion[l-1].begin())>dictunion[l].size())//need to  resize
-							
-							dictunion[l].insert(dictunion[l].end(),dictidx[1]-dictidx[0] + (dictunionend[l-1] - dictunion[l-1].begin()) - dictunion[l].size(),0);
-						dictunionend[l] = std::set_union(&dict[l].read_id[dictidx[0]],&dict[l].read_id[dictidx[1]],dictunion[l-1].begin(),dictunionend[l-1],dictunion[l].begin());
-					}	
-					it_start = dictunion[l].begin();
-					it_end = dictunionend[l];
 				}
 				#pragma omp atomic write
 				beingread[l][tid] = numreads;
-			}
-			if(it_start!=it_end)//non-empty
-				for (auto it = it_end; it != it_start ;)
+				
+				if(flag == 1)
 				{
-					--it;
-					auto rid = *it;
-					if((ref^(read[rid]&mask[j])).count()<=thresh)
-					{	
-						#pragma omp critical (readfound)
-						if(remainingreads[rid])
-						{
-							remainingreads[rid]=0;
-							k = rid;
-							flag = 1;
-						}
-						if(flag == 1)
-							break;
-					}
+					current = k;
+					updaterefcount(read[current],ref,revref,count,false,false,j);
+					foutRC << 'd';
+					foutorder.write((char*)&current,sizeof(uint32_t));
+					foutflag << 1;//for matched
+					foutpos.write((char*)&j,sizeof(uint8_t));
+					break;
 				}
 				
-			if(flag == 1)
-			{
-				current = k;
-				updaterefcount(read[current],ref,revref,count,false,false,j);
-				foutRC << 'd';
-				foutorder.write((char*)&current,sizeof(uint32_t));
-				foutflag << 1;//for matched
-				foutpos.write((char*)&j,sizeof(uint8_t));
-				break;
 			}
-			
-			it_start = it_end = dictunion[0].begin();
+			if(flag==1)
+				break;	
+
 			//find reverse match
 			for(int l = 0; l < numdict; l++)
 			{
-				dictunionend[l] = dictunion[l].begin();
 				if(dict_start[l] <= j)
 					continue;
 				b = revref&mask1[l];
@@ -589,7 +565,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 				}
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
-				{
+				{	
 					#pragma omp atomic write
 					beingread[l][tid] = numreads;
 					continue;
@@ -597,55 +573,38 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
 				if(ull == ull1)//checking if ull is actually the key for this bin
 				{
-					if(l==0)
+					for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
 					{
-						if(dictidx[1]-dictidx[0] > dictunion[l].size())//need to  resize
-							
-							dictunion[l].insert(dictunion[l].end(),dictidx[1]-dictidx[0] - dictunion[l].size(),0);
-						dictunionend[l] = std::copy(&dict[l].read_id[dictidx[0]],&dict[l].read_id[dictidx[1]],dictunion[l].begin());
+						auto rid = dict[l].read_id[i];
+						if((revref^(read[rid]&revmask[j])).count()<=thresh)
+						{	
+							#pragma omp critical (readfound)
+							if(remainingreads[rid])
+							{
+								remainingreads[rid]=0;
+								k = rid;
+								flag = 1;
+							}
+							if(flag == 1)
+								break;
+						}
 					}
-					if(l>0)
-					{
-						if(dictidx[1]-dictidx[0] + (dictunionend[l-1] - dictunion[l-1].begin())>dictunion[l].size())//need to  resize
-							
-							dictunion[l].insert(dictunion[l].end(),dictidx[1]-dictidx[0] + (dictunionend[l-1] - dictunion[l-1].begin()) - dictunion[l].size(),0);
-						dictunionend[l] = std::set_union(&dict[l].read_id[dictidx[0]],&dict[l].read_id[dictidx[1]],dictunion[l-1].begin(),dictunionend[l-1],dictunion[l].begin());
-					}	
-					it_start = dictunion[l].begin();
-					it_end = dictunionend[l];
 				}
 				#pragma omp atomic write
 				beingread[l][tid] = numreads;
-			}
-			if(it_start!=it_end)//non-empty
-				for (auto it = it_end; it != it_start ;)
+				if(flag == 1)
 				{
-					--it;
-					auto rid = *it;
-					if((revref^(read[rid]&revmask[j])).count()<=thresh)
-					{	
-						#pragma omp critical (readfound)
-						if(remainingreads[rid])
-						{
-							remainingreads[rid]=0;
-							k = rid;
-							flag = 1;
-						}
-						if(flag == 1)
-							break;
-					}
+					current = k;
+					updaterefcount(read[current],ref,revref,count,false,true,j);
+					foutRC << 'r';
+					foutorder.write((char*)&current,sizeof(uint32_t));
+					foutflag << 1;//for matched
+					foutpos.write((char*)&j,sizeof(uint8_t));
+					break;
 				}
-				
-			if(flag == 1)
-			{
-				current = k;
-				updaterefcount(read[current],ref,revref,count,false,true,j);
-				foutRC << 'r';
-				foutorder.write((char*)&current,sizeof(uint32_t));
-				foutflag << 1;//for matched
-				foutpos.write((char*)&j,sizeof(uint8_t));
+			}	
+			if(flag==1)
 				break;
-			}
 		
 			revref<<=2;
 			ref>>=2;
@@ -686,6 +645,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	foutorder.close();
 	foutflag.close();
 	foutpos.close();
+//	std::cout << tid << ":Done"<<"\n";
 	}//parallel end
 		
 	delete[] remainingreads;
@@ -790,11 +750,10 @@ void writetofile(std::bitset<2*readlen> *read)
 	return;
 }
 
-
 void bitsettostring(std::bitset<2*readlen> b,char *s)
 {
 	unsigned long long ull,rem;
-	for(int i = 0; i < (2*readlen)/64+1; i++)
+	for(int i = 0; i < 2*readlen/64+1; i++)
 	{	
 		ull = (b&mask64).to_ullong();
 		b>>=64;
@@ -806,7 +765,6 @@ void bitsettostring(std::bitset<2*readlen> b,char *s)
 	}
 	return;
 }
-
 
 std::bitset<2*readlen> chartobitset(char *s)
 {
