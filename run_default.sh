@@ -8,11 +8,15 @@ usage()
 {
 cat << EOF
 usage: 
-Compression
-./run_default.sh -c PATH_TO_FASTQ -t NUM_THREADS[=8]
+Compression - compresses FASTQ reads. Output written to .tar file
+./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS]
+-p = Preserve order of reads
+-t NUM_THREADS - default 8
 
-Decompression
-./run_default.sh -d PATH_TO_TAR -t NUM_THREADS[=8]
+Decompression - decompresses reads. Output written to .dna.d file
+./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS]
+-p = Get reads in original order (slower). Only applicable if -p was used during compression.
+-t NUM_THREADS - default 8
 
 Help (this message)
 ./run_default.sh -h
@@ -26,7 +30,7 @@ compress()
 	pathname=$(dirname $filename)
 	echo "*** Preprocessing ***"
 	echo $filename
-	./src/preprocess.out $filename $pathname
+	./src/preprocess_final.out $filename $pathname
 
 	readlen="$(head $pathname/input_clean.dna | wc -L)"
 	if (($readlen > 256));then
@@ -67,7 +71,13 @@ compress()
 	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
 	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
 	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -tT #-tT for single thread - uses too much memory in multi-threaded
-	rm $pathname/output/*.txt $pathname/output/*.dna  $pathname/output/*.bin
+	rm $pathname/output/*.txt $pathname/output/*.dna 
+	if [[ preserve_order == 'True' ]];then
+		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
+	else
+	 	rm $pathname/output/*.bin
+	fi
 	tar -cf $pathname/$(basename "$filename" .fastq).tar $pathname/output
 	rm -r $pathname/output/
 }
@@ -77,6 +87,13 @@ decompress()
 	echo "Decompression ..."
 	pathname=$(dirname $filename)
 	tar -xf $filename -C $pathname
+	if [[ preserve_order == 'True' ]];then
+		if [ ! -f $pathname/output/read_order.bin ];then
+			echo "Not compressed using -p flag. Order cannot be restored"
+			usage
+			exit 1
+		fi
+	fi
 	7z e $pathname/output/read_pos.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_noise.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_noisepos.txt.7z -o$pathname/output/
@@ -84,8 +101,19 @@ decompress()
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_rev.txt.7z -o$pathname/output/
 	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -tT
-	./src/decoder.out $pathname
+	if [[ preserve_order == 'True' ]];then
+		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
+		./src/decoder_preserve.out $pathname
+		echo "Restoring order of reads"
+		sort -nk1 $pathname/output/output.tmp -o $pathname/output/out_sorted.tmp -T $pathname/output/
+		cut -d " " -f 2 $pathname/output/out_sorted.tmp > $pathname/output/output_clean.dna
+		./src/merge_N.out $pathname
+		echo "Done!"
+	else
+		./src/decoder.out $pathname
 	rm -r $pathname/output/
+	mv $pathname/output.dna $pathname/$(basename "$filename" .tar).dna.d
 }
 
 #Initialize variables to default values.
@@ -98,12 +126,14 @@ if [ $NUMARGS -eq 0 ]; then
 fi
 
 mode=''
+preserve_order='False'
 
-while getopts ':c:d:t:' opt; do
+while getopts ':c:d:t:p' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
     t) num_thr=$OPTARG;;
+    p) preserve_order='True';;
     h) usage ;;
     \?) usage ;;
     *) usage ;;

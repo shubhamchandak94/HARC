@@ -48,7 +48,7 @@ download()
 preprocess()
 {
 	echo "*** Preprocessing ***"
-	./src/preprocess.out data/$basename/input.fastq data/$basename
+	./src/preprocess_final.out data/$basename/input.fastq data/$basename
 	#sort -o data/$basename/input_N.dna data/$basename/input_N.dna -T.
 }
 
@@ -94,7 +94,7 @@ compress()
 	7z a data/$basename/output/read_rev.txt.7z data/$basename/output/read_rev.txt -mmt=$num_thr
 	./src/libbsc/bsc e data/$basename/output/read_seq.txt  data/$basename/output/read_seq.txt.bsc -b512p -tT #-tT for single thread - uses too much memory in multi-threaded
 	mv data/$basename/output/read_order.bin data/$basename/
-	rm data/$basename/output/*.txt data/$basename/output/*.dna  data/$basename/output/*.bin
+	rm data/$basename/output/*.txt data/$basename/output/*.dna
 	tar -cf data/$basename/output.tar data/$basename/output
 	rm -r data/$basename/output/
 }

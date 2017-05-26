@@ -378,6 +378,10 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 
 void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 {
+	if(num_thr > 8)
+		omp_set_num_threads(8);
+	else
+		omp_set_num_threads(num_thr);
 	omp_lock_t dict_lock[numdict];//one lock for each dict
 	for(int j = 0; j < numdict; j++)
 		omp_init_lock(&dict_lock[j]);
@@ -651,7 +655,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	delete[] remainingreads;
 		
 	std::cout << "Reordering done, "<<unmatched<<" were unmatched\n";
-
+	omp_set_num_threads(num_thr);
 	return;
 }
 
