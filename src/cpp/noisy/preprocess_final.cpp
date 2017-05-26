@@ -26,9 +26,6 @@ void preprocess()
 {
 	std::string line;
 	std::ifstream myfile(infile, std::ifstream::in);
-	std::ofstream f(outfile);
-	std::ofstream f_quality(outfilequality);
-	std::ofstream f_id(outfileid);
 	std::ofstream f_clean(outfileclean);
 	std::ofstream f_N(outfileN);
 	std::ofstream f_order_N(outfileorderN,std::ios::binary);

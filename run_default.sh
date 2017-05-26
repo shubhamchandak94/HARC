@@ -61,7 +61,6 @@ compress()
 	rm $pathname/output/temp.dna
 	rm $pathname/output/tempflag.txt
 	rm $pathname/output/temppos.txt
-       	rm $pathname/input.dna
 	
 	#compress and create tarball
 	7z a $pathname/output/read_pos.txt.7z $pathname/output/read_pos.txt -mmt=$num_thr
@@ -72,12 +71,11 @@ compress()
 	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
 	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -tT #-tT for single thread - uses too much memory in multi-threaded
 	rm $pathname/output/*.txt $pathname/output/*.dna 
-	if [[ preserve_order == 'True' ]];then
+	if [[ $preserve_order == "True" ]];then
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
-	else
-	 	rm $pathname/output/*.bin
 	fi
+	rm $pathname/output/*.bin
 	tar -cf $pathname/$(basename "$filename" .fastq).tar $pathname/output
 	rm -r $pathname/output/
 }
@@ -87,8 +85,8 @@ decompress()
 	echo "Decompression ..."
 	pathname=$(dirname $filename)
 	tar -xf $filename -C $pathname
-	if [[ preserve_order == 'True' ]];then
-		if [ ! -f $pathname/output/read_order.bin ];then
+	if [[ $preserve_order == "True" ]];then
+		if [ ! -f $pathname/output/read_order.bin.7z ];then
 			echo "Not compressed using -p flag. Order cannot be restored"
 			usage
 			exit 1
@@ -101,7 +99,7 @@ decompress()
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_rev.txt.7z -o$pathname/output/
 	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -tT
-	if [[ preserve_order == 'True' ]];then
+	if [[ $preserve_order == "True" ]];then
 		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
 		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
 		./src/decoder_preserve.out $pathname
@@ -112,6 +110,7 @@ decompress()
 		echo "Done!"
 	else
 		./src/decoder.out $pathname
+	fi
 	rm -r $pathname/output/
 	mv $pathname/output.dna $pathname/$(basename "$filename" .tar).dna.d
 }
@@ -126,14 +125,14 @@ if [ $NUMARGS -eq 0 ]; then
 fi
 
 mode=''
-preserve_order='False'
+preserve_order="False"
 
 while getopts ':c:d:t:p' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
     t) num_thr=$OPTARG;;
-    p) preserve_order='True';;
+    p) preserve_order="True";;
     h) usage ;;
     \?) usage ;;
     *) usage ;;
@@ -142,6 +141,10 @@ done
 
 if [[ $mode == 'c' ]];then
 compress
-else
+elif [[ $mode == 'd' ]];then
 decompress
+else
+echo "Either -c or -d required"
+usage
+exit 1
 fi;
