@@ -76,7 +76,7 @@ compress()
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
 	fi
 	rm $pathname/output/*.bin
-	tar -cf $pathname/$(basename "$filename" .fastq).tar $pathname/output
+	tar -cf $pathname/$(basename "$filename" .fastq).tar -C $pathname/output .
 	rm -r $pathname/output/
 }
 
@@ -84,7 +84,8 @@ decompress()
 {
 	echo "Decompression ..."
 	pathname=$(dirname $filename)
-	tar -xf $filename -C $pathname
+	mkdir -p $pathname/output
+	tar -xf $filename -C $pathname/output
 	if [[ $preserve_order == "True" ]];then
 		if [ ! -f $pathname/output/read_order.bin.7z ];then
 			echo "Not compressed using -p flag. Order cannot be restored"
