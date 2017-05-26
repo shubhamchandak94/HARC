@@ -28,7 +28,6 @@ int main(int argc, char** argv)
 
 void merge_N()
 {
-	std::cout << "Decoding reads\n";
 	std::ofstream f(outfile);
 	std::ifstream f_in(infile);
 	std::ifstream f_N(infile_N);
