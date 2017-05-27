@@ -14,7 +14,7 @@ Compression - compresses FASTQ reads. Output written to .tar file
 ```bash
 ./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS]
 ```
--p = Preserve order of reads
+-p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
 
 -t NUM_THREADS - default 8
 
