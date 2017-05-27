@@ -53,6 +53,7 @@ compress()
 	mkdir -p $pathname/output/ 
 	./src/reorder_noisy.out $pathname
 	mv $pathname/input_N.dna $pathname/output/input_N.dna
+	mv $pathname/input_clean.dna $pathname/output/input_clean.dna
 	mv $pathname/read_order_N.bin $pathname/output/read_order_N.bin
 	g++ src/cpp/noisy/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname
