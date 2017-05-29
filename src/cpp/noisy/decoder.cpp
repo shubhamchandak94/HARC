@@ -76,7 +76,7 @@ void decode()
 	long pos; 
 	while(f_pos >> std::noskipws >> c)//don't skip whitespaces
 	{
-		pos = c;
+		pos = (unsigned char)(c);
 		if(pos!=0)
 		{
 			for(int i = 0; i <= readlen - 1 - pos;  i++)
@@ -89,7 +89,7 @@ void decode()
 		for(int i = 0; i < noise.size(); i++)
 		{
 			c = f_noisepos.get();
-			noisepos = c + prevnoisepos;
+			noisepos = (unsigned char)(c) + prevnoisepos;
 			currentread[noisepos] = dec_noise[ref[noisepos]][noise[i]];
 			prevnoisepos = noisepos;	
 		}
