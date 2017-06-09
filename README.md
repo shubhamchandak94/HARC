@@ -1,6 +1,6 @@
 # readcompression
 
-Compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves compression close to optimal and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100. No dependencies other than C++11 and g++ compiler.
+Compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100. No dependencies other than C++11 and g++ compiler.
 
 #### Installation
 ```bash
