@@ -59,7 +59,7 @@ Inside this file different chromosomes are demarcated.
 ##### Generating reads using gen_fastq (from orcom repo)
 ###### Error-free reads (without reverse complementation) - 35M reads of length 100 from chrom 22
 ```bash
-cd gen_fastq_noRC
+cd util/gen_fastq_noRC
 make
 ./gen_fastq_noRC 35000000 100 PATH/chrom22.fasta PATH/chrom22_reads.fastq
 ```
