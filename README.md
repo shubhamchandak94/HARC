@@ -1,8 +1,38 @@
 # readcompression
 
+HARC - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100. The algorithm requires C++11 and g++ compiler and works on Linux.
+
+#### Installation
+```bash
+git clone https://github.com/shubhamchandak94/readcompression.git
+cd readcompression
+./install.sh
+```
+
+#### Usage
+Compression - compresses FASTQ reads. Output written to .tar file
+```bash
+./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS]
+```
+-p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
+
+-t NUM_THREADS - default 8
+
+Decompression - decompresses reads. Output written to .dna.d file
+```bash
+./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS]
+```
+-p = Get reads in original order (slower). Only applicable if -p was used during compression.
+
+-t NUM_THREADS - default 8
+
+Help (this message)
+```bash
+./run_default.sh -h
+```
 ##### Downloading datasets
 ###### Usual reads
-```
+```bash
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065390/SRR065390_1.fastq.gz
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065390/SRR065390_2.fastq.gz
 gunzip SRR065390_1.fastq.gz SRR065390_2.fastq.gz
@@ -11,34 +41,8 @@ cat SRR065390_1.fastq SRR065390_2.fastq > SRR065390.fastq
 
 For some datasets (e.g. SRR327342 and SRR870667), the two fastq files may have reads of different lengths
 
-
-##### Converting Fastq file to dna file (needed for our code)
-```
-sed -n '2~4p' SRR065390.fastq > SRR065390.dna &
-```
-
-
-
-##### Removing reads containing 'N' (python code)
-```python
-fout = open('SRR065390_clean.dna','w')
-with open('SRR065390.dna','r') as f:
-  for line in f:
-     if 'N' not in line:
-          fout.write(line)
-```
-
-
-##### Converting dna file to fastq file (with fake seq id and quality scores) (python code)
-```python
-fout = open('SRR065390_clean.fastq','w')
-with open('SRR065390_clean.dna','r') as f:
-  for line in f:
-    fout.write('@\n'+line+'+\n'+line)
-```
-
 ###### Metagenomics data
-```
+```bash
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.1.fq.gz
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.2.fq.gz
 gunzip MH0001_081026_clean.1.fq.gz MH0001_081026_clean.2.fq.gz
@@ -46,7 +50,7 @@ cat MH0001_081026_clean.1.fq MH0001_081026_clean.2.fq
 ```
 
 ###### Human genome (hg19 - for generating simulated reads)
-```
+```bash
 wget -b ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz
 ```
 
@@ -54,14 +58,14 @@ Inside this file different chromosomes are demarcated.
 
 ##### Generating reads using gen_fastq (from orcom repo)
 ###### Error-free reads (without reverse complementation) - 35M reads of length 100 from chrom 22
-```
-cd gen_fastq_noRC
+```bash
+cd util/gen_fastq_noRC
 make
 ./gen_fastq_noRC 35000000 100 PATH/chrom22.fasta PATH/chrom22_reads.fastq
 ```
 
 ###### Reads with 1% uniform substitution rate (each base is equally likely to be changed to any of the 4 possibilities e.g. A - C,T,G,N) (without reverse complementation) - 35M reads of length 100 from chrom 22
-```
+```bash
 ./gen_fastq_noRC 35000000 100 PATH/chrom22.fasta PATH/chrom22_reads.fastq -e
 ```
 
@@ -73,8 +77,10 @@ read
 quality score
 ```
 
-##### Running orcom (boost should be installed)
-```
+#### Other compressors (for evaluation)
+
+##### Installing & Running orcom (boost should be installed)
+```bash
 git clone https://github.com/lrog/orcom.git
 cd orcom
 make boost
@@ -84,7 +90,7 @@ cd bin
 ```
 
 ##### Getting orcom ordered file
-```
+```bash
 ./orcom_pack d -iPATH/SRR065390_clean.orcom -oPATH/SRR065390_clean.dna
 ```
 
@@ -94,6 +100,30 @@ read1
 read2
 ..
 ```
+
+##### Installing and running Leon (seq-only mode)
+```bash
+git clone https://github.com/GATB/leon.git
+cd leon
+sh INSTALL
+./leon -file PATH_TO_FASTQ -c -seq-only -nb-cores NUM_THR
+```
+
+##### Leon Decompression (order preserved)
+```bash
+./leon -file PATH_TO_LEON -d -nb-cores NUM_THR
+```
+
+The fasta.d file is of the form:
+```
+>1
+read1
+>2
+read2
+..
+```
+
+<!---
 
 ##### Some python packages
 ```
@@ -125,7 +155,6 @@ First set the parameters at the top of the files.
 ```
 python decodernoisy.py
 ```
-<!---
 ##### Using Google sparsehashmap
 ###### Installing
 ```
@@ -165,6 +194,31 @@ python packernoisy2.py
 ##### Calculating Number of Hard reads
 ```
 grep 0 -o read_flag.txt | wc -l
+```
+
+##### Converting Fastq file to dna file (needed for our code)
+```
+sed -n '2~4p' SRR065390.fastq > SRR065390.dna &
+```
+
+
+
+##### Removing reads containing 'N' (python code)
+```python
+fout = open('SRR065390_clean.dna','w')
+with open('SRR065390.dna','r') as f:
+  for line in f:
+     if 'N' not in line:
+          fout.write(line)
+```
+
+
+##### Converting dna file to fastq file (with fake seq id and quality scores) (python code)
+```python
+fout = open('SRR065390_clean.fastq','w')
+with open('SRR065390_clean.dna','r') as f:
+  for line in f:
+    fout.write('@\n'+line+'+\n'+line)
 ```
 
 ##### Calculating Number of Singleton reads (i.e. 00's in the flag file) 
