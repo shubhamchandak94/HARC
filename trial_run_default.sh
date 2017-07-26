@@ -104,10 +104,7 @@ decompress()
 	if [[ $preserve_order == "True" ]];then
 		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
 		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
-		./src/decoder_preserve.out $pathname
-		echo "Restoring order of reads"
-		sort -nk1 $pathname/output/output.tmp -o $pathname/output/out_sorted.tmp -T $pathname/output/
-		cut -d " " -f 2 $pathname/output/out_sorted.tmp > $pathname/output/output_clean.dna
+		./src/decoder_preserve_1.out $pathname
 		./src/merge_N.out $pathname
 		echo "Done!"
 	else
