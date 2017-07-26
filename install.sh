@@ -18,5 +18,6 @@ g++ src/cpp/noisy/preprocess_final.cpp -O3 -march=native -std=c++11 -o src/prepr
 #Compiling decoder
 g++ src/cpp/noisy/decoder.cpp -O3 -march=native -std=c++11 -o src/decoder.out
 g++ src/cpp/noisy/decoder_preserve.cpp -O3 -march=native -std=c++11 -o src/decoder_preserve.out
+g++ src/cpp/noisy/decoder_preserve_1.cpp -O3 -march=native -std=c++11 -o src/decoder_preserve_1.out
 g++ src/cpp/noisy/merge_N.cpp -O3 -march=native -std=c++11 -o src/merge_N.out
 

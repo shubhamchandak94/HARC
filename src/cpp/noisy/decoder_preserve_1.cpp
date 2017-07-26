@@ -10,6 +10,7 @@
 long readlen;
 
 std::string outfile;
+std::string outfile_clean;
 std::string infile_seq;
 std::string infile_meta;
 std::string infile_pos;
@@ -114,7 +115,6 @@ void decode()
 	f_noise.close();
 	f_noisepos.close();
 	f_rev.close();
-	f_order.close();
 	std::cout<<"Decoding done\n";
 	return;
 }
