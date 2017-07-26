@@ -121,25 +121,44 @@ void decode()
 
 void restore_order()
 {
-	std::ifstream f_order(infile_order,std::ios::binary);
-	uint32_t *index_array = new uint32_t [numreads];
-	uint32_t order;
-	for(uint32_t i = 0; i < numreads; i++)
-	{
-		f_order.read((char*)&order,sizeof(uint32_t));
-		index_array[order] = i;	
-	}
-	std::ifstream f(outfile);
-	std::ofstream f_clean(outfile_clean);
+	uint32_t hundred_mil = 50000000;
 	std::string s;
-	for(uint32_t i = 0; i < numreads; i++)
+	std::ofstream f_clean(outfile_clean);
+	for (uint32_t i = 0; i <= numreads/hundred_mil; i++)
 	{
-		f.seekg(uint64_t(index_array[i])*(readlen+1), f.beg);
-		std::getline(f,s);
-		f_clean << s << "\n";
+		std::ifstream f_order(infile_order,std::ios::binary);
+		std::ifstream f(outfile);
+		std::ofstream f_bin(outfile+".bin");
+		auto numreads_bin = hundred_mil;
+		if (i == numreads/hundred_mil)
+			numreads_bin = numreads%hundred_mil;
+		uint32_t *index_array = new uint32_t [numreads_bin];	
+		uint32_t order,pos = 0;
+		for(uint32_t j = 0; j < numreads; j++)
+		{
+			f_order.read((char*)&order,sizeof(uint32_t));
+			if (order >= i*hundred_mil && order < i*hundred_mil + numreads_bin)
+			{
+				index_array[order-i*hundred_mil] = pos;
+				f.seekg(uint64_t(j)*(readlen+1), f.beg);
+				std::getline(f,s);
+				f_bin << s << "\n";
+				pos++;
+			}
+		}
+		f_bin.close();
+		std::ifstream f_bin_in(outfile+".bin");
+		for(uint32_t j = 0; j < numreads_bin; j++)
+		{
+			f_bin_in.seekg(uint64_t(index_array[j])*(readlen+1), f_bin_in.beg);
+			std::getline(f_bin_in,s);
+			f_clean << s << "\n";
+		}
+		delete[] index_array;	
+		f_order.close();
+		f.close();
+		f_bin_in.close();
 	}
-	f_order.close();
-	f.close();
 	f_clean.close();
 	return;
 }
