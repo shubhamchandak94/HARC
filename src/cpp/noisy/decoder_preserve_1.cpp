@@ -121,7 +121,8 @@ void decode()
 
 void restore_order()
 {
-	uint32_t hundred_mil = 50000000;
+	std::cout << "Restoring order\n";
+	uint32_t hundred_mil = 100000000;
 	std::string s;
 	std::ofstream f_clean(outfile_clean);
 	for (uint32_t i = 0; i <= numreads/hundred_mil; i++)
