@@ -12,8 +12,8 @@ git clone https://github.com/shubhamchandak94/libbsc.git src/libbsc
 
 
 #Compilation of some files
-g++ src/cpp/noisy/preprocess_final.cpp -O3 -march=native -std=c++11 -o src/preprocess_final.out
-g++ src/cpp/noisy/preprocess_final_q.cpp -O3 -march=native -std=c++11 -o src/preprocess_final_q.out
-g++ src/cpp/noisy/decoder.cpp -O3 -march=native -std=c++11 -o src/decoder.out
-g++ src/cpp/noisy/merge_N.cpp -O3 -march=native -std=c++11 -o src/merge_N.out
-g++ src/cpp/noisy/merge_quality.cpp -O3 -march=native -std=c++11 -o src/merge_quality.out
+g++ src/preprocess.cpp -O3 -march=native -std=c++11 -o src/preprocess.out
+g++ src/preprocess_quality.cpp -O3 -march=native -std=c++11 -o src/preprocess_quality.out
+g++ src/decoder.cpp -O3 -march=native -std=c++11 -o src/decoder.out
+g++ src/merge_N.cpp -O3 -march=native -std=c++11 -o src/merge_N.out
+g++ src/merge_quality_N.cpp -O3 -march=native -std=c++11 -o src/merge_quality_N.out

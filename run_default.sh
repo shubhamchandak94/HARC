@@ -35,30 +35,30 @@ compress()
 	echo "*** Preprocessing ***"
 	echo $filename
 	if [[ $preserve_quality == "True" ]];then
-		./src/preprocess_final_q.out $filename $pathname
+		./src/preprocess_quality.out $filename $pathname
 	else
-		./src/preprocess_final.out $filename $pathname
+		./src/preprocess.out $filename $pathname
 	fi
 	readlen="$(head $pathname/input_clean.dna | wc -L)"
 	if (($readlen > 256));then
 		echo "Maximum read length exceeded" 
 		exit 1
 	fi
-	echo "#define maxmatch $((readlen/2))" > src/cpp/noisy/config.h
-	echo "#define thresh 4" >> src/cpp/noisy/config.h
-	echo "#define numdict 2" >> src/cpp/noisy/config.h
-	echo "#define maxsearch 1000" >> src/cpp/noisy/config.h
-	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/cpp/noisy/config.h
-	echo "#define dict1_end $((readlen/2-1))" >> src/cpp/noisy/config.h
-	echo "#define dict2_start $((readlen/2))" >> src/cpp/noisy/config.h
-	echo "#define dict2_end $(( readlen > 100 ? readlen/2-1+32 : readlen/2-1+readlen*32/100 ))" >> src/cpp/noisy/config.h
+	echo "#define maxmatch $((readlen/2))" > src/config.h
+	echo "#define thresh 4" >> src/config.h
+	echo "#define numdict 2" >> src/config.h
+	echo "#define maxsearch 1000" >> src/config.h
+	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
+	echo "#define dict1_end $((readlen/2-1))" >> src/config.h
+	echo "#define dict2_start $((readlen/2))" >> src/config.h
+	echo "#define dict2_end $(( readlen > 100 ? readlen/2-1+32 : readlen/2-1+readlen*32/100 ))" >> src/config.h
 
-	echo "#define readlen $readlen" >> src/cpp/noisy/config.h
-	echo "#define num_thr $num_thr" >> src/cpp/noisy/config.h
+	echo "#define readlen $readlen" >> src/config.h
+	echo "#define num_thr $num_thr" >> src/config.h
 
-	g++ src/cpp/noisy/matchsort7_v14.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder_noisy.out
+	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
 	mkdir -p $pathname/output/ 
-	./src/reorder_noisy.out $pathname
+	./src/reorder.out $pathname
 	mv $pathname/input_N.dna $pathname/output/input_N.dna
 	mv $pathname/input_clean.dna $pathname/output/input_clean.dna
 	mv $pathname/read_order_N.bin $pathname/output/read_order_N.bin
@@ -66,7 +66,7 @@ compress()
 		mv $pathname/input_N.quality $pathname/output/input_N.quality
 		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
 	fi
-	g++ src/cpp/noisy/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
+	g++ src/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname
 	
 	#remove temporary files
@@ -93,7 +93,7 @@ compress()
 	else
 		if [[ $preserve_quality == "True" ]];then
 			echo "Reordering quality values"
-			g++ src/cpp/noisy/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
+			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
 			./src/reorder_quality.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
 		fi	
@@ -125,12 +125,12 @@ decompress()
 	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -tT
 	if [[ $preserve_order == "True" ]];then
 		readlen=$( cat $pathname/output/read_meta.txt )
-		echo "#define readlen $readlen" > src/cpp/noisy/config.h
-		echo "#define MAX_BIN_SIZE $memory" >> src/cpp/noisy/config.h
-		g++ src/cpp/noisy/decoder_preserve_2.cpp -O3 -march=native -std=c++11 -o src/decoder_preserve_2.out
+		echo "#define readlen $readlen" > src/config.h
+		echo "#define MAX_BIN_SIZE $memory" >> src/config.h
+		g++ src/decoder_preserve.cpp -O3 -march=native -std=c++11 -o src/decoder_preserve.out
 		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
 		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
-		./src/decoder_preserve_2.out $pathname
+		./src/decoder_preserve.out $pathname
 		./src/merge_N.out $pathname
 		echo "Done!"
 	else
