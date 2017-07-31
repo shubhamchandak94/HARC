@@ -6,6 +6,7 @@ set -e
 usage()
 {
 cat << EOF
+
 HARC compression tool for genomic reads. Works on fixed length reads of length less than 256.
 
 Usage: 
