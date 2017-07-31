@@ -71,7 +71,7 @@ void bitsettostring(std::bitset<2*readlen> b,char *s);
 
 void readDnaFile(std::bitset<2*readlen> *read);
 
-void getDataParams();
+int getDataParams();
 
 void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict);
 
@@ -104,7 +104,9 @@ int main(int argc, char** argv)
 	outfileflag = basedir + "/output/tempflag.txt";
 	outfilepos = basedir + "/output/temppos.txt";
 	outfileorder = basedir + "/output/read_order.bin";
-	getDataParams(); //populate numreads, readlen
+	int status = getDataParams(); //populate numreads, readlen
+	if(status!=0)
+		return -1;
 	omp_set_num_threads(num_thr);	
 	setglobalarrays();
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
@@ -200,7 +202,7 @@ std::bitset<2*readlen> stringtobitset(std::string s)
 	return b;
 }
 
-void getDataParams()
+int getDataParams()
 {
 	uint32_t number_of_lines = 0;
 	std::string line;
@@ -218,6 +220,7 @@ void getDataParams()
 	if( _len != read_length) 
 	{
 		std::cout << "Read lengths are not the same!: " << read_length << " , " << _len << std::endl;
+		return -1;
 	}
 	}
 	//readlen = read_length;
@@ -225,6 +228,7 @@ void getDataParams()
 	std::cout << "Read length: " << read_length << std::endl;
 	std::cout << "Number of reads: " << number_of_lines << std::endl;
 	myfile.close();
+	return 0;
 }
 
 void readDnaFile(std::bitset<2*readlen> *read)
