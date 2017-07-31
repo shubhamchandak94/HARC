@@ -1,2 +1,0 @@
-# file path,maximum capacity of the disk,access method
-disk=.,10G,syscall unlink
