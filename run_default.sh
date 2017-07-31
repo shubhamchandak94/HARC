@@ -3,7 +3,6 @@ set -e
 # Download data
 # DATA_DIR="data/"
 
-
 usage()
 {
 cat << EOF
@@ -87,8 +86,9 @@ compress()
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
-			./src/merge_quality.out $pathname
+			./src/merge_quality_N.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
+			rm $pathname/output/*.quality
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
@@ -96,9 +96,11 @@ compress()
 			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
 			./src/reorder_quality.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
+			rm $pathname/output/*.quality
+			echo "Done!"
 		fi	
 	fi
-	rm $pathname/output/*.bin $pathname/output/*.quality
+	rm $pathname/output/*.bin
 	tar -cf $pathname/$(basename "$filename" .fastq).tar -C $pathname/output .
 	rm -r $pathname/output/
 }
@@ -152,7 +154,7 @@ fi
 mode=''
 preserve_order="False"
 preserve_quality="False"
-memory=''
+memory='7'
 
 while getopts ':c:d:t:m:pqh' opt; do
   case "$opt" in
