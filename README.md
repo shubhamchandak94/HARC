@@ -29,7 +29,7 @@ cd readcompression
 
 -t NUM_THREADS - default 8
 
--m max_memory - Controls memory-time tradeoff for decompression. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: with -p = 7 GB, without -p = 3 GB
+-m max_memory - Controls memory-time tradeoff for decompression with -p. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: 7 GB (note: less than 3 GB memory required if -p not specified)
 
 
 ##### Help (this message)
