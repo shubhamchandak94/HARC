@@ -32,9 +32,9 @@ void encode();
 
 void packbits();
 
-std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos);
+std::vector<std::array<long,4>> buildcontig(std::vector<std::string> reads, std::vector<long> pos);
 
-void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos);
+void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos);
 
 void getDataParams();
 
@@ -82,7 +82,9 @@ void encode()
 	f.seekg(uint64_t(i)*(readlen+1), f.beg);
 	in_flag.seekg(i, in_flag.beg);
 	in_pos.seekg(i*sizeof(uint8_t),in_pos.beg);
-	std::string current,ref;
+	std::string current;
+	std::vector<std::array<long,4>> count;
+
 	char c;
 	std::vector<std::string> reads;
 	std::vector<long> pos;
@@ -96,8 +98,8 @@ void encode()
 		{
 			if(reads.size()!=0)
 			{
-				ref = buildcontig(reads,pos);
-				writecontig(ref,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
+				count = buildcontig(reads,pos);
+				writecontig(count,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
 			}
 			reads = {current};
 			pos = {p};
@@ -110,8 +112,8 @@ void encode()
 		i++;	
 					
 	}
-	ref = buildcontig(reads,pos);
-	writecontig(ref,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
+	count = buildcontig(reads,pos);
+	writecontig(count,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
 
 	f.close();
 	in_flag.close();
@@ -223,13 +225,16 @@ void packbits()
 }
 
 
-std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos)
+std::vector<std::array<long,4>> buildcontig(std::vector<std::string> reads, std::vector<long> pos)
 {
-	if(reads.size() == 1)
-		return reads[0];
+	
 	std::vector<std::array<long,4>> count(readlen,{0,0,0,0});
 	for(long i = 0; i < readlen; i++)
 		count[i][chartolong[reads[0][i]]] = 1;
+
+	if(reads.size() == 1)
+		return count;
+
 	long prevpos = 0,currentpos;
 	for(long j = 1; j < reads.size(); j++)
 	{
@@ -239,6 +244,12 @@ std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos)
 			count[currentpos+i][chartolong[reads[j][i]]] += 1;
 		prevpos = currentpos;
 	}
+
+	return count;
+}
+
+std::string generateRef(std::vector<std::array<long,4>> count)
+{
 	std::string ref(count.size(),'A');
 	for(long i = 0; i < count.size(); i++)
 	{
@@ -254,8 +265,11 @@ std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos)
 	return ref;
 }
 
-void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos)
+
+void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos)
 {
+	std::string ref = generateRef(count);
+	
 	f_seq << ref;
 	char c;
 	if(reads.size() == 1)
