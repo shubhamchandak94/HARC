@@ -20,7 +20,7 @@ Decompression - decompresses reads. Output written to .dna.d file
 ./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS] [-m max_memory]
 -p Get reads in original order (slower). Only applicable if -p was used during compression.
 -t NUM_THREADS - Default 8
--m max_memory - Controls memory-time tradeoff for decompression. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: with -p = 7 GB, without -p = 3 GB
+-m max_memory - Controls memory-time tradeoff for decompression with -p. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: 7 GB (note: less than 3 GB memory required if -p not specified)
 
 Help (this message)
 ./run_default.sh -h
@@ -125,10 +125,7 @@ decompress()
 	7z e $pathname/output/input_N.dna.7z -o$pathname/output/
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_rev.txt.7z -o$pathname/output/
-	#Setting number of threads for bsc based on memory and num_thr
-	bsc_thr=$(( ($memory/3)>0?($memory/3):1 ))
-	bsc_thr=$(( ($num_thr>$bsc_thr)?$bsc_thr:$num_thr )) 
-	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -t$bsc_thr 
+	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -t1
 	if [[ $preserve_order == "True" ]];then
 		readlen=$( cat $pathname/output/read_meta.txt )
 		echo "#define readlen $readlen" > src/config.h
