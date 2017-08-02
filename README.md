@@ -1,6 +1,6 @@
 # readcompression
 
-HARC - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100. The algorithm requires C++11 and g++ compiler and works on Linux.
+HARC - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100 during compression. The algorithm requires C++11 and g++ compiler and works on Linux.
 
 #### Installation
 ```bash
@@ -10,36 +10,42 @@ cd readcompression
 ```
 
 #### Usage
-Compression - compresses FASTQ reads. Output written to .tar file
+##### Compression - compresses FASTQ reads. Output written to .tar file
 ```bash
-./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS]
+./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS] [-q]
 ```
 -p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
 
 -t NUM_THREADS - default 8
 
-Decompression - decompresses reads. Output written to .dna.d file
+-q = Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
+
+
+##### Decompression - decompresses reads. Output written to .dna.d file
 ```bash
-./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS]
+./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS] [-m MAX_MEMORY]
 ```
 -p = Get reads in original order (slower). Only applicable if -p was used during compression.
 
 -t NUM_THREADS - default 8
 
-Help (this message)
+-m max_memory - controls memory-time tradeoff for decompression with -p. Specify max memory in GB (default 7 GB). Minimum of 3 GB memory is always used. Example: -m 10 for 10 GB maximum memory.
+
+
+##### Help (this message)
 ```bash
 ./run_default.sh -h
 ```
-##### Downloading datasets
+#### Downloading datasets
 ###### Usual reads
 ```bash
-wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065390/SRR065390_1.fastq.gz
-wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR065/SRR065390/SRR065390_2.fastq.gz
-gunzip SRR065390_1.fastq.gz SRR065390_2.fastq.gz
-cat SRR065390_1.fastq SRR065390_2.fastq > SRR065390.fastq
+wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_1.fastq.gz
+wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_2.fastq.gz
+gunzip SRR554369_1.fastq.gz SRR554369_2.fastq.gz
+cat SRR554369_1.fastq SRR554369_2.fastq > SRR554369.fastq
 ```
 
-For some datasets (e.g. SRR327342 and SRR870667), the two fastq files may have reads of different lengths
+For some datasets (e.g. SRR327342 and SRR870667), the two fastq files may have reads of different lengths. To use HARC on such datasets, compress the two fastq files separately.
 
 ###### Metagenomics data
 ```bash
