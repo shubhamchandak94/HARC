@@ -12,8 +12,6 @@
 #include <atomic>
 #include <cstdio>
 
-//#define readlen 100
-//#define num_thr 8
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -382,10 +380,6 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 
 void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 {
-	if(num_thr > 4)
-		omp_set_num_threads(4);
-	else
-		omp_set_num_threads(num_thr);
 	omp_lock_t dict_lock[numdict];//one lock for each dict
 	for(int j = 0; j < numdict; j++)
 		omp_init_lock(&dict_lock[j]);

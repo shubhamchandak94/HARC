@@ -12,15 +12,15 @@ HARC compression tool for genomic reads. Works on fixed length reads of length l
 Usage: 
 Compression - compresses FASTQ reads. Output written to .tar file
 ./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS] [-q]
--p = Preserve order of reads
--t NUM_THREADS - default 8
--q = Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
+-p Preserve order of reads
+-t NUM_THREADS - Default 8
+-q Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
 
 Decompression - decompresses reads. Output written to .dna.d file
 ./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS] [-m max_memory]
--p = Get reads in original order (slower). Only applicable if -p was used during compression.
--t NUM_THREADS - default 8
--m max_memory - controls memory-time tradeoff for decompression with -p. Specify max memory in GB (default 7 GB). Minimum of 3 GB memory is always used. Example: -m 10 for 10 GB maximum memory.
+-p Get reads in original order (slower). Only applicable if -p was used during compression.
+-t NUM_THREADS - Default 8
+-m max_memory - Controls memory-time tradeoff for decompression. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: with -p = 7 GB, without -p = 3 GB
 
 Help (this message)
 ./run_default.sh -h
@@ -81,7 +81,7 @@ compress()
 	7z a $pathname/output/input_N.dna.7z $pathname/output/input_N.dna -mmt=$numt_thr
 	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
 	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
-	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -tT #-tT for single thread - uses too much memory in multi-threaded
+	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -t1 #single threaded mode to limit memory consumption
 	rm $pathname/output/*.txt $pathname/output/*.dna  
 	if [[ $preserve_order == "True" ]];then
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
@@ -125,7 +125,10 @@ decompress()
 	7z e $pathname/output/input_N.dna.7z -o$pathname/output/
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_rev.txt.7z -o$pathname/output/
-	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -tT
+	#Setting number of threads for bsc based on memory and num_thr
+	bsc_thr=$(( ($memory/3)>0?($memory/3):1 ))
+	bsc_thr=$(( ($num_thr>$bsc_thr)?$bsc_thr:$num_thr )) 
+	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -t$bsc_thr 
 	if [[ $preserve_order == "True" ]];then
 		readlen=$( cat $pathname/output/read_meta.txt )
 		echo "#define readlen $readlen" > src/config.h
