@@ -23,6 +23,7 @@ std::string outfile_pos;
 std::string outfile_noise;
 std::string outfile_noisepos;
 
+float alternate_thresh = 0.0;
 
 char longtochar[] = {'A','C','G','T'};
 long chartolong[128];
@@ -43,6 +44,11 @@ void setglobalarrays();
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
+	if(argc > 2)
+	{
+		alternate_thresh = atof(argv[2]);
+	}
+
 	infile = basedir + "/output/temp.dna";
 	infile_pos = basedir + "/output/temppos.txt";
 	infile_flag = basedir + "/output/tempflag.txt";
@@ -281,14 +287,20 @@ void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, st
 		return;
 	}
 	long prevj = 0;
+	long _read_char_id, _ref_char_id;
 	for(long j = 0; j < readlen; j++)
-		if(reads[0][j] != ref[j])
+	{	
+		_read_char_id = chartolong[reads[0][j]];
+		_ref_char_id = chartolong[ref[j]];
+		bool allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alternate_thresh);	
+		if((reads[0][j] != ref[j]) && allowed_alternate_flag)
 		{
 			f_noise<<enc_noise[ref[j]][reads[0][j]];
 			c = j-prevj;
 			f_noisepos<<c;
 			prevj = j;
 		}
+	}
 	f_noise << "\n";
 	c = readlen;// (to handle breaks in read sequence due to limit on reads.size()
 	f_pos << c;
@@ -298,13 +310,18 @@ void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, st
 		currentpos = prevpos + pos[i];
 		prevj = 0;
 		for(long j = 0; j < readlen; j++)
-			if(reads[i][j] != ref[currentpos+j])
+		{
+			_read_char_id = chartolong[reads[i][j]];
+			_ref_char_id = chartolong[ref[currentpos+j]];
+			bool allowed_alternate_flag = (count[currentpos+j][_read_char_id] > (int)count[currentpos+j][_ref_char_id]*alternate_thresh);	
+			if((reads[i][j] != ref[currentpos+j]) && allowed_alternate_flag)
 			{
 				f_noise<<enc_noise[ref[currentpos+j]][reads[i][j]];
 				c = j-prevj;
 				f_noisepos<<c;
 				prevj = j;
 			}
+		}
 		f_noise << "\n";
 		c = pos[i];
 		f_pos << c;

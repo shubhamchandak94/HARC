@@ -3,6 +3,16 @@ set -e
 # Download data
 # DATA_DIR="data/"
 
+#################
+# PARAMETERS
+#################
+reorder_thresh=4
+denoise_thresh=0.0
+
+
+
+
+
 usage()
 {
 cat << EOF
@@ -45,7 +55,7 @@ compress()
 		exit 1
 	fi
 	echo "#define maxmatch $((readlen/2))" > src/config.h
-	echo "#define thresh 4" >> src/config.h
+	echo "#define thresh $reorder_thresh" >> src/config.h
 	echo "#define numdict 2" >> src/config.h
 	echo "#define maxsearch 1000" >> src/config.h
 	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
@@ -67,7 +77,7 @@ compress()
 		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
 	fi
 	g++ src/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
-	./src/encoder.out $pathname
+	./src/encoder.out $pathname $denoise_thresh
 	
 	#remove temporary files
 	rm $pathname/output/temp.dna
@@ -157,14 +167,15 @@ preserve_order="False"
 preserve_quality="False"
 memory='7'
 
-while getopts ':c:d:t:m:pqh' opt; do
+while getopts ':c:d:t:m:n:pqh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
     t) num_thr=$OPTARG;;
     m) memory=$OPTARG;;
     p) preserve_order="True";;
-    q) preserve_quality="True";;	
+    q) preserve_quality="True";;
+    n) denoise_thresh=$OPTARG;;	
     h) usage ;;
     \?) usage ;;
     *) usage ;;
