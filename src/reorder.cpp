@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstdio>
 
+uint32_t NUM_LOCKS = 16777216; //limits on number of locks (power of 2 for fast mod)
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -380,18 +381,23 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 
 void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 {
-	omp_lock_t dict_lock[numdict];//one lock for each dict
-	for(int j = 0; j < numdict; j++)
+	auto num_locks = std::min(NUM_LOCKS,numreads);
+	omp_lock_t *dict_lock = new omp_lock_t [num_locks];
+	omp_lock_t *read_lock = new omp_lock_t [num_locks];
+	for(int j = 0; j < num_locks; j++)
+	{
 		omp_init_lock(&dict_lock[j]);
+		omp_init_lock(&read_lock[j]);
+	}
 	uint8_t _readlen = readlen;//used for writing to binary file
 	std::bitset<2*readlen> mask[maxmatch];
 	std::bitset<2*readlen> revmask[maxmatch];
 	generatemasks(mask,revmask);
 	std::bitset<2*readlen> mask1[numdict];
 	generateindexmasks(mask1);
-	std::atomic<bool> *remainingreads = new std::atomic<bool>[numreads];
+	bool *remainingreads = new bool [numreads];
 	std::fill(remainingreads, remainingreads+numreads,1);
-	std::atomic<int64_t> remainingpos(numreads-1);//used for searching next unmatched read when no match is found
+
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
 	uint32_t beingwritten[numdict][num_thr], beingread[numdict][num_thr];
 	for(int j = 0; j <numdict; j++)
@@ -418,6 +424,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	uint64_t ull;
 	//flag to check if match was found or not
 	
+	int64_t remainingpos = numreads-1;//used for searching next unmatched read when no match is found
 	#pragma omp critical
 	{//doing initial setup and first read
 		current = firstread;	
@@ -444,25 +451,10 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			startposidx = dict[l].bphf->lookup(ull);
 			//check if any other thread is modifying same dictpos
 			int i;
-			bool go_on = 0; 
-			while(!go_on)//make sure no other thread is reading or writing to dictbin
-			{
-				omp_set_lock(&dict_lock[l]);
-				for(i=0;i<num_thr;i++)
-					if(beingwritten[l][i]==startposidx || beingread[l][i]==startposidx)
-						break;
-				if(i==num_thr)
-				{
-					beingwritten[l][tid] = startposidx;
-					go_on = 1;
-				}
-				omp_unset_lock(&dict_lock[l]);
-			}
+			omp_set_lock(&dict_lock[startposidx % num_locks]);
 			dict[l].findpos(dictidx,startposidx);
 			dict[l].remove(dictidx,startposidx,current);
-
-			#pragma omp atomic write
-			beingwritten[l][tid] = numreads;
+			omp_unset_lock(&dict_lock[startposidx % num_locks]);
 		}
 		flag = 0;
 		uint32_t k;
@@ -480,25 +472,11 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					continue;
 				//check if any other thread is modifying same dictpos
 				int i;
-				bool go_on = 0; 
-				while(!go_on)//make sure no other thread is reading or writing to dictbin
-				{
-					omp_set_lock(&dict_lock[l]);
-					for(i=0;i<num_thr;i++)
-						if(beingwritten[l][i]==startposidx)
-							break;
-					if(i==num_thr)
-					{
-						beingread[l][tid] = startposidx;
-						go_on = 1;
-					}
-					omp_unset_lock(&dict_lock[l]);
-				}
+				omp_set_lock(&dict_lock[startposidx % num_locks]);
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
 				{
-					#pragma omp atomic write
-					beingread[l][tid] = numreads;
+					omp_unset_lock(&dict_lock[startposidx % num_locks]);
 					continue;
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
@@ -509,20 +487,20 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						auto rid = dict[l].read_id[i];
 						if((ref^(read[rid]&mask[j])).count()<=thresh)
 						{	
-							#pragma omp critical (readfound)
+							omp_set_lock(&read_lock[rid % num_locks]);
 							if(remainingreads[rid])
 							{
 								remainingreads[rid]=0;
 								k = rid;
 								flag = 1;
 							}
+							omp_unset_lock(&read_lock[rid % num_locks]);
 							if(flag == 1)
 								break;
 						}
 					}
 				}
-				#pragma omp atomic write
-				beingread[l][tid] = numreads;
+				omp_unset_lock(&dict_lock[startposidx % num_locks]);
 				
 				if(flag == 1)
 				{
@@ -551,25 +529,11 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					continue;
 				//check if any other thread is modifying same dictpos
 				int i;
-				bool go_on = 0; 
-				while(!go_on)//make sure no other thread is reading or writing to dictbin
-				{
-					omp_set_lock(&dict_lock[l]);
-					for(i=0;i<num_thr;i++)
-						if(beingwritten[l][i]==startposidx)
-							break;
-					if(i==num_thr)
-					{
-						beingread[l][tid] = startposidx;
-						go_on = 1;
-					}
-					omp_unset_lock(&dict_lock[l]);
-				}
+				omp_set_lock(&dict_lock[startposidx % num_locks]);
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
 				{	
-					#pragma omp atomic write
-					beingread[l][tid] = numreads;
+					omp_unset_lock(&dict_lock[startposidx % num_locks]);
 					continue;
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
@@ -580,20 +544,20 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						auto rid = dict[l].read_id[i];
 						if((revref^(read[rid]&revmask[j])).count()<=thresh)
 						{	
-							#pragma omp critical (readfound)
+							omp_set_lock(&read_lock[rid % num_locks]);
 							if(remainingreads[rid])
 							{
 								remainingreads[rid]=0;
 								k = rid;
 								flag = 1;
 							}
+							omp_unset_lock(&read_lock[rid % num_locks]);
 							if(flag == 1)
 								break;
 						}
 					}
 				}
-				#pragma omp atomic write
-				beingread[l][tid] = numreads;
+				omp_unset_lock(&dict_lock[startposidx % num_locks]);
 				if(flag == 1)
 				{
 					current = k;
@@ -617,7 +581,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			
 				if(remainingreads[j] == 1)
 				{
-					#pragma omp critical (readfound)	
+					omp_set_lock(&read_lock[j % num_locks]);
 					if(remainingreads[j])//checking again inside critical block
 					{
 						current = j;
@@ -626,6 +590,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						flag = 1;
 						unmatched++;
 					}
+					omp_unset_lock(&read_lock[j % num_locks]);
 					if(flag == 1)
 						break;
 				}

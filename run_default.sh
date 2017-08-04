@@ -81,7 +81,7 @@ compress()
 	7z a $pathname/output/input_N.dna.7z $pathname/output/input_N.dna -mmt=$numt_thr
 	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
 	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
-	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -t1 #single threaded mode to limit memory consumption
+	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -t1 #single thread to limit memory consumption
 	rm $pathname/output/*.txt $pathname/output/*.dna  
 	if [[ $preserve_order == "True" ]];then
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
