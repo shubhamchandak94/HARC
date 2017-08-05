@@ -56,7 +56,7 @@ compress()
 	echo "#define readlen $readlen" >> src/config.h
 	echo "#define num_thr $num_thr" >> src/config.h
 
-	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
+	g++ src/reorder_2.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
 	mkdir -p $pathname/output/ 
 	./src/reorder.out $pathname
 	mv $pathname/input_N.dna $pathname/output/input_N.dna
@@ -66,7 +66,7 @@ compress()
 		mv $pathname/input_N.quality $pathname/output/input_N.quality
 		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
 	fi
-	g++ src/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
+	g++ src/encoder_1.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname
 	
 	#remove temporary files
@@ -102,6 +102,7 @@ compress()
 		fi	
 	fi
 	rm $pathname/output/*.bin
+	rm $pathname/output/*.singleton
 	tar -cf $pathname/$(basename "$filename" .fastq).tar -C $pathname/output .
 	rm -r $pathname/output/
 }

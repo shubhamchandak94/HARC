@@ -12,7 +12,7 @@
 #include <atomic>
 #include <cstdio>
 
-uint32_t NUM_LOCKS = 16777216; //limits on number of locks (power of 2 for fast mod)
+uint32_t num_locks = 0x1000000; //limits on number of locks (power of 2 for fast mod)
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -381,7 +381,6 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 
 void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 {
-	auto num_locks = std::min(NUM_LOCKS,numreads);
 	omp_lock_t *dict_lock = new omp_lock_t [num_locks];
 	omp_lock_t *read_lock = new omp_lock_t [num_locks];
 	for(int j = 0; j < num_locks; j++)
@@ -399,13 +398,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::fill(remainingreads, remainingreads+numreads,1);
 
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
-	uint32_t beingwritten[numdict][num_thr], beingread[numdict][num_thr];
-	for(int j = 0; j <numdict; j++)
-		for(int i = 0; i <num_thr; i++)
-		{
-			beingwritten[j][i] = numreads;//numreads means not writing anywhere right now
-			beingread[j][i] = numreads;
-		}
+
 	uint32_t firstread = 0,unmatched = 0;
 	#pragma omp parallel
 	{
@@ -451,10 +444,10 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			startposidx = dict[l].bphf->lookup(ull);
 			//check if any other thread is modifying same dictpos
 			int i;
-			omp_set_lock(&dict_lock[startposidx % num_locks]);
+			omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
 			dict[l].findpos(dictidx,startposidx);
 			dict[l].remove(dictidx,startposidx,current);
-			omp_unset_lock(&dict_lock[startposidx % num_locks]);
+			omp_unset_lock(&dict_lock[startposidx & 0XFFFFFF]);
 		}
 		flag = 0;
 		uint32_t k;
@@ -472,11 +465,11 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					continue;
 				//check if any other thread is modifying same dictpos
 				int i;
-				omp_set_lock(&dict_lock[startposidx % num_locks]);
+				omp_set_lock(&dict_lock[startposidx & 0XFFFFFF]);
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
 				{
-					omp_unset_lock(&dict_lock[startposidx % num_locks]);
+					omp_unset_lock(&dict_lock[startposidx & 0XFFFFFF]);
 					continue;
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
@@ -487,20 +480,20 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						auto rid = dict[l].read_id[i];
 						if((ref^(read[rid]&mask[j])).count()<=thresh)
 						{	
-							omp_set_lock(&read_lock[rid % num_locks]);
+							omp_set_lock(&read_lock[rid & 0XFFFFFF]);
 							if(remainingreads[rid])
 							{
 								remainingreads[rid]=0;
 								k = rid;
 								flag = 1;
 							}
-							omp_unset_lock(&read_lock[rid % num_locks]);
+							omp_unset_lock(&read_lock[rid & 0XFFFFFF]);
 							if(flag == 1)
 								break;
 						}
 					}
 				}
-				omp_unset_lock(&dict_lock[startposidx % num_locks]);
+				omp_unset_lock(&dict_lock[startposidx & 0XFFFFFF]);
 				
 				if(flag == 1)
 				{
@@ -529,11 +522,11 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					continue;
 				//check if any other thread is modifying same dictpos
 				int i;
-				omp_set_lock(&dict_lock[startposidx % num_locks]);
+				omp_set_lock(&dict_lock[startposidx & 0XFFFFFF]);
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
 				{	
-					omp_unset_lock(&dict_lock[startposidx % num_locks]);
+					omp_unset_lock(&dict_lock[startposidx & 0XFFFFFF]);
 					continue;
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
@@ -544,20 +537,20 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						auto rid = dict[l].read_id[i];
 						if((revref^(read[rid]&revmask[j])).count()<=thresh)
 						{	
-							omp_set_lock(&read_lock[rid % num_locks]);
+							omp_set_lock(&read_lock[rid & 0XFFFFFF]);
 							if(remainingreads[rid])
 							{
 								remainingreads[rid]=0;
 								k = rid;
 								flag = 1;
 							}
-							omp_unset_lock(&read_lock[rid % num_locks]);
+							omp_unset_lock(&read_lock[rid & 0XFFFFFF]);
 							if(flag == 1)
 								break;
 						}
 					}
 				}
-				omp_unset_lock(&dict_lock[startposidx % num_locks]);
+				omp_unset_lock(&dict_lock[startposidx & 0XFFFFFF]);
 				if(flag == 1)
 				{
 					current = k;
@@ -581,7 +574,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			
 				if(remainingreads[j] == 1)
 				{
-					omp_set_lock(&read_lock[j % num_locks]);
+					omp_set_lock(&read_lock[j & 0XFFFFFF]);
 					if(remainingreads[j])//checking again inside critical block
 					{
 						current = j;
@@ -590,7 +583,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						flag = 1;
 						unmatched++;
 					}
-					omp_unset_lock(&read_lock[j % num_locks]);
+					omp_unset_lock(&read_lock[j & 0XFFFFFF]);
 					if(flag == 1)
 						break;
 				}

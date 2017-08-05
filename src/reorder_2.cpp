@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstdio>
 
+uint32_t num_locks = 0x1000000; //limits on number of locks (power of 2  for fast mod)
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -310,6 +311,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 		for(uint32_t i = 0; i < numreads; i++)
 		{
 			finkey.read((char*)&currentkey, sizeof(uint64_t));
+			
 			dict[j].startpos[((dict[j].bphf)->lookup(currentkey))+1]++;	
 		}
 		dict[j].empty_bin = new bool[dict[j].numkeys]();
@@ -380,9 +382,13 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 
 void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 {
-	omp_lock_t dict_lock[numdict];//one lock for each dict
-	for(int j = 0; j < numdict; j++)
+	omp_lock_t *dict_lock = new omp_lock_t [num_locks];
+	omp_lock_t *read_lock = new omp_lock_t [num_locks];
+	for(int j = 0; j < num_locks; j++)
+	{
 		omp_init_lock(&dict_lock[j]);
+		omp_init_lock(&read_lock[j]);
+	}
 	uint8_t _readlen = readlen;//used for writing to binary file
 	std::bitset<2*readlen> mask[maxmatch];
 	std::bitset<2*readlen> revmask[maxmatch];
@@ -393,13 +399,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::fill(remainingreads, remainingreads+numreads,1);
 
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
-	uint32_t beingwritten[numdict][num_thr], beingread[numdict][num_thr];
-	for(int j = 0; j <numdict; j++)
-		for(int i = 0; i <num_thr; i++)
-		{
-			beingwritten[j][i] = numreads;//numreads means not writing anywhere right now
-			beingread[j][i] = numreads;
-		}
+	
 	uint32_t firstread = 0,unmatched = 0;
 	#pragma omp parallel
 	{
@@ -409,12 +409,14 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::ofstream foutflag(outfileflag + '.' + tid_str,std::ofstream::out);
 	std::ofstream foutpos(outfilepos + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder(outfileorder + '.' + tid_str,std::ofstream::out|std::ios::binary);
+	std::ofstream foutorder_s(outfileorder + ".singleton." + tid_str,std::ofstream::out|std::ios::binary);
+	
 	std::bitset<2*readlen> ref,revref,b;
 	int count[4][readlen];
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
-	bool flag = 0, done = 0;
-	uint32_t current;
+	bool flag = 0, done = 0, prev_unmatched = false;
+	uint32_t current, prev;
 	uint64_t ull;
 	//flag to check if match was found or not
 	
@@ -428,10 +430,8 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	}
 	#pragma omp barrier
 	updaterefcount(read[current],ref,revref,count,true,false,0);
-	foutRC << 'd';
-	foutorder.write((char*)&current,sizeof(uint32_t));
-	foutflag << 0;//for unmatched
-	foutpos.write((char*)&_readlen,sizeof(uint8_t));
+	prev_unmatched = true;	
+	prev = current;
 	uint32_t numdone= 0;
 	while(!done)
 	{
@@ -445,25 +445,10 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			startposidx = dict[l].bphf->lookup(ull);
 			//check if any other thread is modifying same dictpos
 			int i;
-			bool go_on = 0; 
-			while(!go_on)//make sure no other thread is reading or writing to dictbin
-			{
-				omp_set_lock(&dict_lock[l]);
-				for(i=0;i<num_thr;i++)
-					if(beingwritten[l][i]==startposidx || beingread[l][i]==startposidx)
-						break;
-				if(i==num_thr)
-				{
-					beingwritten[l][tid] = startposidx;
-					go_on = 1;
-				}
-				omp_unset_lock(&dict_lock[l]);
-			}
+			omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
 			dict[l].findpos(dictidx,startposidx);
 			dict[l].remove(dictidx,startposidx,current);
-
-			#pragma omp atomic write
-			beingwritten[l][tid] = numreads;
+			omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
 		}
 		flag = 0;
 		uint32_t k;
@@ -481,25 +466,11 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					continue;
 				//check if any other thread is modifying same dictpos
 				int i;
-				bool go_on = 0; 
-				while(!go_on)//make sure no other thread is reading or writing to dictbin
-				{
-					omp_set_lock(&dict_lock[l]);
-					for(i=0;i<num_thr;i++)
-						if(beingwritten[l][i]==startposidx)
-							break;
-					if(i==num_thr)
-					{
-						beingread[l][tid] = startposidx;
-						go_on = 1;
-					}
-					omp_unset_lock(&dict_lock[l]);
-				}
+				omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
 				{
-					#pragma omp atomic write
-					beingread[l][tid] = numreads;
+					omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
 					continue;
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
@@ -510,29 +481,38 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						auto rid = dict[l].read_id[i];
 						if((ref^(read[rid]&mask[j])).count()<=thresh)
 						{	
-							#pragma omp critical (readfound)
+							omp_set_lock(&read_lock[rid & 0xFFFFFF]);
 							if(remainingreads[rid])
 							{
 								remainingreads[rid]=0;
 								k = rid;
 								flag = 1;
 							}
+							omp_unset_lock(&read_lock[rid & 0xFFFFFF]);
 							if(flag == 1)
 								break;
 						}
 					}
 				}
-				#pragma omp atomic write
-				beingread[l][tid] = numreads;
+				omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
 				
 				if(flag == 1)
 				{
 					current = k;
 					updaterefcount(read[current],ref,revref,count,false,false,j);
+					if(prev_unmatched == true)//prev read not singleton, write it now
+					{
+						foutRC << 'd';
+						foutorder.write((char*)&prev,sizeof(uint32_t));
+						foutflag << 0;//for unmatched
+						foutpos.write((char*)&_readlen,sizeof(uint8_t));
+					}	
 					foutRC << 'd';
 					foutorder.write((char*)&current,sizeof(uint32_t));
 					foutflag << 1;//for matched
 					foutpos.write((char*)&j,sizeof(uint8_t));
+					
+					prev_unmatched = false;
 					break;
 				}
 				
@@ -552,25 +532,11 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 					continue;
 				//check if any other thread is modifying same dictpos
 				int i;
-				bool go_on = 0; 
-				while(!go_on)//make sure no other thread is reading or writing to dictbin
-				{
-					omp_set_lock(&dict_lock[l]);
-					for(i=0;i<num_thr;i++)
-						if(beingwritten[l][i]==startposidx)
-							break;
-					if(i==num_thr)
-					{
-						beingread[l][tid] = startposidx;
-						go_on = 1;
-					}
-					omp_unset_lock(&dict_lock[l]);
-				}
+				omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
 				dict[l].findpos(dictidx,startposidx);
 				if(dict[l].empty_bin[startposidx])//bin is empty
 				{	
-					#pragma omp atomic write
-					beingread[l][tid] = numreads;
+					omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
 					continue;
 				}
 				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
@@ -581,28 +547,37 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						auto rid = dict[l].read_id[i];
 						if((revref^(read[rid]&revmask[j])).count()<=thresh)
 						{	
-							#pragma omp critical (readfound)
+							omp_set_lock(&read_lock[rid & 0xFFFFFF]);
 							if(remainingreads[rid])
 							{
 								remainingreads[rid]=0;
 								k = rid;
 								flag = 1;
 							}
+							omp_unset_lock(&read_lock[rid & 0xFFFFFF]);
 							if(flag == 1)
 								break;
 						}
 					}
 				}
-				#pragma omp atomic write
-				beingread[l][tid] = numreads;
+				omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
 				if(flag == 1)
 				{
 					current = k;
 					updaterefcount(read[current],ref,revref,count,false,true,j);
+					if(prev_unmatched == true)//prev read not singleton, write it now
+					{
+						foutRC << 'd';
+						foutorder.write((char*)&prev,sizeof(uint32_t));
+						foutflag << 0;//for unmatched
+						foutpos.write((char*)&_readlen,sizeof(uint8_t));
+					}
 					foutRC << 'r';
 					foutorder.write((char*)&current,sizeof(uint32_t));
 					foutflag << 1;//for matched
 					foutpos.write((char*)&j,sizeof(uint8_t));
+					
+					prev_unmatched = false;
 					break;
 				}
 			}	
@@ -618,7 +593,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 			
 				if(remainingreads[j] == 1)
 				{
-					#pragma omp critical (readfound)	
+					omp_set_lock(&read_lock[j & 0xFFFFFF]);
 					if(remainingreads[j])//checking again inside critical block
 					{
 						current = j;
@@ -627,19 +602,28 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						flag = 1;
 						unmatched++;
 					}
+					omp_unset_lock(&read_lock[j & 0xFFFFFF]);
 					if(flag == 1)
 						break;
 				}
 					
 			if(flag == 0)
+			{
+				if(prev_unmatched == true)//last read was singleton, write it now
+				{
+					foutorder_s.write((char*)&prev,sizeof(uint32_t));
+				}
 				done = 1;//no reads left
+			}
 			else
 			{
 				updaterefcount(read[current],ref,revref,count,true,false,0);
-				foutRC << 'd';
-				foutorder.write((char*)&current,sizeof(uint32_t));
-				foutflag << 0;//for unmatched
-				foutpos.write((char*)&_readlen,sizeof(uint8_t));
+				if(prev_unmatched == true)//prev read singleton, write it now
+				{
+					foutorder_s.write((char*)&prev,sizeof(uint32_t));
+				}
+				prev_unmatched = true;
+				prev = current;
 			}
 		}
 	}//while(!done) end
@@ -648,6 +632,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	foutorder.close();
 	foutflag.close();
 	foutpos.close();
+	foutorder_s.close();
 //	std::cout << tid << ":Done"<<"\n";
 	}//parallel end
 		
@@ -680,11 +665,13 @@ void writetofile(std::bitset<2*readlen> *read)
 	//convert bitset to string for all num_thr files in parallel
 	#pragma omp parallel
 	{
-	int tid = omp_get_thread_num();	
+	int tid = omp_get_thread_num();
 	std::string tid_str = std::to_string(tid);
 	std::ofstream fout(outfile + '.' + tid_str,std::ofstream::out);
+	std::ofstream fout_s(outfile + ".singleton." + tid_str,std::ofstream::out);
 	std::ifstream finRC(outfileRC + '.' + tid_str,std::ifstream::in);
 	std::ifstream finorder(outfileorder + '.' + tid_str,std::ifstream::in|std::ios::binary);
+	std::ifstream finorder_s(outfileorder + ".singleton." + tid_str,std::ifstream::in|std::ios::binary);
 	char s[readlen+1],s1[readlen+1];
 	s[readlen] = '\0';
 	s1[readlen] = '\0';
@@ -704,50 +691,71 @@ void writetofile(std::bitset<2*readlen> *read)
 			fout<<s1<<"\n";
 		}
 	}
+	finorder_s.read((char*)&current,sizeof(uint32_t));
+	while(!finorder_s.eof())
+	{
+		bitsettostring(read[current],s);
+		fout_s << s << "\n";
+		finorder_s.read((char*)&current,sizeof(uint32_t));
+	}
 	
 	fout.close();
+	fout_s.close();
 	finRC.close();
-	finorder.close();	
+	finorder.close();
+	finorder_s.close();	
 
 	}
 
 	//Now combine the num_thr files
 	std::ofstream fout(outfile,std::ofstream::out);
+	std::ofstream fout_s(outfile+".singleton",std::ofstream::out);
 	std::ofstream foutRC(outfileRC,std::ofstream::out);
 	std::ofstream foutflag(outfileflag,std::ofstream::out);
 	std::ofstream foutpos(outfilepos,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder(outfileorder,std::ofstream::out|std::ios::binary);
+	std::ofstream foutorder_s(outfileorder+".singleton",std::ofstream::out|std::ios::binary);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
 		std::string tid_str = std::to_string(tid);
 		std::ifstream fin(outfile + '.' + tid_str,std::ifstream::in);
+		std::ifstream fin_s(outfile + ".singleton." + tid_str,std::ifstream::in);
 		std::ifstream finRC(outfileRC + '.' + tid_str,std::ifstream::in);
 		std::ifstream finflag(outfileflag + '.' + tid_str,std::ifstream::in);
 		std::ifstream finpos(outfilepos + '.' + tid_str,std::ifstream::in|std::ios::binary);
-		std::ifstream finorder(outfileorder + '.' + tid_str,std::ifstream::in|std::ios::binary);
+		std::ifstream finorder(outfileorder + '.'  + tid_str,std::ifstream::in|std::ios::binary);
+		std::ifstream finorder_s(outfileorder + ".singleton." + tid_str,std::ifstream::in|std::ios::binary);
 		
 		fout << fin.rdbuf();//write entire file
+		fout_s << fin_s.rdbuf();//write entire file
 		foutRC << finRC.rdbuf();
 		foutflag << finflag.rdbuf();
 		foutpos << finpos.rdbuf();
 		foutorder << finorder.rdbuf();
+		foutorder_s << finorder_s.rdbuf();
 		
 		fin.close();
+		fin_s.close();
 		finRC.close();
 		finflag.close();
 		finorder.close();
+		finorder_s.close();
 		finpos.close();
 		
 		remove((outfile + '.' + tid_str).c_str());
+		remove((outfile + ".singleton." + tid_str).c_str());
 		remove((outfileRC + '.' + tid_str).c_str());
 		remove((outfileflag + '.' + tid_str).c_str());
 		remove((outfilepos + '.' + tid_str).c_str());
 		remove((outfileorder + '.' + tid_str).c_str());
+		remove((outfileorder + ".singleton." + tid_str).c_str());
 	}
 	fout.close();
+	fout_s.close();
 	foutRC.close();
 	foutflag.close();
 	foutorder.close();
+	foutorder_s.close();
 	foutpos.close();
 	return;
 }
