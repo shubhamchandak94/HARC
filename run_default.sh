@@ -46,6 +46,7 @@ compress()
 	fi
 	echo "#define maxmatch $((readlen/2))" > src/config.h
 	echo "#define thresh 4" >> src/config.h
+	echo "#define thresh_s 100" >> src/config.h
 	echo "#define numdict 2" >> src/config.h
 	echo "#define maxsearch 1000" >> src/config.h
 	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
@@ -66,7 +67,7 @@ compress()
 		mv $pathname/input_N.quality $pathname/output/input_N.quality
 		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
 	fi
-	g++ src/encoder_1.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
+	g++ src/encoder_1.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname
 	
 	#remove temporary files

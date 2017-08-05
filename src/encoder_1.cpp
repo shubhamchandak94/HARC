@@ -18,7 +18,6 @@ uint32_t numreads, numreads_s;
 int numdict_s = 1;
 uint32_t dict_start[1];
 uint32_t dict_end[1];
-int thresh_s = 16;
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -96,9 +95,9 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s);
 
 void packbits();
 
-std::string buildcontig(std::list<std::string> reads, std::list<long> pos);//using lists to enable faster insertion of singletons
+std::string buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size);//using lists to enable faster insertion of singletons
 
-void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC);
+void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, uint32_t list_size);
 
 void getDataParams();
 
@@ -146,7 +145,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	}
 	bool *remainingreads = new bool [numreads_s];
 	std::fill(remainingreads, remainingreads+numreads_s,1);
-	uint32_t matched = 0;
+
 	std::bitset<2*readlen> mask1[numdict_s];
 	generateindexmasks(mask1);
 	std::cout<<"Encoding reads\n";
@@ -189,7 +188,8 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	std::list<char> RC;
 	std::list<uint32_t> order;
 	uint8_t p;
-	uint32_t ord;
+	uint32_t ord, list_size = 0;//list_size variable introduced because list::size() was running very slowly
+					// on UIUC machine
 	while(i < stop)
 	{
 		std::getline(f,current);
@@ -197,11 +197,11 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 		rc = in_RC.get();
 		in_pos.read((char*)&p,sizeof(uint8_t));
 		in_order.read((char*)&ord,sizeof(uint32_t));
-		if(c=='0'||reads.size()>10000000)//so that reads vector doesn't get too large
+		if(c=='0'||list_size>10000000)//so that reads vector doesn't get too large
 		{
-			if(reads.size()!=0)
+			if(list_size!=0)
 			{
-				ref = buildcontig(reads,pos);
+				ref = buildcontig(reads,pos,list_size);
 				//try to align the singleton reads to ref
 				//first create bitsets from first readlen positions of ref
 				forward_bitset = stringtobitset(ref.substr(0,readlen));
@@ -215,9 +215,6 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 				//are inserted correctly
 				*pos_it = 0; //putting 0 in first pos (originally was readlen and will be converted 
 				//to readlen in writecontig
-/*				std::cout << "\n";
-				for(auto it = pos.begin(); it != pos.end(); ++it)
-					std::cout << *it << " ";*/
 				//convert pos to cumulative list
 				long cumsum = 0;
 				for(auto it = pos.begin();it!=pos.end();++it)
@@ -225,9 +222,6 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					*it = cumsum + *it;
 					cumsum = *it;
 				}	
-		/*		std::cout << "\n";
-				for(auto it = pos.begin(); it != pos.end(); ++it)
-					std::cout << *it << " ";*/
 				for(uint32_t j = 0; j < ref.size()-readlen+1; j++)
 				{
 					if(j == nextpos)//go through non-singleton reads at this pos
@@ -274,7 +268,6 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 									if(remainingreads[rid])
 									{
 										remainingreads[rid]=0;
-										matched++;
 										flag = 1;
 									}
 									omp_unset_lock(&read_lock[rid]);
@@ -288,6 +281,8 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 									RC.insert(RC_it,'d');
 									//delete from dictionary
 									dict[l].remove(dictidx,startposidx,rid);
+									if(dict[l].empty_bin[startposidx])//bin is empty
+										break;
 									dict[l].findpos(dictidx,startposidx);
 								}
 							}
@@ -323,7 +318,6 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 									if(remainingreads[rid])
 									{
 										remainingreads[rid]=0;
-										matched++;
 										flag = 1;
 									}
 									omp_unset_lock(&read_lock[rid]);
@@ -337,6 +331,8 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 									RC.insert(RC_it,'r');
 									//delete from dictionary
 									dict[l].remove(dictidx,startposidx,rid);
+									if(dict[l].empty_bin[startposidx])//bin is empty
+										break;
 									dict[l].findpos(dictidx,startposidx);
 								}
 							}
@@ -355,33 +351,19 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 				}
 				//convert pos to differences again
 				long prevpos = 0;
-/*				std::cout << "\n";
-				for(auto it = pos.begin(); it != pos.end(); ++it)
-					std::cout << *it << " ";*/
 				for(auto it = pos.begin(); it != pos.end(); ++it)
 				{
 					*it = *it - prevpos;
 					prevpos = prevpos + *it;
 				}
-/*				std::cout << "\n";
-				for(auto it = pos.begin(); it != pos.end(); ++it)
-					std::cout << *it << " ";*/
-		/*		std::cout << "pos size" << pos.size()<<"\n";
-				std::cout << "reads size" << reads.size()<<"\n";
-				std::cout << "order size" << order.size()<<"\n";
-				std::cout << "RC size" << RC.size()<<"\n";
-				std::cout << "ref size" << ref.size()<<"\n";
-				std::cout << "lengths of reads"<<"\n";
-				for(auto it = reads.begin(); it != reads.end(); ++it)
-					std::cout << (*it).size() <<"\n";*/
-
-				
-				writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC);
+			
+				writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,list_size);
 			}
 			reads = {current};
 			pos = {p};
 			order = {ord};
 			RC = {rc};
+			list_size = 1;
 		}
 		else
 		{
@@ -389,12 +371,13 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 			pos.push_back(p);
 			order.push_back(ord);
 			RC.push_back(rc);
+			list_size++;
 		}
 		i++;	
 					
 	}
-	ref = buildcontig(reads,pos);
-	writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC);
+	ref = buildcontig(reads,pos,list_size);
+	writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,list_size);
 
 	f.close();
 	in_flag.close();
@@ -408,7 +391,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	f_order.close();
 	f_RC.close();
 	}
-	std::cout << matched << " singletons were aligned\n";
+
 	//Combine files produced by the threads
 	std::ofstream f_seq(outfile_seq);
 	std::ofstream f_pos(outfile_pos);
@@ -454,9 +437,11 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	f_RC.open(infile_RC,std::ofstream::app);
 	char c = readlen;
 	std::string s;
+	uint32_t matched = numreads_s;
 	for (uint32_t i = 0; i < numreads_s; i++)
 		if(remainingreads[i] == 1)
 		{
+			matched--;
 			f_pos << c;
 			f_order.write((char*)&order_s[i],sizeof(uint32_t));
 			f_RC << 'd';
@@ -471,7 +456,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	f_RC.close();
 	delete[] remainingreads;
 	packbits();
-	std::cout << "Encoding done\n";
+	std::cout << "Encoding done: " << matched << " singleton reads were aligned\n";
 	return;
 }
 
@@ -544,9 +529,9 @@ void packbits()
 }
 
 
-std::string buildcontig(std::list<std::string> reads, std::list<long> pos)
+std::string buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size)
 {
-	if(reads.size() == 1)
+	if(list_size == 1)
 		return reads.front();
 	auto reads_it = reads.begin();
 	std::vector<std::array<long,4>> count(readlen,{0,0,0,0});
@@ -579,11 +564,11 @@ std::string buildcontig(std::list<std::string> reads, std::list<long> pos)
 	return ref;
 }
 
-void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC)
+void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, uint32_t list_size)
 {
 	f_seq << ref;
 	char c;
-	if(reads.size() == 1)
+	if(list_size == 1)
 	{
 		f_noise << "\n";
 		c = readlen;//(not pos[0] to handle breaks in read sequence due to limit on reads.size() - can't
