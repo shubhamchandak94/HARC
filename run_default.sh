@@ -35,9 +35,9 @@ compress()
 	echo "*** Preprocessing ***"
 	echo $filename
 	if [[ $preserve_quality == "True" ]];then
-		./src/preprocess_quality.out $filename $pathname
+		./src/preprocess_quality.out $filename $pathname $num_thr
 	else
-		./src/preprocess.out $filename $pathname
+		./src/preprocess.out $filename $pathname $num_thr
 	fi
 	readlen="$(head $pathname/input_clean.dna | wc -L)"
 	if (($readlen > 256));then
@@ -46,7 +46,7 @@ compress()
 	fi
 	echo "#define maxmatch $((readlen/2))" > src/config.h
 	echo "#define thresh 4" >> src/config.h
-	echo "#define thresh_s 100" >> src/config.h
+	echo "#define thresh_s 24" >> src/config.h
 	echo "#define numdict 2" >> src/config.h
 	echo "#define maxsearch 1000" >> src/config.h
 	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
@@ -57,7 +57,7 @@ compress()
 	echo "#define readlen $readlen" >> src/config.h
 	echo "#define num_thr $num_thr" >> src/config.h
 
-	g++ src/reorder_2.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
+	g++ src/reorder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
 	mkdir -p $pathname/output/ 
 	./src/reorder.out $pathname
 	mv $pathname/input_N.dna $pathname/output/input_N.dna
@@ -67,7 +67,7 @@ compress()
 		mv $pathname/input_N.quality $pathname/output/input_N.quality
 		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
 	fi
-	g++ src/encoder_1.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
+	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname
 	
 	#remove temporary files
