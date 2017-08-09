@@ -7,16 +7,18 @@
 #include <string>
 #include "config.h"
 
-uint32_t numreads;
+uint32_t numreads, numreads_N;
 
 std::string outfile;
 std::string infile;
 std::string infile_N;
 std::string infile_order;
+std::string infile_order_N_pe;//post-encoding
 
 void reorder_quality();
+void reorder_quality_N();
 
-void getDataParams();//populate numreads and readlen
+void getDataParams();//populate numreads and numreads_N
 
 int main(int argc, char** argv)
 {
@@ -25,7 +27,9 @@ int main(int argc, char** argv)
 	infile = basedir + "/output/input_clean.quality";
 	infile_N = basedir + "/output/input_N.quality";
 	infile_order = basedir + "/output/read_order.bin";
+	infile_order_N_pe = basedir + "/output/read_order_N_pe.bin";
 	getDataParams();
+	reorder_quality_N();
 	reorder_quality();
 	return 0;
 }
@@ -81,6 +85,42 @@ void reorder_quality()
 	return;
 }
 
+void reorder_quality_N()
+{
+	std::ifstream f_N(infile_N);
+	std::ifstream f_order_N_pe(infile_order_N_pe,std::ios::binary);
+	uint32_t order;
+	uint32_t *reverse_index = new uint32_t [numreads_N];
+	for (uint32_t i = 0; i < numreads_N; i++)
+	{
+		f_order_N_pe.read((char*)&order,sizeof(uint32_t));
+		reverse_index[order] = i;
+	}
+	f_order_N_pe.close();
+	char s[readlen+1];
+	s[readlen] = '\0';
+	uint32_t *index_array = new uint32_t [numreads_N];
+	char(*quality)[readlen+1] = new char [numreads_N][readlen+1];	
+	uint32_t pos = 0;
+	for(uint32_t j = 0; j < numreads_N; j++)
+	{
+		index_array[reverse_index[j]] = j;
+		f_N.getline(quality[j],readlen+1);
+	}
+	f_N.close();
+	std::ofstream f(infile_N);
+	for(uint32_t j = 0; j < numreads_N; j++)
+	{
+		f << quality[index_array[j]] << "\n";
+	}
+	delete[] index_array;
+	delete[] quality;
+	delete[] reverse_index;
+
+	f.close();
+	return;
+}
+
 void getDataParams()
 {
 	uint32_t number_of_lines = 0;
@@ -90,4 +130,10 @@ void getDataParams()
 		++number_of_lines;
 	numreads = number_of_lines;
 	myfile.close();
+	number_of_lines = 0;
+	std::ifstream myfile_N(infile_N, std::ifstream::in);
+	while (std::getline(myfile_N, line))
+		++number_of_lines;
+	numreads_N = number_of_lines;
+	myfile_N.close();
 }

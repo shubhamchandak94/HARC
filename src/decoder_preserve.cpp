@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 #include <bitset>
+#include <cstdio>
 #include "config.h"
 
 std::string outfile;
@@ -17,8 +18,9 @@ std::string infile_noise;
 std::string infile_noisepos;
 std::string infile_rev;
 std::string infile_order;
+std::string infile_N;
+std::string infile_order_N_pe;
 
-char longtochar[] = {'A','C','G','T'};
 long chartolong[128];
 char dec_noise[128][128];
 char chartorevchar[128];
@@ -33,6 +35,8 @@ std::bitset<2*readlen> mask64;//bitset with 64 bits set to 1 (used in bitsettost
 void decode();
 
 void restore_order();
+
+void restore_order_N();
 
 void unpackbits();
 
@@ -67,9 +71,12 @@ int main(int argc, char** argv)
 	infile_noisepos = basedir + "/output/read_noisepos.txt";
 	infile_rev = basedir + "/output/read_rev.txt";
 	infile_order = basedir + "/output/read_order.bin";
+	infile_N = basedir + "/output/input_N.dna";
+	infile_order_N_pe =  basedir + "/output/read_order_N_pe.bin";
 //	getDataParams(); //populate readlen
 	setglobalarrays();
 	decode();
+	restore_order_N();
 	restore_order();
 	return 0;
 }
@@ -84,8 +91,8 @@ void decode()
 	std::ifstream f_noise(infile_noise);
 	std::ifstream f_noisepos(infile_noisepos);
 	std::ifstream f_rev(infile_rev);
-
-
+	std::ofstream f_N_tmp(infile_N+".tmp");	
+	
 	char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
 	std::bitset<2*readlen> b;
 	currentread[readlen] = '\0';
@@ -97,7 +104,6 @@ void decode()
 
 	while(f_pos >> std::noskipws >> c)//don't skip whitespaces
 	{
-		numreads++;
 		pos = (unsigned char)(c);
 		if(pos!=0)
 		{
@@ -116,16 +122,30 @@ void decode()
 			prevnoisepos = noisepos;	
 		}
 		c = f_rev.get();
-		if(c == 'd')
+		if(strchr(currentread,'N')!=NULL)
 		{
-			b = chartobitset(currentread);
-			f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+			if(c == 'd')
+				f_N_tmp << currentread<<"\n";
+			else
+			{
+				reverse_complement(currentread,revread);
+				f_N_tmp << revread<<"\n";
+			}
 		}
 		else
 		{
-			reverse_complement(currentread,revread);
-			b = chartobitset(revread);
-			f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+			numreads++;
+			if(c == 'd')
+			{
+				b = chartobitset(currentread);
+				f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+			}
+			else
+			{
+				reverse_complement(currentread,revread);
+				b = chartobitset(revread);
+				f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+			}
 		}
 	}
 	f.close();
@@ -134,7 +154,46 @@ void decode()
 	f_noise.close();
 	f_noisepos.close();
 	f_rev.close();
+	std::ifstream f_N(infile_N);
+	f_N_tmp << f_N.rdbuf();
+	f_N_tmp.close();
+	f_N.close();
+	rename((infile_N+".tmp").c_str(), infile_N.c_str());
 	std::cout<<"Decoding done\n";
+	return;
+}
+
+void restore_order_N()
+{
+	std::string line;
+	std::ifstream f_N(infile_N);
+	uint32_t numreads_N = 0;
+	while(std::getline(f_N,line))
+		numreads_N++;
+	f_N.close();
+	f_N.open(infile_N);
+		
+	std::ifstream f_order(infile_order_N_pe,std::ios::binary);
+	uint32_t *index_array = new uint32_t [numreads_N];
+	char(*reads_N)[readlen+1] = new char [numreads_N][readlen+1];
+	uint32_t order;
+	for(uint32_t j = 0; j < numreads_N; j++)
+	{
+		f_order.read((char*)&order,sizeof(uint32_t));
+		index_array[order] = j;
+		f_N.getline(reads_N[j],readlen+1);
+	}
+	f_N.close();
+	std::ofstream out_N(infile_N);
+	
+	for(uint32_t j = 0; j < numreads_N; j++)
+	{
+		out_N << reads_N[index_array[j]] << "\n";
+	}
+	delete[] index_array;
+	delete[] reads_N;
+	f_order.close();
+	out_N.close();
 	return;
 }
 
@@ -187,11 +246,11 @@ void restore_order()
 void unpackbits()
 {
 	std::ifstream in_seq(infile_seq,std::ios::binary);
-	std::ifstream in_noise(infile_noise,std::ios::binary);
+//	std::ifstream in_noise(infile_noise,std::ios::binary);
 	std::ofstream f_seq(infile_seq+".tmp");
 	std::ifstream in_seq_tail(infile_seq+".tail");
-	std::ofstream f_noise(infile_noise+".tmp");
-	std::ifstream in_noise_tail(infile_noise+".tail");
+//	std::ofstream f_noise(infile_noise+".tmp");
+//	std::ifstream in_noise_tail(infile_noise+".tail");
 	char inttobase[4];
 	inttobase[0] = 'A';
 	inttobase[1] = 'C';
@@ -218,7 +277,7 @@ void unpackbits()
 	remove(infile_seq.c_str());
 	remove((infile_seq+".tail").c_str());
 	rename((infile_seq+".tmp").c_str(),infile_seq.c_str());		
-	
+/*	
 	//noise
 	inttobase[0] = '0';
 	inttobase[1] = '1';
@@ -243,7 +302,7 @@ void unpackbits()
 	f_noise.close();
 	remove((infile_noise+".tail").c_str());
 	rename((infile_noise+".tmp").c_str(),infile_noise.c_str());		
-	
+*/	
 	return;
 }
 
@@ -286,6 +345,7 @@ void setglobalarrays()
 	chartorevchar['C'] = 'G';
 	chartorevchar['G'] = 'C';
 	chartorevchar['T'] = 'A';
+	chartorevchar['N'] = 'N';
 	for(int i = 0; i < 64; i++)
 		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)

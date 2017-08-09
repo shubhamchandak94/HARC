@@ -87,6 +87,7 @@ compress()
 	if [[ $preserve_order == "True" ]];then
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
 			./src/merge_quality_N.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
@@ -135,6 +136,7 @@ decompress()
 		g++ src/decoder_preserve.cpp -O3 -march=native -std=c++11 -o src/decoder_preserve.out
 		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
 		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_order_N_pe.bin.7z -o$pathname/output/
 		./src/decoder_preserve.out $pathname
 		./src/merge_N.out $pathname
 		echo "Done!"

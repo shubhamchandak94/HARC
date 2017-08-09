@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
-
+#include <cstdio>
 
 long readlen;
 
@@ -19,7 +19,6 @@ std::string infile_rev;
 std::string infile_N;
 
 
-char longtochar[] = {'A','C','G','T'};
 long chartolong[128];
 char dec_noise[128][128];
 char chartorevchar[128];
@@ -66,7 +65,7 @@ void decode()
 	std::ifstream f_noisepos(infile_noisepos);
 	std::ifstream f_rev(infile_rev);
 	std::ifstream f_N(infile_N);
-	
+	std::ofstream f_N_tmp(infile_N+".tmp");
 	char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
 	currentread[readlen] = '\0';
 	revread[readlen] = '\0';
@@ -94,15 +93,32 @@ void decode()
 			prevnoisepos = noisepos;	
 		}
 		c = f_rev.get();
-		if(c == 'd')
-			f << currentread<<"\n";
+		if(strchr(currentread,'N')!=NULL)
+		{
+			if(c == 'd')
+				f_N_tmp << currentread<<"\n";
+			else
+			{
+				reverse_complement(currentread,revread);
+				f_N_tmp << revread<<"\n";
+			}
+		}
 		else
 		{
-			reverse_complement(currentread,revread);
-			f << revread<<"\n";
+			if(c == 'd')
+				f << currentread<<"\n";
+			else
+			{
+				reverse_complement(currentread,revread);
+				f << revread<<"\n";
+			}
 		}
 	}
-	f << f_N.rdbuf();		
+	f_N_tmp.close();
+	std::ifstream in_N_tmp(infile_N+".tmp");
+	f << in_N_tmp.rdbuf();
+	f << f_N.rdbuf();
+	remove((infile_N+".tmp").c_str());		
 	f.close();
 	f_seq.close();
 	f_pos.close();
@@ -117,11 +133,11 @@ void decode()
 void unpackbits()
 {
 	std::ifstream in_seq(infile_seq,std::ios::binary);
-	std::ifstream in_noise(infile_noise,std::ios::binary);
+//	std::ifstream in_noise(infile_noise,std::ios::binary);
 	std::ofstream f_seq(infile_seq+".tmp");
 	std::ifstream in_seq_tail(infile_seq+".tail");
-	std::ofstream f_noise(infile_noise+".tmp");
-	std::ifstream in_noise_tail(infile_noise+".tail");
+//	std::ofstream f_noise(infile_noise+".tmp");
+//	std::ifstream in_noise_tail(infile_noise+".tail");
 	char inttobase[4];
 	inttobase[0] = 'A';
 	inttobase[1] = 'C';
@@ -148,7 +164,7 @@ void unpackbits()
 	remove(infile_seq.c_str());
 	remove((infile_seq+".tail").c_str());
 	rename((infile_seq+".tmp").c_str(),infile_seq.c_str());		
-	
+/*	
 	//noise
 	inttobase[0] = '0';
 	inttobase[1] = '1';
@@ -173,7 +189,7 @@ void unpackbits()
 	f_noise.close();
 	remove((infile_noise+".tail").c_str());
 	rename((infile_noise+".tmp").c_str(),infile_noise.c_str());		
-	
+*/	
 	return;
 }
 
@@ -216,6 +232,7 @@ void setglobalarrays()
 	chartorevchar['C'] = 'G';
 	chartorevchar['G'] = 'C';
 	chartorevchar['T'] = 'A';
+	chartorevchar['N'] = 'N';
 	return;
 }
 	
@@ -229,5 +246,3 @@ void getDataParams()
 	std::cout << "Read length: " << readlen << std::endl;
 	myfile.close();
 }
-
-
