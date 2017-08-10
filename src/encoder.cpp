@@ -511,7 +511,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 void packbits()
 {
 	std::ifstream in_seq(outfile_seq);
-	std::ifstream in_noise(outfile_noise);
+	std::ifstream in_rev(infile_RC);
 	std::ofstream f_seq(outfile_seq+".tmp",std::ios::binary);
 	std::ofstream f_seq_tail(outfile_seq+".tail");
 
@@ -527,7 +527,7 @@ void packbits()
 	
 	in_seq.close();
 	in_seq.open(outfile_seq);
-	char dnabase[4];
+	char dnabase[8];
 	uint8_t dnabin;
 	for(uint64_t i = 0; i < file_len/4; i++)
 	{
@@ -545,6 +545,34 @@ void packbits()
 	in_seq.close();
 	remove(outfile_seq.c_str());
 	rename((outfile_seq+".tmp").c_str(),outfile_seq.c_str());		
+	
+	//rev
+	std::ofstream f_rev(infile_RC+".tmp",std::ios::binary);
+	std::ofstream f_rev_tail(infile_RC+".tail");
+	file_len=0;
+	while(in_rev >> std::noskipws >> c)
+		file_len++;
+	basetoint['d'] = 0;
+	basetoint['r'] = 1;
+	
+	in_rev.close();
+	in_rev.open(infile_RC);
+	for(uint64_t i = 0; i < file_len/8; i++)
+	{
+		in_rev.read(dnabase,8);
+		dnabin = 128*basetoint[dnabase[7]]+64*basetoint[dnabase[6]]+
+			 32*basetoint[dnabase[5]]+16*basetoint[dnabase[4]]+
+			 8*basetoint[dnabase[3]]+4*basetoint[dnabase[2]]+
+			 2*basetoint[dnabase[1]]+basetoint[dnabase[0]];
+		f_rev.write((char*)&dnabin,sizeof(uint8_t));
+	}
+	f_rev.close();
+	in_rev.read(dnabase,file_len%8);
+	for(int i=0; i<file_len%8;i++)
+		f_rev_tail << dnabase[i];
+	f_rev_tail.close();
+	remove(infile_RC.c_str());
+	rename((infile_RC+".tmp").c_str(),infile_RC.c_str());
 /*	
 	//noise
 	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);

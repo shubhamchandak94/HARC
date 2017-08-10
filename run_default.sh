@@ -76,18 +76,18 @@ compress()
 	rm $pathname/output/temppos.txt
 	
 	#compress and create tarball
-	7z a $pathname/output/read_pos.txt.7z $pathname/output/read_pos.txt -mmt=$num_thr
-	7z a $pathname/output/read_noise.txt.7z $pathname/output/read_noise.txt -mmt=$num_thr
+	./src/libbsc/bsc e $pathname/output/read_pos.txt $pathname/output/read_pos.txt.bsc -b64p -t$num_thr
+	./src/libbsc/bsc e $pathname/output/read_noise.txt $pathname/output/read_noise.txt.bsc -b64p -t$num_thr 
 	7z a $pathname/output/read_noisepos.txt.7z $pathname/output/read_noisepos.txt -mmt=$numt_thr
-	7z a $pathname/output/input_N.dna.7z $pathname/output/input_N.dna -mmt=$numt_thr
+	./src/libbsc/bsc e $pathname/output/input_N.dna $pathname/output/input_N.dna.bsc -b64p -t$num_thr
 	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
 	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
-	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -t1 #single thread to limit memory consumption
+	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b64p -t$num_thr 
 	rm $pathname/output/*.txt $pathname/output/*.dna  
 	if [[ $preserve_order == "True" ]];then
-		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
+		./src/libbsc/bsc e $pathname/output/read_order.bin $pathname/output/read_order.bin.bsc -b64p -t$num_thr
+		./src/libbsc/bsc e $pathname/output/read_order_N.bin $pathname/output/read_order_N.bin.bsc -b64p -t$num_thr
+		./src/libbsc/bsc e $pathname/output/read_order_N_pe.bin $pathname/output/read_order_N_pe.bin.bsc -b64p -t$num_thr
 		if [[ $preserve_quality == "True" ]];then
 			./src/merge_quality_N.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
@@ -116,27 +116,27 @@ decompress()
 	mkdir -p $pathname/output
 	tar -xf $filename -C $pathname/output
 	if [[ $preserve_order == "True" ]];then
-		if [ ! -f $pathname/output/read_order.bin.7z ];then
+		if [ ! -f $pathname/output/read_order.bin.bsc ];then
 			echo "Not compressed using -p flag. Order cannot be restored"
 			usage
 			exit 1
 		fi
 	fi
-	7z e $pathname/output/read_pos.txt.7z -o$pathname/output/
-	7z e $pathname/output/read_noise.txt.7z -o$pathname/output/
+	./src/libbsc/bsc d $pathname/output/read_pos.txt.bsc $pathname/output/read_pos.txt -t$num_thr
+	./src/libbsc/bsc d $pathname/output/read_noise.txt.bsc $pathname/output/read_noise.txt -t$num_thr
 	7z e $pathname/output/read_noisepos.txt.7z -o$pathname/output/
-	7z e $pathname/output/input_N.dna.7z -o$pathname/output/
+	./src/libbsc/bsc d $pathname/output/input_N.dna.bsc $pathname/output/input_N.dna -t$num_thr
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_rev.txt.7z -o$pathname/output/
-	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -t1
+	./src/libbsc/bsc d $pathname/output/read_seq.txt.bsc $pathname/output/read_seq.txt -t$num_thr
 	if [[ $preserve_order == "True" ]];then
 		readlen=$( cat $pathname/output/read_meta.txt )
 		echo "#define readlen $readlen" > src/config.h
 		echo "#define MAX_BIN_SIZE $memory" >> src/config.h
 		g++ src/decoder_preserve.cpp -O3 -march=native -std=c++11 -o src/decoder_preserve.out
-		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_order_N_pe.bin.7z -o$pathname/output/
+		./src/libbsc/bsc d $pathname/output/read_order.bin.bsc $pathname/output/read_order.bin -t$num_thr
+		./src/libbsc/bsc d $pathname/output/read_order_N.bin.bsc $pathname/output/read_order_N.bin -t$num_thr
+		./src/libbsc/bsc d $pathname/output/read_order_N_pe.bin.bsc $pathname/output/read_order_N_pe.bin -t$num_thr
 		./src/decoder_preserve.out $pathname
 		./src/merge_N.out $pathname
 		echo "Done!"

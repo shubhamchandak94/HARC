@@ -251,6 +251,9 @@ void unpackbits()
 	std::ifstream in_seq_tail(infile_seq+".tail");
 //	std::ofstream f_noise(infile_noise+".tmp");
 //	std::ifstream in_noise_tail(infile_noise+".tail");
+	std::ifstream in_rev(infile_rev,std::ios::binary);
+	std::ofstream f_rev(infile_rev+".tmp");
+	std::ifstream in_rev_tail(infile_rev+".tail");
 	char inttobase[4];
 	inttobase[0] = 'A';
 	inttobase[1] = 'C';
@@ -277,6 +280,37 @@ void unpackbits()
 	remove(infile_seq.c_str());
 	remove((infile_seq+".tail").c_str());
 	rename((infile_seq+".tmp").c_str(),infile_seq.c_str());		
+	
+	//rev
+	inttobase[0] = 'd';
+	inttobase[1] = 'r';
+	
+	in_rev.read((char*)&dnabin,sizeof(uint8_t));
+	while(!in_rev.eof())
+	{	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		dnabin/=2; 	
+		f_rev << inttobase[dnabin%2];
+		in_rev.read((char*)&dnabin,sizeof(uint8_t));
+	}
+	in_rev.close();
+	f_rev << in_rev_tail.rdbuf();
+	in_rev_tail.close();
+	f_rev.close();
+	remove((infile_rev+".tail").c_str());
+	rename((infile_rev+".tmp").c_str(),infile_rev.c_str());		
 /*	
 	//noise
 	inttobase[0] = '0';
