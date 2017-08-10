@@ -18,7 +18,7 @@ void merge_N();
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	outfile = basedir + "/output.dna";
+	outfile = basedir + "/output/output.dna";
 	infile = basedir + "/output/output_clean.dna";
 	infile_N = basedir + "/output/input_N.dna";
 	infile_order_N = basedir + "/output/read_order_N.bin";

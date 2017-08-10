@@ -7,6 +7,7 @@
 #include <string>
 #include <bitset>
 #include <cstdio>
+#include <omp.h>
 #include "config.h"
 
 std::string outfile;
@@ -20,6 +21,7 @@ std::string infile_rev;
 std::string infile_order;
 std::string infile_N;
 std::string infile_order_N_pe;
+std::string infile_singleton;
 
 long chartolong[128];
 char dec_noise[128][128];
@@ -73,7 +75,9 @@ int main(int argc, char** argv)
 	infile_order = basedir + "/output/read_order.bin";
 	infile_N = basedir + "/output/input_N.dna";
 	infile_order_N_pe =  basedir + "/output/read_order_N_pe.bin";
+	infile_singleton = basedir + "/output/read_singleton.txt";
 //	getDataParams(); //populate readlen
+	omp_set_num_threads(num_thr);
 	setglobalarrays();
 	decode();
 	restore_order_N();
@@ -85,75 +89,115 @@ void decode()
 {
 	std::cout << "Decoding reads\n";
 	unpackbits();
-	std::ofstream f(outfile,std::ios::binary);
-	std::ifstream f_seq(infile_seq);
-	std::ifstream f_pos(infile_pos);
-	std::ifstream f_noise(infile_noise);
-	std::ifstream f_noisepos(infile_noisepos);
-	std::ifstream f_rev(infile_rev);
-	std::ofstream f_N_tmp(infile_N+".tmp");	
+	uint32_t numreads_thr[num_thr];
+	#pragma omp parallel
+	{
+	int tid = omp_get_thread_num();
+	numreads_thr[tid] = 0;
+	for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
+	{
+		std::ofstream f(outfile+'.'+std::to_string(tid_e),std::ios::binary);
+		std::ifstream f_seq(infile_seq+'.'+std::to_string(tid_e));
+		std::ifstream f_pos(infile_pos+'.'+std::to_string(tid_e));
+		std::ifstream f_noise(infile_noise+'.'+std::to_string(tid_e));
+		std::ifstream f_noisepos(infile_noisepos+'.'+std::to_string(tid_e));
+		std::ifstream f_rev(infile_rev+'.'+std::to_string(tid_e));
+		std::ofstream f_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
 	
-	char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
+		char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
+		std::bitset<2*readlen> b;
+		currentread[readlen] = '\0';
+		revread[readlen] = '\0';
+		ref[readlen] = '\0';
+		std::string noise;
+		char c;
+		long pos; 
+
+		while(f_pos >> std::noskipws >> c)//don't skip whitespaces
+		{
+			pos = (unsigned char)(c);
+			if(pos!=0)
+			{
+				for(int i = 0; i <= readlen - 1 - pos;  i++)
+					ref[i] = ref[i+pos];
+				f_seq.get(ref+readlen-pos,pos+1);
+			}
+			strcpy(currentread,ref);	
+			int prevnoisepos = 0,noisepos;
+			std::getline(f_noise,noise);
+			for(int i = 0; i < noise.size(); i++)
+			{
+				c = f_noisepos.get();
+				noisepos = (unsigned char)c + prevnoisepos;
+				currentread[noisepos] = dec_noise[ref[noisepos]][noise[i]];
+				prevnoisepos = noisepos;	
+			}
+			c = f_rev.get();
+			if(strchr(currentread,'N')!=NULL)
+			{
+				if(c == 'd')
+					f_N_tmp << currentread<<"\n";
+				else
+				{
+					reverse_complement(currentread,revread);
+					f_N_tmp << revread<<"\n";
+				}
+			}
+			else
+			{
+				numreads_thr[tid]++;
+				if(c == 'd')
+				{
+					b = chartobitset(currentread);
+					f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+				}
+				else
+				{
+					reverse_complement(currentread,revread);
+					b = chartobitset(revread);
+					f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+				}
+			}
+		}
+		f.close();
+		f_seq.close();
+		f_pos.close();
+		f_noise.close();
+		f_noisepos.close();
+		f_rev.close();
+		f_N_tmp.close();
+	}
+	}
+	numreads = 0;
+	for(int tid = 0; tid < num_thr; tid++)
+		numreads += numreads_thr[tid];
+	std::ofstream f(outfile,std::ios::binary);
+	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
+	{
+		std::ifstream f_in(outfile+'.'+std::to_string(tid_e),std::ios::binary);
+		f << f_in.rdbuf();	
+		f_in.close();
+	}
+	std::ifstream f_singleton(infile_singleton);
+	char currentread[readlen+1];
 	std::bitset<2*readlen> b;
 	currentread[readlen] = '\0';
-	revread[readlen] = '\0';
-	ref[readlen] = '\0';
-	std::string noise;
-	char c;
-	long pos; 
-
-	while(f_pos >> std::noskipws >> c)//don't skip whitespaces
-	{
-		pos = (unsigned char)(c);
-		if(pos!=0)
-		{
-			for(int i = 0; i <= readlen - 1 - pos;  i++)
-				ref[i] = ref[i+pos];
-			f_seq.get(ref+readlen-pos,pos+1);
-		}
-		strcpy(currentread,ref);	
-		int prevnoisepos = 0,noisepos;
-		std::getline(f_noise,noise);
-		for(int i = 0; i < noise.size(); i++)
-		{
-			c = f_noisepos.get();
-			noisepos = (unsigned char)c + prevnoisepos;
-			currentread[noisepos] = dec_noise[ref[noisepos]][noise[i]];
-			prevnoisepos = noisepos;	
-		}
-		c = f_rev.get();
-		if(strchr(currentread,'N')!=NULL)
-		{
-			if(c == 'd')
-				f_N_tmp << currentread<<"\n";
-			else
-			{
-				reverse_complement(currentread,revread);
-				f_N_tmp << revread<<"\n";
-			}
-		}
-		else
-		{
-			numreads++;
-			if(c == 'd')
-			{
-				b = chartobitset(currentread);
-				f.write((char*)&b,sizeof(std::bitset<2*readlen>));
-			}
-			else
-			{
-				reverse_complement(currentread,revread);
-				b = chartobitset(revread);
-				f.write((char*)&b,sizeof(std::bitset<2*readlen>));
-			}
-		}
+	f_singleton.read(currentread,readlen);
+	while(!f_singleton.eof())
+	{	
+		numreads++;
+		b = chartobitset(currentread);
+		f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+		f_singleton.read(currentread,readlen);
 	}
-	f.close();
-	f_seq.close();
-	f_pos.close();
-	f_noise.close();
-	f_noisepos.close();
-	f_rev.close();
+	f_singleton.close();
+	std::ofstream f_N_tmp(infile_N+".tmp",std::ios::binary);	
+	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
+	{
+		std::ifstream in_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
+		f_N_tmp << in_N_tmp.rdbuf();			
+		in_N_tmp.close();
+	}
 	std::ifstream f_N(infile_N);
 	f_N_tmp << f_N.rdbuf();
 	f_N_tmp.close();
@@ -245,15 +289,83 @@ void restore_order()
 
 void unpackbits()
 {
-	std::ifstream in_seq(infile_seq,std::ios::binary);
-//	std::ifstream in_noise(infile_noise,std::ios::binary);
-	std::ofstream f_seq(infile_seq+".tmp");
-	std::ifstream in_seq_tail(infile_seq+".tail");
-//	std::ofstream f_noise(infile_noise+".tmp");
-//	std::ifstream in_noise_tail(infile_noise+".tail");
-	std::ifstream in_rev(infile_rev,std::ios::binary);
-	std::ofstream f_rev(infile_rev+".tmp");
-	std::ifstream in_rev_tail(infile_rev+".tail");
+	#pragma omp parallel
+	{
+	int tid = omp_get_thread_num();
+	for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
+	{
+		std::ofstream f_seq(infile_seq+'.'+std::to_string(tid_e)+".tmp");
+		std::ofstream f_rev(infile_rev+'.'+std::to_string(tid_e)+".tmp");
+		std::ifstream in_seq(infile_seq+'.'+std::to_string(tid_e),std::ios::binary);
+		std::ifstream in_seq_tail(infile_seq+'.'+std::to_string(tid_e)+".tail");
+		std::ifstream in_rev(infile_rev+'.'+std::to_string(tid_e),std::ios::binary);
+		std::ifstream in_rev_tail(infile_rev+'.'+std::to_string(tid_e)+".tail");
+		char inttobase[4];
+		inttobase[0] = 'A';
+		inttobase[1] = 'C';
+		inttobase[2] = 'G';
+		inttobase[3] = 'T';
+		
+		uint8_t dnabin;
+		in_seq.read((char*)&dnabin,sizeof(uint8_t));
+		while(!in_seq.eof())
+		{	
+			f_seq << inttobase[dnabin%4];
+			dnabin/=4; 	
+			f_seq << inttobase[dnabin%4];
+			dnabin/=4; 	
+			f_seq << inttobase[dnabin%4];
+			dnabin/=4; 	
+			f_seq << inttobase[dnabin%4];
+			in_seq.read((char*)&dnabin,sizeof(uint8_t));
+		}
+		in_seq.close();
+		f_seq << in_seq_tail.rdbuf();
+		in_seq_tail.close();
+		
+		//rev
+		inttobase[0] = 'd';
+		inttobase[1] = 'r';
+		
+		in_rev.read((char*)&dnabin,sizeof(uint8_t));
+		while(!in_rev.eof())
+		{	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			dnabin/=2; 	
+			f_rev << inttobase[dnabin%2];
+			in_rev.read((char*)&dnabin,sizeof(uint8_t));
+		}
+		in_rev.close();
+		f_rev << in_rev_tail.rdbuf();
+		in_rev_tail.close();
+		
+		f_seq.close();
+		f_rev.close();
+		remove((infile_seq+'.'+std::to_string(tid_e)).c_str());
+		remove((infile_rev+'.'+std::to_string(tid_e)).c_str());
+		remove((infile_seq+'.'+std::to_string(tid_e)+".tail").c_str());
+		rename((infile_seq+'.'+std::to_string(tid_e)+".tmp").c_str(),(infile_seq+'.'+std::to_string(tid_e)).c_str());
+		remove((infile_rev+'.'+std::to_string(tid_e)+".tail").c_str());
+		rename((infile_rev+'.'+std::to_string(tid_e)+".tmp").c_str(),(infile_rev+'.'+std::to_string(tid_e)).c_str());	
+	}//for end
+	}//parallel end
+	
+	//singleton
+	std::ifstream in_singleton(infile_singleton,std::ios::binary);
+	std::ofstream f_singleton(infile_singleton+".tmp");
+	std::ifstream in_singleton_tail(infile_singleton+".tail");
 	char inttobase[4];
 	inttobase[0] = 'A';
 	inttobase[1] = 'C';
@@ -261,82 +373,25 @@ void unpackbits()
 	inttobase[3] = 'T';
 	
 	uint8_t dnabin;
-	in_seq.read((char*)&dnabin,sizeof(uint8_t));
-	while(!in_seq.eof())
+	in_singleton.read((char*)&dnabin,sizeof(uint8_t));
+	while(!in_singleton.eof())
 	{	
-		f_seq << inttobase[dnabin%4];
+		f_singleton << inttobase[dnabin%4];
 		dnabin/=4; 	
-		f_seq << inttobase[dnabin%4];
+		f_singleton << inttobase[dnabin%4];
 		dnabin/=4; 	
-		f_seq << inttobase[dnabin%4];
+		f_singleton << inttobase[dnabin%4];
 		dnabin/=4; 	
-		f_seq << inttobase[dnabin%4];
-		in_seq.read((char*)&dnabin,sizeof(uint8_t));
+		f_singleton << inttobase[dnabin%4];
+		in_singleton.read((char*)&dnabin,sizeof(uint8_t));
 	}
-	in_seq.close();
-	f_seq << in_seq_tail.rdbuf();
-	in_seq_tail.close();
-	f_seq.close();
-	remove(infile_seq.c_str());
-	remove((infile_seq+".tail").c_str());
-	rename((infile_seq+".tmp").c_str(),infile_seq.c_str());		
-	
-	//rev
-	inttobase[0] = 'd';
-	inttobase[1] = 'r';
-	
-	in_rev.read((char*)&dnabin,sizeof(uint8_t));
-	while(!in_rev.eof())
-	{	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		dnabin/=2; 	
-		f_rev << inttobase[dnabin%2];
-		in_rev.read((char*)&dnabin,sizeof(uint8_t));
-	}
-	in_rev.close();
-	f_rev << in_rev_tail.rdbuf();
-	in_rev_tail.close();
-	f_rev.close();
-	remove((infile_rev+".tail").c_str());
-	rename((infile_rev+".tmp").c_str(),infile_rev.c_str());		
-/*	
-	//noise
-	inttobase[0] = '0';
-	inttobase[1] = '1';
-	inttobase[2] = '2';
-	inttobase[3] = '\n';
-	
-	in_noise.read((char*)&dnabin,sizeof(uint8_t));
-	while(!in_noise.eof())
-	{	
-		f_noise << inttobase[dnabin%4];
-		dnabin/=4; 	
-		f_noise << inttobase[dnabin%4];
-		dnabin/=4; 	
-		f_noise << inttobase[dnabin%4];
-		dnabin/=4; 	
-		f_noise << inttobase[dnabin%4];
-		in_noise.read((char*)&dnabin,sizeof(uint8_t));
-	}
-	in_noise.close();
-	f_noise << in_noise_tail.rdbuf();
-	in_noise_tail.close();
-	f_noise.close();
-	remove((infile_noise+".tail").c_str());
-	rename((infile_noise+".tmp").c_str(),infile_noise.c_str());		
-*/	
+	in_singleton.close();
+	f_singleton << in_singleton_tail.rdbuf();
+	in_singleton_tail.close();
+	f_singleton.close();
+	remove(infile_singleton.c_str());
+	remove((infile_singleton+".tail").c_str());
+	rename((infile_singleton+".tmp").c_str(),infile_singleton.c_str());		
 	return;
 }
 

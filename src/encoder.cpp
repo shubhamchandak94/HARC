@@ -517,36 +517,6 @@ void packbits()
 		remove((outfile_seq+'.'+std::to_string(tid)).c_str());
 		rename((outfile_seq+'.'+std::to_string(tid)+".tmp").c_str(),(outfile_seq+'.'+std::to_string(tid)).c_str());		
 		
-		//singleton
-		std::ifstream in_singleton(outfile_singleton+'.'+std::to_string(tid));
-		std::ofstream f_singleton(outfile_singleton+'.'+std::to_string(tid)+".tmp",std::ios::binary);
-		std::ofstream f_singleton_tail(outfile_singleton+'.'+std::to_string(tid)+".tail");
-		while(in_singleton >> std::noskipws >> c)
-			file_len++;
-		basetoint['A'] = 0;
-		basetoint['C'] = 1;
-		basetoint['G'] = 2;
-		basetoint['T'] = 3;
-		
-		in_singleton.close();
-		in_singleton.open(outfile_singleton);
-		for(uint64_t i = 0; i < file_len/4; i++)
-		{
-			in_singleton.read(dnabase,4);
-			
-			dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
-				basetoint[dnabase[1]]+basetoint[dnabase[0]];
-			f_singleton.write((char*)&dnabin,sizeof(uint8_t));
-		}
-		f_singleton.close();
-		in_singleton.read(dnabase,file_len%4);
-		for(int i=0; i<file_len%4;i++)
-			f_singleton_tail << dnabase[i];
-		f_singleton_tail.close();
-		in_singleton.close();
-		remove((outfile_singleton+'.'+std::to_string(tid)).c_str());
-		rename((outfile_singleton+'.'+std::to_string(tid)+".tmp").c_str(),(outfile_singleton+'.'+std::to_string(tid)).c_str());		
-		
 		//rev
 		std::ifstream in_rev(infile_RC+'.'+std::to_string(tid));
 		std::ofstream f_rev(infile_RC+'.'+std::to_string(tid)+".tmp",std::ios::binary);
@@ -576,6 +546,39 @@ void packbits()
 		remove((infile_RC+'.'+std::to_string(tid)).c_str());
 		rename((infile_RC+'.'+std::to_string(tid)+".tmp").c_str(),(infile_RC+'.'+std::to_string(tid)).c_str());
 	}
+	//singleton
+	std::ifstream in_singleton(outfile_singleton);
+	std::ofstream f_singleton(outfile_singleton+".tmp",std::ios::binary);
+	std::ofstream f_singleton_tail(outfile_singleton+".tail");
+	uint64_t file_len=0;
+	char c;
+	while(in_singleton >> std::noskipws >> c)
+		file_len++;
+	uint8_t basetoint[128];
+	basetoint['A'] = 0;
+	basetoint['C'] = 1;
+	basetoint['G'] = 2;
+	basetoint['T'] = 3;
+	in_singleton.close();
+	in_singleton.open(outfile_singleton);
+	char dnabase[8];
+	uint8_t dnabin;
+	for(uint64_t i = 0; i < file_len/4; i++)
+	{
+		in_singleton.read(dnabase,4);
+		
+		dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
+			basetoint[dnabase[1]]+basetoint[dnabase[0]];
+		f_singleton.write((char*)&dnabin,sizeof(uint8_t));
+	}
+	f_singleton.close();
+	in_singleton.read(dnabase,file_len%4);
+	for(int i=0; i<file_len%4;i++)
+		f_singleton_tail << dnabase[i];
+	f_singleton_tail.close();
+	in_singleton.close();
+	remove((outfile_singleton).c_str());
+	rename((outfile_singleton+".tmp").c_str(),(outfile_singleton).c_str());		
 /*	
 	//noise
 	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);
