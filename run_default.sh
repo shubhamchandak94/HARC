@@ -74,16 +74,45 @@ compress()
 	rm $pathname/output/temp.dna
 	rm $pathname/output/tempflag.txt
 	rm $pathname/output/temppos.txt
+
+	#tar files produced by the threads
+	mkdir -p $pathname/output/read_noise
+	mv $pathname/output/read_noise.txt* $pathname/output/read_noise
+	mkdir -p $pathname/output/read_noisepos
+	mv $pathname/output/read_noisepos.txt* $pathname/output/read_noisepos
+	mkdir -p $pathname/output/read_pos
+	mv $pathname/output/read_pos.txt* $pathname/output/read_pos
+	mkdir -p $pathname/output/read_seq
+	mv $pathname/output/read_seq.txt* $pathname/output/read_seq
+	mkdir -p $pathname/output/read_rev
+	mv $pathname/output/read_rev.txt* $pathname/output/read_rev
+	mkdir -p $pathname/output/read_singleton
+	mv $pathname/output/read_singleton.txt* $pathname/output/read_singleton
+
+	tar -cf	$pathname/output/read_noise.tar -C $pathname/output/read_noise .
+	tar -cf	$pathname/output/read_noisepos.tar -C $pathname/output/read_noisepos .
+	tar -cf	$pathname/output/read_pos.tar -C $pathname/output/read_pos .
+	tar -cf	$pathname/output/read_seq.tar -C $pathname/output/read_seq .
+	tar -cf	$pathname/output/read_rev.tar -C $pathname/output/read_rev .
+	tar -cf	$pathname/output/read_singleton.tar -C $pathname/output/read_singleton .
+	
+	rm -r $pathname/output/read_noise
+	rm -r $pathname/output/read_noisepos
+	rm -r $pathname/output/read_pos
+	rm -r $pathname/output/read_seq
+	rm -r $pathname/output/read_rev
+	rm -r $pathname/output/read_singleton
 	
 	#compress and create tarball
-	./src/libbsc/bsc e $pathname/output/read_pos.txt $pathname/output/read_pos.txt.bsc -b64p -t$num_thr
-	./src/libbsc/bsc e $pathname/output/read_noise.txt $pathname/output/read_noise.txt.bsc -b64p -t$num_thr 
-	7z a $pathname/output/read_noisepos.txt.7z $pathname/output/read_noisepos.txt -mmt=$numt_thr
+	./src/libbsc/bsc e $pathname/output/read_pos.tar $pathname/output/read_pos.tar.bsc -b64p -t$num_thr
+	./src/libbsc/bsc e $pathname/output/read_noise.tar $pathname/output/read_noise.tar.bsc -b64p -t$num_thr 
+	7z a $pathname/output/read_noisepos.tar.7z $pathname/output/read_noisepos.tar -mmt=$numt_thr
 	./src/libbsc/bsc e $pathname/output/input_N.dna $pathname/output/input_N.dna.bsc -b64p -t$num_thr
 	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
-	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
-	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b64p -t$num_thr 
-	rm $pathname/output/*.txt $pathname/output/*.dna  
+	7z a $pathname/output/read_rev.tar.7z $pathname/output/read_rev.tar -mmt=$num_thr
+	./src/libbsc/bsc e $pathname/output/read_seq.tar $pathname/output/read_seq.tar.bsc -b64p -t$num_thr 
+	./src/libbsc/bsc e $pathname/output/read_singleton.tar $pathname/output/read_singleton.tar.bsc -b64p -t$num_thr 
+	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar 
 	if [[ $preserve_order == "True" ]];then
 		./src/libbsc/bsc e $pathname/output/read_order.bin $pathname/output/read_order.bin.bsc -b64p -t$num_thr
 		./src/libbsc/bsc e $pathname/output/read_order_N.bin $pathname/output/read_order_N.bin.bsc -b64p -t$num_thr

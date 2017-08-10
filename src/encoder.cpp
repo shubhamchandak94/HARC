@@ -57,6 +57,7 @@ std::string outfile_meta;
 std::string outfile_pos;
 std::string outfile_noise;
 std::string outfile_noisepos;
+std::string outfile_singleton;
 std::string infile_order;
 std::string outdir;
 std::string outfile_order_N_pe;
@@ -117,6 +118,7 @@ int main(int argc, char** argv)
 	outfile_pos = basedir + "/output/read_pos.txt";
 	outfile_noise = basedir + "/output/read_noise.txt";
 	outfile_noisepos = basedir + "/output/read_noisepos.txt";
+	outfile_singleton = basedir + "/output/read_singleton.txt";
 	outfile_order_N_pe = basedir + "/output/read_order_N_pe.bin";//pe - post encoding
 	
 	omp_set_num_threads(num_thr);
@@ -422,54 +424,26 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	}
 
 	//Combine files produced by the threads
-	std::ofstream f_seq(outfile_seq);
-	std::ofstream f_pos(outfile_pos);
-	std::ofstream f_noise(outfile_noise);
-	std::ofstream f_noisepos(outfile_noisepos);
-	std::ofstream f_RC(infile_RC);
 	std::ofstream f_order(infile_order);
 	std::ofstream f_order_N_pe(outfile_order_N_pe,std::ios::binary|std::ofstream::app);	
 	std::ofstream f_meta(outfile_meta);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
-		std::ifstream in_seq(outfile_seq+'.'+std::to_string(tid));
-		std::ifstream in_pos(outfile_pos+'.'+std::to_string(tid));
-		std::ifstream in_noise(outfile_noise+'.'+std::to_string(tid));
-		std::ifstream in_noisepos(outfile_noisepos+'.'+std::to_string(tid));
 		std::ifstream in_order(infile_order+'.'+std::to_string(tid));
 		std::ifstream in_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid));
-		std::ifstream in_RC(infile_RC+'.'+std::to_string(tid));
-		f_seq << in_seq.rdbuf();
-		f_pos << in_pos.rdbuf();
-		f_noise << in_noise.rdbuf();
-		f_noisepos << in_noisepos.rdbuf();
 		f_order << in_order.rdbuf();
-	 	f_RC << in_RC.rdbuf();
 		f_order_N_pe << in_order_N_pe.rdbuf();
-		remove((outfile_seq+'.'+std::to_string(tid)).c_str());
-		remove((outfile_pos+'.'+std::to_string(tid)).c_str());
-		remove((outfile_noise+'.'+std::to_string(tid)).c_str());
-		remove((outfile_noisepos+'.'+std::to_string(tid)).c_str());
 		remove((infile_order+'.'+std::to_string(tid)).c_str());
 		remove((outfile_order_N_pe+'.'+std::to_string(tid)).c_str());
-		remove((infile_RC+'.'+std::to_string(tid)).c_str());
 	}
 	f_meta << readlen << "\n";
-	f_seq.close();
 	f_meta.close();
-	f_pos.close();
-	f_noise.close();
-	f_noisepos.close();
 	f_order.close();
 	f_order_N_pe.close();
-	f_RC.close();
 	//write remaining singleton reads now
-	f_seq.open(outfile_seq,std::ofstream::app);
-	f_pos.open(outfile_pos,std::ofstream::app);
-	f_noise.open(outfile_noise,std::ofstream::app);
+	std::ofstream f_singleton(outfile_singleton);
 	f_order.open(infile_order,std::ios::binary|std::ofstream::app);
 	f_order_N_pe.open(outfile_order_N_pe,std::ios::binary|std::ofstream::app);
-	f_RC.open(infile_RC,std::ofstream::app);
 	std::ofstream f_N(infile_N);
 	char c = readlen;
 	std::string s;
@@ -478,12 +452,9 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 		if(remainingreads[i] == 1)
 		{
 			matched_s--;
-			f_pos << c;
 			f_order.write((char*)&order_s[i],sizeof(uint32_t));
-			f_RC << 'd';
-			f_noise << '\n';
 			s = bitsettostring(read[i]);
-			f_seq << s;
+			f_singleton << s;
 		}
 	uint32_t matched_N = numreads_N;
 	for (uint32_t i = numreads_s; i < numreads_s+numreads_N; i++)
@@ -493,13 +464,10 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 			f_N << bitsettostring(read[i]) << "\n";
 			f_order_N_pe.write((char*)&order_s[i],sizeof(uint32_t));
 		}
-	f_seq.close();
-	f_pos.close();
-	f_noise.close();
 	f_order.close();
 	f_order_N_pe.close();
-	f_RC.close();
 	f_N.close();
+	f_singleton.close();
 	delete[] remainingreads;
 	packbits();
 	std::cout << "Encoding done:\n"; 
@@ -510,69 +478,104 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 
 void packbits()
 {
-	std::ifstream in_seq(outfile_seq);
-	std::ifstream in_rev(infile_RC);
-	std::ofstream f_seq(outfile_seq+".tmp",std::ios::binary);
-	std::ofstream f_seq_tail(outfile_seq+".tail");
 
-	uint64_t file_len=0;
-	char c;
-	while(in_seq >> std::noskipws >> c)
-		file_len++;
-	uint8_t basetoint[128];
-	basetoint['A'] = 0;
-	basetoint['C'] = 1;
-	basetoint['G'] = 2;
-	basetoint['T'] = 3;
-	
-	in_seq.close();
-	in_seq.open(outfile_seq);
-	char dnabase[8];
-	uint8_t dnabin;
-	for(uint64_t i = 0; i < file_len/4; i++)
+	#pragma omp parallel
 	{
-		in_seq.read(dnabase,4);
+		int tid = omp_get_thread_num();
+		//seq
+		std::ifstream in_seq(outfile_seq+'.'+std::to_string(tid));
+		std::ofstream f_seq(outfile_seq+'.'+std::to_string(tid)+".tmp",std::ios::binary);
+		std::ofstream f_seq_tail(outfile_seq+'.'+std::to_string(tid)+".tail");
+		uint64_t file_len=0;
+		char c;
+		while(in_seq >> std::noskipws >> c)
+			file_len++;
+		uint8_t basetoint[128];
+		basetoint['A'] = 0;
+		basetoint['C'] = 1;
+		basetoint['G'] = 2;
+		basetoint['T'] = 3;
 		
-		dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
-			basetoint[dnabase[1]]+basetoint[dnabase[0]];
-		f_seq.write((char*)&dnabin,sizeof(uint8_t));
+		in_seq.close();
+		in_seq.open(outfile_seq+'.'+std::to_string(tid));
+		char dnabase[8];
+		uint8_t dnabin;
+		for(uint64_t i = 0; i < file_len/4; i++)
+		{
+			in_seq.read(dnabase,4);
+			
+			dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
+				basetoint[dnabase[1]]+basetoint[dnabase[0]];
+			f_seq.write((char*)&dnabin,sizeof(uint8_t));
+		}
+		f_seq.close();
+		in_seq.read(dnabase,file_len%4);
+		for(int i=0; i<file_len%4;i++)
+			f_seq_tail << dnabase[i];
+		f_seq_tail.close();
+		in_seq.close();
+		remove((outfile_seq+'.'+std::to_string(tid)).c_str());
+		rename((outfile_seq+'.'+std::to_string(tid)+".tmp").c_str(),(outfile_seq+'.'+std::to_string(tid)).c_str());		
+		
+		//singleton
+		std::ifstream in_singleton(outfile_singleton+'.'+std::to_string(tid));
+		std::ofstream f_singleton(outfile_singleton+'.'+std::to_string(tid)+".tmp",std::ios::binary);
+		std::ofstream f_singleton_tail(outfile_singleton+'.'+std::to_string(tid)+".tail");
+		while(in_singleton >> std::noskipws >> c)
+			file_len++;
+		basetoint['A'] = 0;
+		basetoint['C'] = 1;
+		basetoint['G'] = 2;
+		basetoint['T'] = 3;
+		
+		in_singleton.close();
+		in_singleton.open(outfile_singleton);
+		for(uint64_t i = 0; i < file_len/4; i++)
+		{
+			in_singleton.read(dnabase,4);
+			
+			dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
+				basetoint[dnabase[1]]+basetoint[dnabase[0]];
+			f_singleton.write((char*)&dnabin,sizeof(uint8_t));
+		}
+		f_singleton.close();
+		in_singleton.read(dnabase,file_len%4);
+		for(int i=0; i<file_len%4;i++)
+			f_singleton_tail << dnabase[i];
+		f_singleton_tail.close();
+		in_singleton.close();
+		remove((outfile_singleton+'.'+std::to_string(tid)).c_str());
+		rename((outfile_singleton+'.'+std::to_string(tid)+".tmp").c_str(),(outfile_singleton+'.'+std::to_string(tid)).c_str());		
+		
+		//rev
+		std::ifstream in_rev(infile_RC+'.'+std::to_string(tid));
+		std::ofstream f_rev(infile_RC+'.'+std::to_string(tid)+".tmp",std::ios::binary);
+		std::ofstream f_rev_tail(infile_RC+'.'+std::to_string(tid)+".tail");
+		file_len=0;
+		while(in_rev >> std::noskipws >> c)
+			file_len++;
+		basetoint['d'] = 0;
+		basetoint['r'] = 1;
+		
+		in_rev.close();
+		in_rev.open(infile_RC+'.'+std::to_string(tid));
+		for(uint64_t i = 0; i < file_len/8; i++)
+		{
+			in_rev.read(dnabase,8);
+			dnabin = 128*basetoint[dnabase[7]]+64*basetoint[dnabase[6]]+
+				 32*basetoint[dnabase[5]]+16*basetoint[dnabase[4]]+
+				 8*basetoint[dnabase[3]]+4*basetoint[dnabase[2]]+
+				 2*basetoint[dnabase[1]]+basetoint[dnabase[0]];
+			f_rev.write((char*)&dnabin,sizeof(uint8_t));
+		}
+		f_rev.close();
+		in_rev.read(dnabase,file_len%8);
+		for(int i=0; i<file_len%8;i++)
+			f_rev_tail << dnabase[i];
+		f_rev_tail.close();
+		remove((infile_RC+'.'+std::to_string(tid)).c_str());
+		rename((infile_RC+'.'+std::to_string(tid)+".tmp").c_str(),(infile_RC+'.'+std::to_string(tid)).c_str());
 	}
-	f_seq.close();
-	in_seq.read(dnabase,file_len%4);
-	for(int i=0; i<file_len%4;i++)
-		f_seq_tail << dnabase[i];
-	f_seq_tail.close();
-	in_seq.close();
-	remove(outfile_seq.c_str());
-	rename((outfile_seq+".tmp").c_str(),outfile_seq.c_str());		
-	
-	//rev
-	std::ofstream f_rev(infile_RC+".tmp",std::ios::binary);
-	std::ofstream f_rev_tail(infile_RC+".tail");
-	file_len=0;
-	while(in_rev >> std::noskipws >> c)
-		file_len++;
-	basetoint['d'] = 0;
-	basetoint['r'] = 1;
-	
-	in_rev.close();
-	in_rev.open(infile_RC);
-	for(uint64_t i = 0; i < file_len/8; i++)
-	{
-		in_rev.read(dnabase,8);
-		dnabin = 128*basetoint[dnabase[7]]+64*basetoint[dnabase[6]]+
-			 32*basetoint[dnabase[5]]+16*basetoint[dnabase[4]]+
-			 8*basetoint[dnabase[3]]+4*basetoint[dnabase[2]]+
-			 2*basetoint[dnabase[1]]+basetoint[dnabase[0]];
-		f_rev.write((char*)&dnabin,sizeof(uint8_t));
-	}
-	f_rev.close();
-	in_rev.read(dnabase,file_len%8);
-	for(int i=0; i<file_len%8;i++)
-		f_rev_tail << dnabase[i];
-	f_rev_tail.close();
-	remove(infile_RC.c_str());
-	rename((infile_RC+".tmp").c_str(),infile_RC.c_str());
 /*	
 	//noise
 	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);
