@@ -144,7 +144,7 @@ decompress()
 	mkdir -p $pathname/output
 	tar -xf $filename -C $pathname/output
 	if [[ $preserve_order == "True" ]];then
-		if [ ! -f $pathname/output/read_order.bin.bsc ];then
+		if [ ! -f $pathname/output/read_order.bin.7z ];then
 			echo "Not compressed using -p flag. Order cannot be restored"
 			usage
 			exit 1
