@@ -45,9 +45,9 @@ compress()
 	echo "*** Preprocessing ***"
 	echo $filename
 	if [[ $preserve_quality == "True" ]];then
-		./src/preprocess_quality.out $filename $pathname
+		./src/preprocess_quality.out $filename $pathname $num_thr
 	else
-		./src/preprocess.out $filename $pathname
+		./src/preprocess.out $filename $pathname $num_thr
 	fi
 	readlen="$(head $pathname/input_clean.dna | wc -L)"
 	if (($readlen > 256));then
@@ -55,7 +55,10 @@ compress()
 		exit 1
 	fi
 	echo "#define maxmatch $((readlen/2))" > src/config.h
+
 	echo "#define thresh $reorder_thresh" >> src/config.h
+
+	echo "#define thresh_s 24" >> src/config.h
 	echo "#define numdict 2" >> src/config.h
 	echo "#define maxsearch 1000" >> src/config.h
 	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
@@ -66,7 +69,7 @@ compress()
 	echo "#define readlen $readlen" >> src/config.h
 	echo "#define num_thr $num_thr" >> src/config.h
 
-	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
+	g++ src/reorder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
 	mkdir -p $pathname/output/ 
 	./src/reorder.out $pathname
 	mv $pathname/input_N.dna $pathname/output/input_N.dna
@@ -76,22 +79,24 @@ compress()
 		mv $pathname/input_N.quality $pathname/output/input_N.quality
 		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
 	fi
-	g++ src/encoder.cpp -march=native -O3 -fopenmp -std=c++11 -o src/encoder.out
+
+	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname $denoise_thresh
 	
 	#remove temporary files
 	rm $pathname/output/temp.dna
-	rm $pathname/output/tempflag.txt
+	#rm $pathname/output/tempflag.txt
 	rm $pathname/output/temppos.txt
 	
 	#compress and create tarball
 	7z a $pathname/output/read_pos.txt.7z $pathname/output/read_pos.txt -mmt=$num_thr
 	7z a $pathname/output/read_noise.txt.7z $pathname/output/read_noise.txt -mmt=$num_thr
+	7z a $pathname/output/tempflag.txt.7z $pathname/output/tempflag.txt -mmt=$num_thr
 	7z a $pathname/output/read_noisepos.txt.7z $pathname/output/read_noisepos.txt -mmt=$numt_thr
 	7z a $pathname/output/input_N.dna.7z $pathname/output/input_N.dna -mmt=$numt_thr
 	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
 	7z a $pathname/output/read_rev.txt.7z $pathname/output/read_rev.txt -mmt=$num_thr
-	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -t1 #single threaded mode to limit memory consumption
+	./src/libbsc/bsc e $pathname/output/read_seq.txt $pathname/output/read_seq.txt.bsc -b512p -t1 #single thread to limit memory consumption
 	rm $pathname/output/*.txt $pathname/output/*.dna  
 	if [[ $preserve_order == "True" ]];then
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
@@ -112,6 +117,7 @@ compress()
 		fi	
 	fi
 	rm $pathname/output/*.bin
+	rm $pathname/output/*.singleton
 	tar -cf $pathname/$(basename "$filename" .fastq).tar -C $pathname/output .
 	rm -r $pathname/output/
 }
@@ -131,6 +137,7 @@ decompress()
 	fi
 	7z e $pathname/output/read_pos.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_noise.txt.7z -o$pathname/output/
+	7z e $pathname/output/tempflag.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_noisepos.txt.7z -o$pathname/output/
 	7z e $pathname/output/input_N.dna.7z -o$pathname/output/
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
@@ -149,8 +156,9 @@ decompress()
 	else
 		./src/decoder.out $pathname
 	fi
-	rm -r $pathname/output/
-	mv $pathname/output.dna $pathname/$(basename "$filename" .tar).dna.d
+	#rm -r $pathname/output/
+	#mv $pathname/output.dna $pathname/$(basename "$filename" .tar).dna.d
+	mv $pathname/output.dna $pathname/output/output.dna
 }
 
 #Initialize variables to default values.
