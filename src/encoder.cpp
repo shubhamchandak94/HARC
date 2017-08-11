@@ -247,6 +247,9 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					{
 						b = forward_bitset&mask1[l];
 						ull = (b>>3*dict_start[l]).to_ullong();
+					//	std::vector<uint32_t> deleted_rids;
+						//if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l]-dict_start[l]+1)))-1)) 
+						//	continue;//added because there were too many of these
 						//making the whole thing slow due to locking
 						startposidx = dict[l].bphf->lookup(ull);
 						if(startposidx >= dict[l].numkeys)//not found
