@@ -112,9 +112,10 @@ compress()
 	./src/libbsc/bsc e $pathname/output/read_singleton.txt $pathname/output/read_singleton.txt.bsc -b64p -t$num_thr 
 	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar 
 	if [[ $preserve_order == "True" ]];then
-		./src/libbsc/bsc e $pathname/output/read_order.bin $pathname/output/read_order.bin.bsc -b64p -t$num_thr
-		./src/libbsc/bsc e $pathname/output/read_order_N.bin $pathname/output/read_order_N.bin.bsc -b64p -t$num_thr
-		./src/libbsc/bsc e $pathname/output/read_order_N_pe.bin $pathname/output/read_order_N_pe.bin.bsc -b64p -t$num_thr
+		./src/pack_order.out $pathname	
+		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
 			./src/merge_quality_N.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
@@ -174,9 +175,10 @@ decompress()
 		echo "#define num_thr $num_thr" >> src/config.h
 		echo "#define num_thr_e $num_thr_e" >> src/config.h
 		g++ src/decoder_preserve.cpp -O3 -march=native -fopenmp -std=c++11 -o src/decoder_preserve.out
-		./src/libbsc/bsc d $pathname/output/read_order.bin.bsc $pathname/output/read_order.bin -t$num_thr
-		./src/libbsc/bsc d $pathname/output/read_order_N.bin.bsc $pathname/output/read_order_N.bin -t$num_thr
-		./src/libbsc/bsc d $pathname/output/read_order_N_pe.bin.bsc $pathname/output/read_order_N_pe.bin -t$num_thr
+		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_order_N_pe.bin.7z -o$pathname/output/
+		./src/unpack_order.out $pathname
 		./src/decoder_preserve.out $pathname
 		./src/merge_N.out $pathname
 		echo "Done!"
