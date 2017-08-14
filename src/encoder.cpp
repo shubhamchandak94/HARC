@@ -14,7 +14,7 @@
 #include "BooPHF.h"
 #include "config.h"
 
-uint32_t numreads, numreads_s;
+uint32_t numreads, numreads_s, numreads_N;
 int numdict_s = 1;
 uint32_t dict_start[1];
 uint32_t dict_end[1];
@@ -51,49 +51,50 @@ std::string infile_flag;
 std::string infile_pos;
 std::string infile_seq;
 std::string infile_RC;
+std::string infile_N;
 std::string outfile_seq;
 std::string outfile_meta;
 std::string outfile_pos;
 std::string outfile_noise;
 std::string outfile_noisepos;
 
+
 float alternate_thresh = 0.0;
+std::string outfile_singleton;
 std::string infile_order;
 std::string outdir;
+std::string outfile_order_N_pe;
 
-char longtochar[] = {'A','C','G','T'};
+char longtochar[] = {'A','C','G','T','N'};
 long chartolong[128];
 char enc_noise[128][128];
 
 
 //Some global arrays (some initialized in setglobalarrays())
-char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
-char inttochar[] = {'A','C','G','T'};
+char revinttochar[8] = {'A','N','G','#','C','#','T','#'};//used in bitsettostring
+char inttochar[] = {'A','C','G','T','N'};
 char chartorevchar[128];//A-T etc for reverse complement
-int chartoint[128];//A-0,C-1 etc. used in updaterefcount
-std::bitset<2*readlen> basemask[readlen][128];//bitset for A,G,C,T at each position 
+std::bitset<3*readlen> basemask[readlen][128];//bitset for A,G,C,T,N at each position 
 //used in stringtobitset, chartobitset and bitsettostring
-std::bitset<2*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
+std::bitset<3*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
 //used in bitsettostring
-std::bitset<2*readlen> mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
+std::bitset<3*readlen> mask63;//bitset with 63 bits set to 1 (used in bitsettostring for conversion to ullong)
 
-std::bitset<2*readlen> stringtobitset(std::string s);
+std::bitset<3*readlen> stringtobitset(std::string s);
 
-std::string bitsettostring(std::bitset<2*readlen> b);
+std::string bitsettostring(std::bitset<3*readlen> b);
 
-void readsingletons(std::bitset<2*readlen> *read, uint32_t *order_s);
+void readsingletons(std::bitset<3*readlen> *read, uint32_t *order_s);
 
-void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict);
+void constructdictionary(std::bitset<3*readlen> *read, bbhashdict *dict);
 
-void writetofile(std::bitset<2*readlen> *read);
+void writetofile(std::bitset<3*readlen> *read);
 
 std::string reverse_complement(std::string s);
 
-std::bitset<2*readlen> chartobitset(char &s);
+void generateindexmasks(std::bitset<3*readlen> *mask1);
 
-void generateindexmasks(std::bitset<2*readlen> *mask1);
-
-void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s);
+void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s);
 
 void packbits();
 
@@ -106,8 +107,11 @@ void packbits();
 std::string generateRef(std::vector<std::array<long,4>> count);
 
 std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size);//using lists to enable faster insertion of singletons
-void writecontig(std::vector<std::array<long,4>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, uint32_t list_size);
+void writecontig(std::vector<std::array<long,4>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size);
 // >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
+// =======
+// void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size);
+// >>>>>>> 423ae1669879a3eeeebaebcfaee829d5f19c7b5a
 
 void getDataParams();
 
@@ -127,18 +131,20 @@ int main(int argc, char** argv)
 	infile_flag = basedir + "/output/tempflag.txt";
 	infile_order = basedir + "/output/read_order.bin";
 	infile_RC = basedir + "/output/read_rev.txt";
-			
+	infile_N = basedir + "/output/input_N.dna";		
 	outfile_seq = basedir + "/output/read_seq.txt";
 	outfile_meta = basedir + "/output/read_meta.txt";
 	outfile_pos = basedir + "/output/read_pos.txt";
 	outfile_noise = basedir + "/output/read_noise.txt";
 	outfile_noisepos = basedir + "/output/read_noisepos.txt";
+	outfile_singleton = basedir + "/output/read_singleton.txt";
+	outfile_order_N_pe = basedir + "/output/read_order_N_pe.bin";//pe - post encoding
 	
 	omp_set_num_threads(num_thr);
 	getDataParams(); //populate readlen and numreads
 	setglobalarrays();
-	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads_s];
-	uint32_t *order_s = new uint32_t [numreads_s];
+	std::bitset<3*readlen> *read = new std::bitset<3*readlen> [numreads_s+numreads_N];
+	uint32_t *order_s = new uint32_t [numreads_s+numreads_N];
 	readsingletons(read,order_s);
 	dict_start[0] = 0;
 	dict_end[0] = std::min(19,readlen);
@@ -149,19 +155,19 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
+void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 {
-	omp_lock_t *read_lock = new omp_lock_t [numreads_s];
-	omp_lock_t *dict_lock = new omp_lock_t [numreads_s];
-	for(int j = 0; j < numreads_s; j++)
+	omp_lock_t *read_lock = new omp_lock_t [numreads_s+numreads_N];
+	omp_lock_t *dict_lock = new omp_lock_t [numreads_s+numreads_N];
+	for(int j = 0; j < numreads_s+numreads_N; j++)
 	{
 		omp_init_lock(&read_lock[j]);
 		omp_init_lock(&dict_lock[j]);
 	}
-	bool *remainingreads = new bool [numreads_s];
-	std::fill(remainingreads, remainingreads+numreads_s,1);
+	bool *remainingreads = new bool [numreads_s+numreads_N];
+	std::fill(remainingreads, remainingreads+numreads_s+numreads_N,1);
 
-	std::bitset<2*readlen> mask1[numdict_s];
+	std::bitset<3*readlen> mask1[numdict_s];
 	generateindexmasks(mask1);
 	std::cout<<"Encoding reads\n";
 	#pragma omp parallel 
@@ -178,7 +184,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	std::ofstream f_noisepos(outfile_noisepos+'.'+std::to_string(tid));
 	std::ofstream f_order(infile_order+'.'+std::to_string(tid),std::ios::binary);
 	std::ofstream f_RC(infile_RC+'.'+std::to_string(tid));
-	
+	std::ofstream f_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid),std::ios::binary);	
 	uint64_t i, stop;
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
@@ -203,7 +209,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	in_order.seekg(i*sizeof(uint32_t),in_order.beg);
 	in_RC.seekg(i,in_RC.beg);
 	std::string current,ref;
-	std::bitset<2*readlen> forward_bitset,reverse_bitset,b;
+	std::bitset<3*readlen> forward_bitset,reverse_bitset,b;
 	char c,rc;
 	std::list<std::string> reads;
 	std::list<long> pos;
@@ -269,7 +275,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					for(int l = 0; l < numdict_s; l++)//forward
 					{
 						b = forward_bitset&mask1[l];
-						ull = (b>>2*dict_start[l]).to_ullong();
+						ull = (b>>3*dict_start[l]).to_ullong();
 					//	std::vector<uint32_t> deleted_rids;
 						//if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l]-dict_start[l]+1)))-1)) 
 						//	continue;//added because there were too many of these
@@ -286,7 +292,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 							omp_unset_lock(&dict_lock[startposidx]);
 							continue;
 						}
-						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
+						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
 						if(ull == ull1)//checking if ull is actually the key for this bin
 						{	
 							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0]; i--)
@@ -320,9 +326,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 							for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
 							{
 								b = read[*it]&mask1[l1];
-								ull = (b>>2*dict_start[l1]).to_ullong();
-//								if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l1]-dict_start[l1]+1)))-1))
-//									continue;//added because there were too many of these
+								ull = (b>>3*dict_start[l1]).to_ullong();
 								startposidx = dict[l1].bphf->lookup(ull);
 								if(!omp_test_lock(&dict_lock[startposidx]))
 								{
@@ -338,10 +342,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					for(int l = 0; l < numdict_s; l++)//reverse
 					{
 						b = reverse_bitset&mask1[l];
-						ull = (b>>2*dict_start[l]).to_ullong();
-//						std::vector<uint32_t> deleted_rids;
-//						if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l]-dict_start[l]+1)))-1)) 
-//							continue;//added because there were too many of these
+						ull = (b>>3*dict_start[l]).to_ullong();
 						startposidx = dict[l].bphf->lookup(ull);
 						if(startposidx >= dict[l].numkeys)//not found
 							continue;
@@ -354,7 +355,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 							omp_unset_lock(&dict_lock[startposidx]);
 							continue;
 						}
-						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
+						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
 						if(ull == ull1)//checking if ull is actually the key for this bin
 						{	
 							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0]; i--)
@@ -388,9 +389,7 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 							for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
 							{
 								b = read[*it]&mask1[l1];
-								ull = (b>>2*dict_start[l1]).to_ullong();
-//								if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l1]-dict_start[l1]+1)))-1))
-//									continue;//added because there were too many of these
+								ull = (b>>3*dict_start[l1]).to_ullong();
 								startposidx = dict[l1].bphf->lookup(ull);
 								if(!omp_test_lock(&dict_lock[startposidx]))
 								{
@@ -405,9 +404,9 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					}
 					if(j != ref.size()-readlen)//not at last position,shift bitsets
 					{
-						forward_bitset >>= 2;
+						forward_bitset >>= 3;
 						forward_bitset |= basemask[readlen-1][ref[j+readlen]];
-						reverse_bitset <<= 2;
+						reverse_bitset <<= 3;
 						reverse_bitset |= basemask[0][chartorevchar[ref[j+readlen]]];
 					}	
 							
@@ -420,8 +419,11 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					prevpos = prevpos + *it;
 				}
 			
-				writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,list_size);
+				writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC, f_order_N_pe,list_size);
 //>>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
+// =======
+// 				writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
+// >>>>>>> 423ae1669879a3eeeebaebcfaee829d5f19c7b5a
 			}
 			reads = {current};
 			pos = {p};
@@ -440,13 +442,18 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 		i++;	
 					
 	}
+
 // <<<<<<< HEAD
 // 	count = buildcontig(reads,pos);
 // 	writecontig(count,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
 // =======
 	count = buildcontig(reads,pos,list_size);
-	writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,list_size);
+	writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
 // >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
+// =======
+// 	ref = buildcontig(reads,pos,list_size);
+// 	writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
+// >>>>>>> 423ae1669879a3eeeebaebcfaee829d5f19c7b5a
 
 	f.close();
 	in_flag.close();
@@ -458,117 +465,170 @@ void encode(std::bitset<2*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	f_noise.close();
 	f_noisepos.close();
 	f_order.close();
+	f_order_N_pe.close();
 	f_RC.close();
 	}
 
 	//Combine files produced by the threads
-	std::ofstream f_seq(outfile_seq);
-	std::ofstream f_pos(outfile_pos);
-	std::ofstream f_noise(outfile_noise);
-	std::ofstream f_noisepos(outfile_noisepos);
-	std::ofstream f_RC(infile_RC);
-	std::ofstream f_order(infile_order);	
+	std::ofstream f_order(infile_order);
+	std::ofstream f_order_N_pe(outfile_order_N_pe,std::ios::binary|std::ofstream::app);	
 	std::ofstream f_meta(outfile_meta);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
-		std::ifstream in_seq(outfile_seq+'.'+std::to_string(tid));
-		std::ifstream in_pos(outfile_pos+'.'+std::to_string(tid));
-		std::ifstream in_noise(outfile_noise+'.'+std::to_string(tid));
-		std::ifstream in_noisepos(outfile_noisepos+'.'+std::to_string(tid));
 		std::ifstream in_order(infile_order+'.'+std::to_string(tid));
-		std::ifstream in_RC(infile_RC+'.'+std::to_string(tid));
-		f_seq << in_seq.rdbuf();
-		f_pos << in_pos.rdbuf();
-		f_noise << in_noise.rdbuf();
-		f_noisepos << in_noisepos.rdbuf();
+		std::ifstream in_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid));
 		f_order << in_order.rdbuf();
-	 	f_RC << in_RC.rdbuf();
-		remove((outfile_seq+'.'+std::to_string(tid)).c_str());
-		remove((outfile_pos+'.'+std::to_string(tid)).c_str());
-		remove((outfile_noise+'.'+std::to_string(tid)).c_str());
-		remove((outfile_noisepos+'.'+std::to_string(tid)).c_str());
+		f_order_N_pe << in_order_N_pe.rdbuf();
 		remove((infile_order+'.'+std::to_string(tid)).c_str());
-		remove((infile_RC+'.'+std::to_string(tid)).c_str());
+		remove((outfile_order_N_pe+'.'+std::to_string(tid)).c_str());
 	}
 	f_meta << readlen << "\n";
-	f_seq.close();
 	f_meta.close();
-	f_pos.close();
-	f_noise.close();
-	f_noisepos.close();
 	f_order.close();
-	f_RC.close();
+	f_order_N_pe.close();
 	//write remaining singleton reads now
-	f_seq.open(outfile_seq,std::ofstream::app);
-	f_pos.open(outfile_pos,std::ofstream::app);
-	f_noise.open(outfile_noise,std::ofstream::app);
+	std::ofstream f_singleton(outfile_singleton);
 	f_order.open(infile_order,std::ios::binary|std::ofstream::app);
-	f_RC.open(infile_RC,std::ofstream::app);
+	f_order_N_pe.open(outfile_order_N_pe,std::ios::binary|std::ofstream::app);
+	std::ofstream f_N(infile_N);
 	char c = readlen;
 	std::string s;
-	uint32_t matched = numreads_s;
+	uint32_t matched_s = numreads_s;
 	for (uint32_t i = 0; i < numreads_s; i++)
 		if(remainingreads[i] == 1)
 		{
-			matched--;
-			f_pos << c;
+			matched_s--;
 			f_order.write((char*)&order_s[i],sizeof(uint32_t));
-			f_RC << 'd';
-			f_noise << '\n';
 			s = bitsettostring(read[i]);
-			f_seq << s;
-		}	
-	f_seq.close();
-	f_pos.close();
-	f_noise.close();
+			f_singleton << s;
+		}
+	uint32_t matched_N = numreads_N;
+	for (uint32_t i = numreads_s; i < numreads_s+numreads_N; i++)
+		if(remainingreads[i] == 1)
+		{
+			matched_N--;
+			f_N << bitsettostring(read[i]) << "\n";
+			f_order_N_pe.write((char*)&order_s[i],sizeof(uint32_t));
+		}
 	f_order.close();
-	f_RC.close();
+	f_order_N_pe.close();
+	f_N.close();
+	f_singleton.close();
 	delete[] remainingreads;
 	packbits();
-	std::cout << "Encoding done: " << matched << " singleton reads were aligned\n";
+	std::cout << "Encoding done:\n"; 
+	std::cout << matched_s << " singleton reads were aligned\n";
+	std::cout << matched_N << " reads with N were aligned\n";
 	return;
 }
 
 void packbits()
 {
-	std::ifstream in_seq(outfile_seq);
-	std::ifstream in_noise(outfile_noise);
-	std::ofstream f_seq(outfile_seq+".tmp",std::ios::binary);
-	std::ofstream f_seq_tail(outfile_seq+".tail");
-	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);
-	std::ofstream f_noise_tail(outfile_noise+".tail");
+
+	#pragma omp parallel
+	{
+		int tid = omp_get_thread_num();
+		//seq
+		std::ifstream in_seq(outfile_seq+'.'+std::to_string(tid));
+		std::ofstream f_seq(outfile_seq+'.'+std::to_string(tid)+".tmp",std::ios::binary);
+		std::ofstream f_seq_tail(outfile_seq+'.'+std::to_string(tid)+".tail");
+		uint64_t file_len=0;
+		char c;
+		while(in_seq >> std::noskipws >> c)
+			file_len++;
+		uint8_t basetoint[128];
+		basetoint['A'] = 0;
+		basetoint['C'] = 1;
+		basetoint['G'] = 2;
+		basetoint['T'] = 3;
+		
+		in_seq.close();
+		in_seq.open(outfile_seq+'.'+std::to_string(tid));
+		char dnabase[8];
+		uint8_t dnabin;
+		for(uint64_t i = 0; i < file_len/4; i++)
+		{
+			in_seq.read(dnabase,4);
+			
+			dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
+				basetoint[dnabase[1]]+basetoint[dnabase[0]];
+			f_seq.write((char*)&dnabin,sizeof(uint8_t));
+		}
+		f_seq.close();
+		in_seq.read(dnabase,file_len%4);
+		for(int i=0; i<file_len%4;i++)
+			f_seq_tail << dnabase[i];
+		f_seq_tail.close();
+		in_seq.close();
+		remove((outfile_seq+'.'+std::to_string(tid)).c_str());
+		rename((outfile_seq+'.'+std::to_string(tid)+".tmp").c_str(),(outfile_seq+'.'+std::to_string(tid)).c_str());		
+		
+		//rev
+		std::ifstream in_rev(infile_RC+'.'+std::to_string(tid));
+		std::ofstream f_rev(infile_RC+'.'+std::to_string(tid)+".tmp",std::ios::binary);
+		std::ofstream f_rev_tail(infile_RC+'.'+std::to_string(tid)+".tail");
+		file_len=0;
+		while(in_rev >> std::noskipws >> c)
+			file_len++;
+		basetoint['d'] = 0;
+		basetoint['r'] = 1;
+		
+		in_rev.close();
+		in_rev.open(infile_RC+'.'+std::to_string(tid));
+		for(uint64_t i = 0; i < file_len/8; i++)
+		{
+			in_rev.read(dnabase,8);
+			dnabin = 128*basetoint[dnabase[7]]+64*basetoint[dnabase[6]]+
+				 32*basetoint[dnabase[5]]+16*basetoint[dnabase[4]]+
+				 8*basetoint[dnabase[3]]+4*basetoint[dnabase[2]]+
+				 2*basetoint[dnabase[1]]+basetoint[dnabase[0]];
+			f_rev.write((char*)&dnabin,sizeof(uint8_t));
+		}
+		f_rev.close();
+		in_rev.read(dnabase,file_len%8);
+		for(int i=0; i<file_len%8;i++)
+			f_rev_tail << dnabase[i];
+		f_rev_tail.close();
+		remove((infile_RC+'.'+std::to_string(tid)).c_str());
+		rename((infile_RC+'.'+std::to_string(tid)+".tmp").c_str(),(infile_RC+'.'+std::to_string(tid)).c_str());
+	}
+	//singleton
+	std::ifstream in_singleton(outfile_singleton);
+	std::ofstream f_singleton(outfile_singleton+".tmp",std::ios::binary);
+	std::ofstream f_singleton_tail(outfile_singleton+".tail");
 	uint64_t file_len=0;
 	char c;
-	while(in_seq >> std::noskipws >> c)
+	while(in_singleton >> std::noskipws >> c)
 		file_len++;
 	uint8_t basetoint[128];
 	basetoint['A'] = 0;
 	basetoint['C'] = 1;
 	basetoint['G'] = 2;
 	basetoint['T'] = 3;
-	
-	in_seq.close();
-	in_seq.open(outfile_seq);
-	char dnabase[4];
+	in_singleton.close();
+	in_singleton.open(outfile_singleton);
+	char dnabase[8];
 	uint8_t dnabin;
 	for(uint64_t i = 0; i < file_len/4; i++)
 	{
-		in_seq.read(dnabase,4);
+		in_singleton.read(dnabase,4);
 		
 		dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
 			basetoint[dnabase[1]]+basetoint[dnabase[0]];
-		f_seq.write((char*)&dnabin,sizeof(uint8_t));
+		f_singleton.write((char*)&dnabin,sizeof(uint8_t));
 	}
-	f_seq.close();
-	in_seq.read(dnabase,file_len%4);
+	f_singleton.close();
+	in_singleton.read(dnabase,file_len%4);
 	for(int i=0; i<file_len%4;i++)
-		f_seq_tail << dnabase[i];
-	f_seq_tail.close();
-	in_seq.close();
-	remove(outfile_seq.c_str());
-	rename((outfile_seq+".tmp").c_str(),outfile_seq.c_str());		
-	
+		f_singleton_tail << dnabase[i];
+	f_singleton_tail.close();
+	in_singleton.close();
+	remove((outfile_singleton).c_str());
+	rename((outfile_singleton+".tmp").c_str(),(outfile_singleton).c_str());		
+/*	
 	//noise
+	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);
+	std::ofstream f_noise_tail(outfile_noise+".tail");
 	file_len=0;
 	while(in_noise >> std::noskipws >> c)
 		file_len++;
@@ -593,7 +653,7 @@ void packbits()
 	f_noise_tail.close();
 	remove(outfile_noise.c_str());
 	rename((outfile_noise+".tmp").c_str(),outfile_noise.c_str());
-	
+*/	
 	return;
 }
 
@@ -661,11 +721,15 @@ std::string generateRef(std::vector<std::array<long,4>> count)
 }
 
 // <<<<<<< HEAD
+// <<<<<<< HEAD
 
 // void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos)
 // =======
-void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, uint32_t list_size)
 // >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
+// =======
+// void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size)
+// >>>>>>> 423ae1669879a3eeeebaebcfaee829d5f19c7b5a
+void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size)
 {
 	std::string ref = generateRef(count);
 	
@@ -709,7 +773,10 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 	f_noise << "\n";
 	c = readlen;// (to handle breaks in read sequence due to limit on reads.size()
 	f_pos << c;
-	f_order.write((char*)&(*order_it),sizeof(uint32_t));
+	if((*reads_it).find('N')!=std::string::npos)
+		f_order_N_pe.write((char*)&(*order_it),sizeof(uint32_t));
+	else
+		f_order.write((char*)&(*order_it),sizeof(uint32_t));
 	f_RC << *RC_it;
 	long prevpos = 0,currentpos;
 	++pos_it;
@@ -740,7 +807,10 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 		f_noise << "\n";
 		c = *pos_it;
 		f_pos << c;
-		f_order.write((char*)&(*order_it),sizeof(uint32_t));
+		if((*reads_it).find('N')!=std::string::npos)
+			f_order_N_pe.write((char*)&(*order_it),sizeof(uint32_t));
+		else
+			f_order.write((char*)&(*order_it),sizeof(uint32_t));
 		f_RC << *RC_it;
 		prevpos = currentpos;
 	}
@@ -753,25 +823,30 @@ void setglobalarrays()
 	chartorevchar['C'] = 'G';
 	chartorevchar['G'] = 'C';
 	chartorevchar['T'] = 'A';
-	chartoint['A'] = 0;
-	chartoint['C'] = 1;
-	chartoint['G'] = 2;
-	chartoint['T'] = 3;
+	chartorevchar['N'] = 'N';
 
-	for(int i = 0; i < 64; i++)
-		mask64[i] = 1;
+	for(int i = 0; i < 63; i++)
+		mask63[i] = 1;
 	for(int i = 0; i < readlen; i++)
 	{
-		basemask[i]['A'][2*i] = 0;
-		basemask[i]['A'][2*i+1] = 0;
-		basemask[i]['C'][2*i] = 0;
-		basemask[i]['C'][2*i+1] = 1;
-		basemask[i]['G'][2*i] = 1;
-		basemask[i]['G'][2*i+1] = 0;
-		basemask[i]['T'][2*i] = 1;
-		basemask[i]['T'][2*i+1] = 1;
-		positionmask[i][2*i] = 1;
-		positionmask[i][2*i+1] = 1;
+		basemask[i]['A'][3*i] = 0;
+		basemask[i]['A'][3*i+1] = 0;
+		basemask[i]['A'][3*i+2] = 0;
+		basemask[i]['C'][3*i] = 0;
+		basemask[i]['C'][3*i+1] = 0;
+		basemask[i]['C'][3*i+2] = 1;
+		basemask[i]['G'][3*i] = 0;
+		basemask[i]['G'][3*i+1] = 1;
+		basemask[i]['G'][3*i+2] = 0;
+		basemask[i]['T'][3*i] = 0;
+		basemask[i]['T'][3*i+1] = 1;
+		basemask[i]['T'][3*i+2] = 1;
+		basemask[i]['N'][3*i] = 1;
+		basemask[i]['N'][3*i+1] = 0;
+		basemask[i]['N'][3*i+2] = 0;
+		positionmask[i][3*i] = 1;
+		positionmask[i][3*i+1] = 1;
+		positionmask[i][3*i+2] = 1;
 	}		
 
 	//enc_noise uses substitution statistics from Minoche et al. 
@@ -823,19 +898,26 @@ void getDataParams()
 		++number_of_lines;
 	numreads_s = number_of_lines;
 	std::cout << "Number of singleton reads: " << number_of_lines << std::endl;
+	std::ifstream myfile_N(infile_N, std::ifstream::in);
+	number_of_lines = 0; 
+	while (std::getline(myfile_N, line))
+		++number_of_lines;
+	numreads_N = number_of_lines;
+	std::cout << "Number of reads with N: " << number_of_lines << std::endl;
 	myfile.close();
 	myfile_s.close();
+	myfile_N.close();
 }
 
-std::bitset<2*readlen> stringtobitset(std::string s)
+std::bitset<3*readlen> stringtobitset(std::string s)
 {
-	std::bitset<2*readlen> b;
+	std::bitset<3*readlen> b;
 	for(int i = 0; i < readlen; i++)
 		b |= basemask[i][s[i]];
 	return b;
 }
 
-void readsingletons(std::bitset<2*readlen> *read, uint32_t *order_s)
+void readsingletons(std::bitset<3*readlen> *read, uint32_t *order_s)
 {
 	#pragma omp parallel
 	{
@@ -857,56 +939,78 @@ void readsingletons(std::bitset<2*readlen> *read, uint32_t *order_s)
 	}
 	f.close();
 	}
+	#pragma omp parallel
+	{
+	int tid = omp_get_thread_num();
+	uint32_t i, stop;	
+	//doing initial setup and first read
+	i = uint64_t(tid)*numreads_N/omp_get_num_threads();//spread out first read equally
+	stop = uint64_t(tid+1)*numreads_N/omp_get_num_threads();
+	if(tid == omp_get_num_threads()-1)
+		stop = numreads_N;
+	std::ifstream f(infile_N, std::ifstream::in);
+	f.seekg(uint64_t(i)*(readlen+1), f.beg);
+	std::string s;
+	while(i < stop)
+	{
+		std::getline(f,s);
+		read[numreads_s+i] = stringtobitset(s);
+		i++;
+	}
+	f.close();
+	}
 	std::ifstream f_order_s(infile_order+".singleton", std::ios::binary);
 	for(uint32_t i = 0; i < numreads_s; i++)
 		f_order_s.read((char*)&order_s[i],sizeof(uint32_t));
-	f_order_s.close();	
+	f_order_s.close();
+	for(uint32_t i = numreads_s; i < numreads_s+numreads_N; i++)
+		order_s[i] = i - numreads_s;	
 	return;
 }
 
-void generateindexmasks(std::bitset<2*readlen> *mask1)
+void generateindexmasks(std::bitset<3*readlen> *mask1)
 //masks for dictionary positions
 {
 	for(int j = 0; j < numdict_s; j++)
 		mask1[j].reset();
 	for(int j = 0; j < numdict_s; j++)
-		for(int i = 2*dict_start[j]; i < 2*(dict_end[j]+1); i++)
+		for(int i = 3*dict_start[j]; i < 3*(dict_end[j]+1); i++)
 			mask1[j][i] = 1;
 	return;
 }
 
 
-void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
+void constructdictionary(std::bitset<3*readlen> *read, bbhashdict *dict)
 {
-	std::bitset<2*readlen> mask[numdict_s];
+	std::bitset<3*readlen> mask[numdict_s];
 	generateindexmasks(mask);
 	for(int j = 0; j < numdict_s; j++)
 	{
-		uint64_t *ull = new uint64_t[numreads_s];
+		uint64_t *ull = new uint64_t[numreads_s+numreads_N];
 		#pragma omp parallel
 		{
-		std::bitset<2*readlen> b;
+		std::bitset<3*readlen> b;
 		int tid = omp_get_thread_num();
 		std::ofstream foutkey(outdir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
 		uint32_t i, stop;
-		i = uint64_t(tid)*numreads_s/omp_get_num_threads();
-		stop = uint64_t(tid+1)*numreads_s/omp_get_num_threads();
+		i = uint64_t(tid)*(numreads_s+numreads_N)/omp_get_num_threads();
+		stop = uint64_t(tid+1)*(numreads_s+numreads_N)/omp_get_num_threads();
 		if(tid == omp_get_num_threads()-1)
-			stop = numreads_s;
+			stop = numreads_s+numreads_N;
 		//compute keys and write to file and store in ull
 		for(; i < stop; i++)
 		{
 			b = read[i]&mask[j];
-			ull[i] = (b>>2*dict_start[j]).to_ullong();
+			ull[i] = (b>>3*dict_start[j]).to_ullong();
 			foutkey.write((char*)&ull[i], sizeof(uint64_t));
 		}
 		foutkey.close();
 		}//parallel end
 		
 		//deduplicating ull
-		std::sort(ull,ull+numreads_s);
+		std::sort(ull,ull+numreads_s+numreads_N);
 		uint32_t k = 0;
-		for (uint32_t i = 1; i < numreads_s; i++) 
+		for (uint32_t i = 1; i < numreads_s+numreads_N; i++) 
 		        if (ull[i] != ull[k])         
 				ull[++k] = ull[i];
 		dict[j].numkeys = k+1;
@@ -925,10 +1029,10 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 		std::ofstream fouthash(outdir+std::string("hash.bin.")+std::to_string(tid),std::ios::binary);
 		uint64_t currentkey,currenthash;
 		uint32_t i, stop;
-		i = uint64_t(tid)*numreads_s/omp_get_num_threads();
-		stop = uint64_t(tid+1)*numreads_s/omp_get_num_threads();
+		i = uint64_t(tid)*(numreads_s+numreads_N)/omp_get_num_threads();
+		stop = uint64_t(tid+1)*(numreads_s+numreads_N)/omp_get_num_threads();
 		if(tid == omp_get_num_threads()-1)
-			stop = numreads_s;
+			stop = numreads_s+numreads_N;
 		for(; i < stop; i++)
 		{
 			finkey.read((char*)&currentkey, sizeof(uint64_t));
@@ -960,7 +1064,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 			dict[j].startpos[i] =  dict[j].startpos[i] +  dict[j].startpos[i-1];
 
 		//insert elements in the dict array
-		dict[j].read_id = new uint32_t[numreads_s];
+		dict[j].read_id = new uint32_t[numreads_s+numreads_N];
 		uint32_t i = 0;
 		for(int tid = 0; tid < num_thr; tid++)
 		{
@@ -989,9 +1093,9 @@ void bbhashdict::findpos(int64_t *dictidx, uint32_t &startposidx)
 {
 	dictidx[0] = startpos[startposidx];
 	auto endidx = startpos[startposidx+1];
-	if(read_id[endidx-1] == numreads_s)//means exactly one read has been removed
+	if(read_id[endidx-1] == numreads_s+numreads_N)//means exactly one read has been removed
 		dictidx[1] = endidx-1;
-	else if(read_id[endidx-1] == numreads_s+1)//means two or more reads have been removed (in this case second last entry stores the number of reads left)
+	else if(read_id[endidx-1] == numreads_s+numreads_N+1)//means two or more reads have been removed (in this case second last entry stores the number of reads left)
 		dictidx[1] = dictidx[0] + read_id[endidx-2];
 	else
 		dictidx[1] = endidx;//no read deleted
@@ -1011,10 +1115,10 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 	std::move(read_id+dictidx[0]+pos+1,read_id+dictidx[1],read_id+dictidx[0]+pos);
 	auto endidx = startpos[startposidx+1];
 	if(dictidx[1] == endidx)//this is first read to be deleted
-		read_id[endidx-1] = numreads_s;
-	else if(read_id[endidx-1] == numreads_s)//exactly one read has been deleted till now
+		read_id[endidx-1] = numreads_s+numreads_N;
+	else if(read_id[endidx-1] == numreads_s+numreads_N)//exactly one read has been deleted till now
 	{
-		read_id[endidx-1] = numreads_s + 1;
+		read_id[endidx-1] = numreads_s+numreads_N + 1;
 		read_id[endidx-2] = size - 1;//number of reads left in bin
 	}
 	else//more than two reads have been deleted
@@ -1023,47 +1127,25 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 	return;	
 }
 
-
-void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
-{
-	for(int i = 0; i < maxmatch; i++)
-	{	
-		mask[i].reset();
-		revmask[i].reset();
-		for(int j = 0; j < 2*readlen - 2*i; j++)
-			mask[i][j] = 1;
-		for(int j = 2*i; j < 2*readlen; j++)
-			revmask[i][j] = 1; 	
-	}
-	return;
-}
-
-std::string bitsettostring(std::bitset<2*readlen> b)
+std::string bitsettostring(std::bitset<3*readlen> b)
 {
 	char s[readlen+1];
 	s[readlen] = '\0';
 	unsigned long long ull,rem;
-	for(int i = 0; i < 2*readlen/64+1; i++)
+	for(int i = 0; i < 3*readlen/63+1; i++)
 	{	
-		ull = (b&mask64).to_ullong();
-		b>>=64;
-		for(int j = 32*i  ; j < 32*i+32 && j < readlen ; j++)
+		ull = (b&mask63).to_ullong();
+		b>>=63;
+		for(int j = 21*i  ; j < 21*i+21 && j < readlen ; j++)
 		{
-			s[j] = revinttochar[ull%4];	
-			ull/=4;
+			s[j] = revinttochar[ull%8];	
+			ull/=8;
 		}
 	}
 	std::string s1 = s;
 	return s1;
 }
 
-std::bitset<2*readlen> chartobitset(char *s)
-{
-	std::bitset<2*readlen> b;
-	for(int i = 0; i < readlen; i++)
-		b |= basemask[i][s[i]];
-	return b;
-}
 
 std::string reverse_complement(std::string s)
 {
