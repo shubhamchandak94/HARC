@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
 	outdir = basedir + "/output/";
-	infile = basedir + "/input_clean.dna";
+	infile = basedir + "/output/input_clean.dna";
 	outfile = basedir + "/output/temp.dna";
 	outfileRC = basedir + "/output/read_rev.txt";
 	outfileflag = basedir + "/output/tempflag.txt";

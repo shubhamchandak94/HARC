@@ -32,14 +32,15 @@ exit 0
 compress()
 {
 	pathname=$(dirname $filename)
+	if [ -d "$pathname/output" ]; then
+  		echo "Directory named output already exists in directory containing FASTQ file. Remove directory and run again."
+		exit 1
+	fi
+	mkdir -p $pathname/output/
 	echo "*** Preprocessing ***"
 	echo $filename
-	if [[ $preserve_quality == "True" ]];then
-		./src/preprocess_quality.out $filename $pathname $num_thr
-	else
-		./src/preprocess.out $filename $pathname $num_thr
-	fi
-	readlen="$(head $pathname/input_clean.dna | wc -L)"
+	./src/preprocess.out $filename $pathname $preserve_order $preserve_quality
+	readlen="$(head $pathname/output/input_clean.dna | wc -L)"
 	if (($readlen > 256));then
 		echo "Maximum read length exceeded" 
 		exit 1
@@ -58,16 +59,8 @@ compress()
 	echo "#define num_thr $num_thr" >> src/config.h
 
 	g++ src/reorder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
-	mkdir -p $pathname/output/
 	 
 	./src/reorder.out $pathname
-	mv $pathname/input_N.dna $pathname/output/input_N.dna
-	mv $pathname/input_clean.dna $pathname/output/input_clean.dna
-	mv $pathname/read_order_N.bin $pathname/output/read_order_N.bin
-	if [[ $preserve_quality == "True" ]];then
-		mv $pathname/input_N.quality $pathname/output/input_N.quality
-		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
-	fi
 	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
 	./src/encoder.out $pathname
 	
@@ -117,9 +110,7 @@ compress()
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
-			./src/merge_quality_N.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
-			rm $pathname/output/*.quality
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
@@ -141,6 +132,10 @@ decompress()
 {
 	echo "Decompression ..."
 	pathname=$(dirname $filename)
+	if [ -d "$pathname/output" ]; then
+  		echo "Directory named output already exists in directory containing .tar file. Remove directory and run again."
+		exit 1
+	fi
 	mkdir -p $pathname/output
 	tar -xf $filename -C $pathname/output
 	if [[ $preserve_order == "True" ]];then

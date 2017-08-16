@@ -15,9 +15,9 @@
 #include "config.h"
 
 uint32_t numreads, numreads_s, numreads_N;
-int numdict_s = 1;
-uint32_t dict_start[1];
-uint32_t dict_end[1];
+int numdict_s = 2;
+uint32_t dict_start[2];
+uint32_t dict_end[2];
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -127,8 +127,20 @@ int main(int argc, char** argv)
 	std::bitset<3*readlen> *read = new std::bitset<3*readlen> [numreads_s+numreads_N];
 	uint32_t *order_s = new uint32_t [numreads_s+numreads_N];
 	readsingletons(read,order_s);
-	dict_start[0] = 0;
-	dict_end[0] = std::min(19,readlen);
+	if(readlen > 50)
+	{
+		dict_start[0] = 0;
+		dict_end[0] = 20;
+		dict_start[1] = 21;
+		dict_end[1] = 41;
+	}
+	else
+	{
+		dict_start[0] = 0;
+		dict_end[0] = 20*readlen/50;
+		dict_start[1] = 20*readlen/50 + 1;
+		dict_end[1] = 41*readlen/50;
+	}
 	bbhashdict dict[numdict_s];
 	constructdictionary(read,dict);
 	encode(read,dict,order_s);
@@ -266,7 +278,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
 						if(ull == ull1)//checking if ull is actually the key for this bin
 						{	
-							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0]; i--)
+							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
 							{
 								auto rid = dict[l].read_id[i];
 								if((forward_bitset^read[rid]).count()<=thresh_s)
@@ -329,7 +341,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
 						if(ull == ull1)//checking if ull is actually the key for this bin
 						{	
-							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0]; i--)
+							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
 							{
 								auto rid = dict[l].read_id[i];
 								if((reverse_bitset^read[rid]).count()<=thresh_s)
@@ -389,7 +401,6 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					*it = *it - prevpos;
 					prevpos = prevpos + *it;
 				}
-			
 				writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
 			}
 			reads = {current};
@@ -582,35 +593,6 @@ void packbits()
 	in_singleton.close();
 	remove((outfile_singleton).c_str());
 	rename((outfile_singleton+".tmp").c_str(),(outfile_singleton).c_str());		
-/*	
-	//noise
-	std::ofstream f_noise(outfile_noise+".tmp",std::ios::binary);
-	std::ofstream f_noise_tail(outfile_noise+".tail");
-	file_len=0;
-	while(in_noise >> std::noskipws >> c)
-		file_len++;
-	basetoint['0'] = 0;
-	basetoint['1'] = 1;
-	basetoint['2'] = 2;
-	basetoint['\n'] = 3;
-	
-	in_noise.close();
-	in_noise.open(outfile_noise);
-	for(uint64_t i = 0; i < file_len/4; i++)
-	{
-		in_noise.read(dnabase,4);
-		dnabin = 64*basetoint[dnabase[3]]+16*basetoint[dnabase[2]]+4*
-			basetoint[dnabase[1]]+basetoint[dnabase[0]];
-		f_noise.write((char*)&dnabin,sizeof(uint8_t));
-	}
-	f_noise.close();
-	in_noise.read(dnabase,file_len%4);
-	for(int i=0; i<file_len%4;i++)
-		f_noise_tail << dnabase[i];
-	f_noise_tail.close();
-	remove(outfile_noise.c_str());
-	rename((outfile_noise+".tmp").c_str(),outfile_noise.c_str());
-*/	
 	return;
 }
 
@@ -781,10 +763,14 @@ void getDataParams()
 {
 	uint32_t number_of_lines = 0; 
 	std::string line;
-	std::ifstream myfile(infile, std::ifstream::in);
-
-	while (std::getline(myfile, line))
+	std::ifstream myfile(infile_order, std::ios::binary);
+	uint32_t order;
+	myfile.read((char*)&order,sizeof(uint32_t));
+	while (!myfile.eof())
+	{
 		++number_of_lines;
+		myfile.read((char*)&order,sizeof(uint32_t));
+	}
 	//readlen = read_length;
 	numreads = number_of_lines;
 	std::cout << "Read length: " << readlen << std::endl;
