@@ -39,12 +39,13 @@ compress()
 	mkdir -p $pathname/output/
 	echo "*** Preprocessing ***"
 	echo $filename
-	./src/preprocess.out $filename $pathname $preserve_order $preserve_quality
-	readlen="$(head $pathname/output/input_clean.dna | wc -L)"
+	readlen="$(head -2 $filename | tail -1 | wc -L)"
 	if (($readlen > 256));then
 		echo "Maximum read length exceeded" 
 		exit 1
 	fi
+	./src/preprocess.out $filename $pathname $preserve_order $preserve_quality $readlen
+	readlen="$(head $pathname/output/input_clean.dna | wc -L)"
 	echo "#define maxmatch $((readlen/2))" > src/config.h
 	echo "#define thresh 4" >> src/config.h
 	echo "#define thresh_s 24" >> src/config.h

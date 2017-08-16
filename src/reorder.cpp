@@ -44,6 +44,7 @@ class bbhashdict
 uint32_t numreads = 0;
 
 std::string infile;
+std::string infilenumreads;
 std::string outfile;
 std::string outfileRC;
 std::string outfileflag;
@@ -103,9 +104,10 @@ int main(int argc, char** argv)
 	outfileflag = basedir + "/output/tempflag.txt";
 	outfilepos = basedir + "/output/temppos.txt";
 	outfileorder = basedir + "/output/read_order.bin";
-	int status = getDataParams(); //populate numreads, readlen
-	if(status!=0)
-		return -1;
+	infilenumreads = basedir + "/output/numreads.bin";
+	
+	std::ifstream f_numreads(infilenumreads, std::ios::binary);
+	f_numreads.read((char*)&numreads,sizeof(uint32_t));	
 	omp_set_num_threads(num_thr);	
 	setglobalarrays();
 	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];

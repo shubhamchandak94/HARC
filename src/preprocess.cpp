@@ -9,31 +9,38 @@ std::string outfileorderN;
 std::string outfilequality;
 std::string outfilequalityN;
 std::string outfilequalityfinal;
+std::string outfilenumreads;
 
 std::string preserve_order;
 std::string preserve_quality;
 
-void preprocess();
+int readlen;
+
+
+int preprocess();
 
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[2]);
-	
 	infile = std::string(argv[1]);
 	preserve_order = std::string(argv[3]);
 	preserve_quality = std::string(argv[4]);
+	readlen = atoi(argv[5]);
 	outfileclean = basedir + "/output/input_clean.dna";
 	outfileN = basedir + "/output/input_N.dna";
 	outfileorderN = basedir + "/output/read_order_N.bin";
 	outfilequality = basedir + "/output/input_clean.quality";
 	outfilequalityN = basedir + "/output/input_N.quality";
 	outfilequalityfinal = basedir + "/output/output.quality";
-	preprocess();
+	outfilenumreads = basedir + "/output/numreads.bin";
+	int status = preprocess();
+	if(status != 0)
+		return -1;
 	std::cout << "Preprocessing Done!\n";
 	return 0;
 }
 
-void preprocess()
+int preprocess()
 {
 	std::string line;
 	std::ifstream myfile(infile, std::ifstream::in);
@@ -50,7 +57,8 @@ void preprocess()
 	if(preserve_order == "False" && preserve_quality == "True")
 		f_quality_N.open(outfilequalityN);
 	int i = 0;
-	uint32_t readnum = 0;
+	uint64_t readnum = 0;
+	uint64_t num_clean = 0;
 	bool flag_N = false;
 	while(std::getline(myfile, line))
 	{
@@ -59,6 +67,12 @@ void preprocess()
 			case 0:	//f_id << line << "\n";
 				break;
 			case 1: //f << line << "\n";
+				if(line.length() != readlen)
+				{	
+					std::cout << "Read length not fixed. Found two different read lengths: "<< 
+						  readlen << " and " << line.length() << "\n";
+					return -1;
+				}
 				if(line.find('N')!=std::string::npos)
 				{
 					flag_N = true;
@@ -67,6 +81,7 @@ void preprocess()
 				}
 				else
 				{
+					num_clean++;
 					flag_N = false;
 					f_clean << line << "\n";
 				}
@@ -83,5 +98,20 @@ void preprocess()
 		}
 		i = (i+1)%4;
 	}
-	return;	
+	if(readnum > 4294967290)
+	{
+		std::cout << "Too many reads. HARC supports at most 4294967290 reads\n";
+		return -1;
+	}
+	else
+	{
+		std::ofstream f_numreads(outfilenumreads,std::ios::binary);
+		uint32_t num_clean_32 = num_clean;
+		f_numreads.write((char*)&num_clean_32, sizeof(uint32_t));
+		std::cout << "Read length: " << readlen << "\n";
+		std::cout << "Total number of reads: " << readnum <<"\n";
+		std::cout << "Total number of reads without N: " << num_clean <<"\n";
+		f_numreads.close();
+	}	
+	return 0;	
 }
