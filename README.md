@@ -12,7 +12,7 @@ cd readcompression
 #### Usage
 ##### Compression - compresses FASTQ reads. Output written to .harc file
 ```bash
-./run_default.sh -c FASTQ_file [-p] [-t num_threads] [-q]
+./harc -c FASTQ_file [-p] [-t num_threads] [-q]
 ```
 -p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
 
@@ -23,7 +23,7 @@ cd readcompression
 
 ##### Decompression - decompresses reads. Output written to .dna.d file
 ```bash
-./run_default.sh -d HARC_file [-p] [-t num_threads] [-m max_memory]
+./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
 ```
 -p = Get reads in original order (slower). Only applicable if -p was used during compression.
 
@@ -34,7 +34,7 @@ cd readcompression
 
 ##### Help (this message)
 ```bash
-./run_default.sh -h
+./harc -h
 ```
 #### Downloading datasets
 ###### Usual reads
