@@ -10,31 +10,31 @@ cd readcompression
 ```
 
 #### Usage
-##### Compression - compresses FASTQ reads. Output written to .tar file
+##### Compression - compresses FASTQ reads. Output written to .harc file
 ```bash
-./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS] [-q]
+./harc -c FASTQ_file [-p] [-t num_threads] [-q]
 ```
 -p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
 
--t NUM_THREADS - default 8
+-t num_threads - default 8
 
 -q = Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
 
 
 ##### Decompression - decompresses reads. Output written to .dna.d file
 ```bash
-./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS] [-m MAX_MEMORY]
+./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
 ```
 -p = Get reads in original order (slower). Only applicable if -p was used during compression.
 
--t NUM_THREADS - default 8
+-t num_threads - default 8
 
 -m max_memory - Controls memory-time tradeoff for decompression with -p. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: 7 GB (note: less than 3 GB memory required if -p not specified)
 
 
 ##### Help (this message)
 ```bash
-./run_default.sh -h
+./harc -h
 ```
 #### Downloading datasets
 ###### Usual reads

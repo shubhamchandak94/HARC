@@ -10,20 +10,23 @@ cat << EOF
 HARC compression tool for genomic reads. Works on fixed length reads of length less than 256.
 
 Usage: 
-Compression - compresses FASTQ reads. Output written to .tar file
-./run_default.sh -c PATH_TO_FASTQ [-p] [-t NUM_THREADS] [-q]
+Compression - compresses FASTQ reads. Output written to .harc file
+./harc -c FASTQ_file [-p] [-t num_threads] [-q]
 -p Preserve order of reads
--t NUM_THREADS - Default 8
+-t num_threads - Default 8
 -q Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
 
 Decompression - decompresses reads. Output written to .dna.d file
-./run_default.sh -d PATH_TO_TAR [-p] [-t NUM_THREADS] [-m max_memory]
+./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
 -p Get reads in original order (slower). Only applicable if -p was used during compression.
--t NUM_THREADS - Default 8
+-t num_threads - Default 8
 -m max_memory - Controls memory-time tradeoff for decompression with -p. Specify max memory in GB (minimum 3 GB). e.g. -m 10 for 10 GB maximum memory. Default: 7 GB (note: less than 3 GB memory required if -p not specified)
 
 Help (this message)
-./run_default.sh -h
+./harc -h
+
+See README and more supplementary information at:
+https://github.com/shubhamchandak94/HARC
 
 EOF
 exit 0
@@ -125,7 +128,7 @@ compress()
 	fi
 	rm $pathname/output/*.bin
 	rm $pathname/output/*.singleton
-	tar -cf $pathname/$(basename "$filename" .fastq).tar -C $pathname/output .
+	tar -cf $pathname/$(basename "$filename" .fastq).harc -C $pathname/output .
 	rm -r $pathname/output/
 }
 
