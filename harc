@@ -184,7 +184,7 @@ decompress()
 	else
 		./src/decoder.out $pathname $num_thr $num_thr_e
 	fi
-	mv $pathname/output/output.dna $pathname/$(basename "$filename" .tar).dna.d
+	mv $pathname/output/output.dna $pathname/$(basename "$filename" .harc).dna.d
 	rm -r $pathname/output/
 }
 

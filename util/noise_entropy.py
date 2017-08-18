@@ -3,8 +3,9 @@ import os
 import numpy as np
 import struct
 
-readlen = 63
-
+readlen = 101
+inFile = "../temp"
+cluster_boundary = 3#1 for 10, 2 for 20, 3 for 30
 
 ###################################
 def quality_to_prob(qual_string):
@@ -34,20 +35,22 @@ def qv_to_prob():
 
 def quality_value_stats(inFile):
   
-    qv_counts_0order = np.ones((42,readlen))
-    qv_counts_1order = np.ones((42,42,readlen))
-    qv_counts_2order = np.ones((42,42,42,readlen))
+    qv_counts_0order = np.zeros((42,readlen))
+    qv_counts_1order = np.zeros((42,42,readlen))
+    qv_counts_2order = np.zeros((42,42,42,readlen))
     
-    qv_counts_0order_1 = np.ones((42,readlen))
-    qv_counts_1order_1 = np.ones((42,42,readlen))
-    qv_counts_2order_1 = np.ones((42,42,42,readlen))
+    qv_counts_0order_1 = np.zeros((42,readlen))
+    qv_counts_1order_1 = np.zeros((42,42,readlen))
+    qv_counts_2order_1 = np.zeros((42,42,42,readlen))
     
-    qv_counts_0order_2 = np.ones((42,readlen))
-    qv_counts_1order_2 = np.ones((42,42,readlen))
-    qv_counts_2order_2 = np.ones((42,42,42,readlen))
+    qv_counts_0order_2 = np.zeros((42,readlen))
+    qv_counts_1order_2 = np.zeros((42,42,readlen))
+    qv_counts_2order_2 = np.zeros((42,42,42,readlen))
 
     
     f = open(inFile,'r')
+
+    num_reads_1 = 0
     s = f.read(8)
     num_reads_1 = struct.unpack('Q',s)[0]
     for i in range(readlen):
@@ -113,7 +116,7 @@ def avg_quality_value(inFile):
             qv_avg[i] = np.mean(qv_id)
     return qv_avg
 
-inFile = "../temp"
+
 ret = quality_value_stats(inFile)
 
 
