@@ -14,7 +14,7 @@ Compression - compresses FASTQ reads. Output written to .harc file
 ./harc -c FASTQ_file [-p] [-t num_threads] [-q]
 -p Preserve order of reads
 -t num_threads - Default 8
--q Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
+-q Write quality values and Read IDs to .quality and .id files, respectively. Quality values and IDs are appropriately reordered if -p is not specified. 
 
 Decompression - decompresses reads. Output written to .dna.d file
 ./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
@@ -115,14 +115,17 @@ compress()
 		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
+			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
-			echo "Reordering quality values"
+			echo "Reordering quality values and ids"
 			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
 			./src/reorder_quality.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
 			rm $pathname/output/*.quality
+			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
+			rm $pathname/output/*.id
 			echo "Done!"
 		fi	
 	fi

@@ -9,6 +9,9 @@ std::string outfileorderN;
 std::string outfilequality;
 std::string outfilequalityN;
 std::string outfilequalityfinal;
+std::string outfileid;
+std::string outfileidN;
+std::string outfileidfinal;
 std::string outfilenumreads;
 
 std::string preserve_order;
@@ -32,6 +35,9 @@ int main(int argc, char** argv)
 	outfilequality = basedir + "/output/input_clean.quality";
 	outfilequalityN = basedir + "/output/input_N.quality";
 	outfilequalityfinal = basedir + "/output/output.quality";
+	outfileid = basedir + "/output/input_clean.id";
+	outfileidN = basedir + "/output/input_N.id";
+	outfileidfinal = basedir + "/output/output.id";
 	outfilenumreads = basedir + "/output/numreads.bin";
 	int status = preprocess();
 	if(status != 0)
@@ -48,14 +54,26 @@ int preprocess()
 	std::ofstream f_N(outfileN);
 	std::ofstream f_order_N(outfileorderN,std::ios::binary);
 	std::ofstream f_quality;
+	std::ofstream f_id;
+	
 	if(preserve_quality == "True")
 		if(preserve_order == "False")	
+		{
 			f_quality.open(outfilequality);
+			f_id.open(outfileid);
+		}
 		else
+		{
 			f_quality.open(outfilequalityfinal);
+			f_id.open(outfileidfinal);
+		}
 	std::ofstream f_quality_N;
+	std::ofstream f_id_N;
 	if(preserve_order == "False" && preserve_quality == "True")
+	{
 		f_quality_N.open(outfilequalityN);
+		f_id_N.open(outfileidN);
+	}
 	int i = 0;
 	uint64_t readnum = 0;
 	uint64_t num_clean = 0;
@@ -64,7 +82,11 @@ int preprocess()
 	{
 		switch(i)
 		{
-			case 0:	//f_id << line << "\n";
+			case 0:	if(preserve_quality == "True")
+					if(!flag_N || preserve_order == "True")
+						f_id << line << "\n";
+					else
+						f_id_N << line << "\n";
 				break;
 			case 1: //f << line << "\n";
 				if(line.length() != readlen)
@@ -87,8 +109,7 @@ int preprocess()
 				}
 				break;
 			case 2: break;
-			case 3:	//f_quality << line << "\n";
-				if(preserve_quality == "True")
+			case 3: if(preserve_quality == "True")
 					if(!flag_N || preserve_order == "True")
 						f_quality << line << "\n";
 					else
