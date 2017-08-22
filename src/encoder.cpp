@@ -294,6 +294,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 								if(flag == 1)//match found
 								{
 									flag = 0;
+									list_size++;
 									pos.insert(pos_it,j);
 									reads.insert(reads_it,bitsettostring(read[rid]));
 									order.insert(order_it,order_s[rid]);
@@ -357,6 +358,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 								if(flag == 1)//match found
 								{
 									flag = 0;
+									list_size++;
 									pos.insert(pos_it,j);
 									reads.insert(reads_it,reverse_complement(bitsettostring(read[rid])));
 									order.insert(order_it,order_s[rid]);
