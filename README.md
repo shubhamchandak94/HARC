@@ -18,7 +18,7 @@ cd readcompression
 
 -t num_threads - default 8
 
--q = Write quality values to .quality file. Quality values are appropriately reordered if -p is not specified. 
+-q = Write quality values and read IDs to .quality and .id files, respectively. Quality values and read IDs are appropriately reordered if -p is not specified. 
 
 
 ##### Decompression - decompresses reads. Output written to .dna.d file
