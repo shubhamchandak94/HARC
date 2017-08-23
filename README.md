@@ -54,7 +54,7 @@ For compressing file.fastq while preserving its order, run
 ./harc -c file.fastq -p
 ```
 
-Now, file.harc also contains the order information and it can be compressed with or without the -p flag. If -p flag is not used the reads will be decompressed faster but will be reordered from the original. To decompress and restore the original order, run
+Now, file.harc also contains the order information and it can be decompressed with or without the -p flag. If -p flag is not used, the reads will be decompressed faster but not in the original order. To decompress and restore the original order, run
 ```bash
 ./harc -d file.harc -p
 ```
@@ -69,6 +69,7 @@ To preserve the quality and read identifiers, use -q switch during compression, 
 ./harc -c file.fastq -q
 ```
 This will write the quality values to file.quality and read identifiers to file.id in the same directory as file.fastq. Since the command was run without the -p flag, the quality values and the IDs will be reordered to match the new order of the reads. Quality value compressor QVZ (available at https://github.com/mikelhernaez/qvz) can be used to directly compress file.quality.
+
 ### Downloading datasets
 ###### Usual reads
 ```bash
@@ -116,6 +117,25 @@ read
 quality score
 ```
 
+### Computing noise entropy
+The directory util/ contains quality_counts.cpp and noise_entropy.py, which can be used to compute the noise entropy upper bound using the method described in the Supplementary Data (https://github.com/shubhamchandak94/HARC/blob/master/supplementary-data.pdf). To use these, first write the quality values (every fourth line of the FASTQ file) to a separate file, e.g., by using
+```bash
+sed -n '4~4p' file.fastq > file.quality
+```
+Now modify the read length in the header of quality_counts.cpp and compile it by running
+```bash
+g++ util/quality_counts.cpp -O3 -march=native -std=c++11 -o util/quality_counts.out
+```
+Next, generate the quality counts by running
+```bash
+./util/quality_counts.out file.quality file.quality_counts
+```
+Update the read length and input file in the header of noise_entropy.py and run
+```bash
+python util/noise_entropy.py
+```
+to get the noise entropies for models of different orders.
+
 ### Other compressors (for evaluation)
 
 ##### Installing & Running orcom (boost should be installed)
@@ -124,13 +144,13 @@ git clone https://github.com/lrog/orcom.git
 cd orcom
 make boost
 cd bin
-./orcom_bin e -iPATH/SRR065390_clean.fastq -oPATH/SRR065390_clean.bin
-./orcom_pack e -iPATH/SRR065390_clean.bin -oPATH/SRR065390_clean.orcom
+./orcom_bin e -iPATH/SRR065390.fastq -oPATH/SRR065390.bin
+./orcom_pack e -iPATH/SRR065390.bin -oPATH/SRR065390.orcom
 ```
 
 ##### Getting orcom ordered file
 ```bash
-./orcom_pack d -iPATH/SRR065390_clean.orcom -oPATH/SRR065390_clean.dna
+./orcom_pack d -iPATH/SRR065390.orcom -oPATH/SRR065390.dna
 ```
 
 The dna file is of the form:
