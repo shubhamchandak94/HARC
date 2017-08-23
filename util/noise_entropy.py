@@ -3,9 +3,9 @@ import os
 import numpy as np
 import struct
 
-readlen = 63
-inFile = "../temp"#logs/ERP001775_1.quality_counts"
-num_clusters = 2
+readlen = 101
+inFile = "logs/ERP001775_1.quality_counts"
+num_clusters = 4
 
 ###################################
 def quality_to_prob(qual_string):
