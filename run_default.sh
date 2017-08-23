@@ -131,10 +131,11 @@ compress()
 		./src/pack_order.out $pathname	
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr ########KEDAR
 		if [[ $preserve_quality == "True" ]];then
 			./src/merge_quality_N.out $pathname
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
+			mv $pathname/output.readid $pathname/$(basename "$filename" .fastq).readid
 			rm $pathname/output/*.quality
 		fi
 	else
@@ -205,8 +206,9 @@ decompress()
 	fi
 
 	#rm -r $pathname/output/
-	#mv $pathname/output.dna $pathname/$(basename "$filename" .tar).dna.d
-	mv $pathname/output.dna $pathname/output/output.dna
+	mv $pathname/output/output.dna $pathname/$(basename "$filename" .tar).dna.d
+	rm -r $pathname/output/
+	#mv $pathname/output.dna $pathname/output/output.dna
 }
 
 #Initialize variables to default values.

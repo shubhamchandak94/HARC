@@ -756,13 +756,13 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 	{	
 		_read_char_id = chartolong[(*reads_it)[j]];
 		_ref_char_id = chartolong[ref[j]];
-		bool allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alternate_thresh);	
+		bool allowed_alternate_flag = false;
+		if( _read_char_id == 4)
+			allowed_alternate_flag = true;
+		else
+			allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alternate_thresh);
+			
 		if(((*reads_it)[j] != ref[j]) && allowed_alternate_flag)
-// =======
-	
-// 	for(long j = 0; j < readlen; j++)
-// 		if((*reads_it)[j] != ref[j])
-// >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 		{
 			f_noise<<enc_noise[ref[j]][(*reads_it)[j]];
 			c = j-prevj;
@@ -788,15 +788,16 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 		currentpos = prevpos + *pos_it;
 		prevj = 0;
 		for(long j = 0; j < readlen; j++)
-// <<<<<<< HEAD
 		{
 			_read_char_id = chartolong[(*reads_it)[j]];
 			_ref_char_id = chartolong[ref[currentpos+j]];
-			bool allowed_alternate_flag = (count[currentpos+j][_read_char_id] > (int)count[currentpos+j][_ref_char_id]*alternate_thresh);	
+			bool allowed_alternate_flag = false;
+			if( _read_char_id == 4)
+				allowed_alternate_flag = true;
+			else
+				allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alternate_thresh);	
+			
 			if(((*reads_it)[j] != ref[currentpos+j]) && allowed_alternate_flag)
-// =======
-// 			if((*reads_it)[j] != ref[currentpos+j])
-// >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 			{
 				f_noise<<enc_noise[ref[currentpos+j]][(*reads_it)[j]];
 				c = j-prevj;
