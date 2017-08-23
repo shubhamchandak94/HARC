@@ -2,14 +2,14 @@
 
 HARC (HAsh-based Read Compressor) - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100 during compression. The algorithm requires C++11 and g++ compiler and works on Linux.
 
-#### Installation
+### Installation
 ```bash
 git clone https://github.com/shubhamchandak94/readcompression.git
 cd readcompression
 ./install.sh
 ```
 
-#### Usage
+### Usage
 ##### Compression - compresses FASTQ reads. Output written to .harc file
 ```bash
 ./harc -c FASTQ_file [-p] [-t num_threads] [-q]
@@ -36,7 +36,40 @@ cd readcompression
 ```bash
 ./harc -h
 ```
-#### Downloading datasets
+
+### Example Usage of HARC
+For compressing file.fastq in the HARC home directory without preserving order using default 8 threads, 
+```bash
+./harc -c file.fastq
+```
+The compressed file is located in the same directory and is named file.harc.
+
+To decompress file.harc to file.dna.d containing the reads (not in the original order) using 4 threads,
+```bash
+./harc -d file.harc -t 4
+```
+
+For compressing file.fastq while preserving its order, run 
+```bash
+./harc -c file.fastq -p
+```
+
+Now, file.harc also contains the order information and it can be compressed with or without the -p flag. If -p flag is not used the reads will be decompressed faster but will be reordered from the original. To decompress and restore the original order, run
+```bash
+./harc -d file.harc -p
+```
+Decompression with -p flag also allows the user to set the maximum memory used during the order restoration step by using the -m flag, e.g., to use at most 10 GB memory for that step while decompressing, run
+```bash
+./harc -d file.harc -p -m 10
+```
+Note, however, that the BSC decompression step uses 350 MB/thread (both with and without -p) irrespective of the -m switch. This component can be controlled by reducing the number of threads. Also, maximum threads used by HARC during decompression is limited by the number of threads used during compression.
+
+To preserve the quality and read identifiers, use -q switch during compression, e.g.,
+```bash
+./harc -c file.fastq -q
+```
+This will write the quality values to file.quality and read identifiers to file.id in the same directory as file.fastq. Since the command was run without the -p flag, the quality values and the IDs will be reordered to match the new order of the reads. Quality value compressor QVZ (available at https://github.com/mikelhernaez/qvz) can be used to directly compress file.quality.
+### Downloading datasets
 ###### Usual reads
 ```bash
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_1.fastq.gz
@@ -83,7 +116,7 @@ read
 quality score
 ```
 
-#### Other compressors (for evaluation)
+### Other compressors (for evaluation)
 
 ##### Installing & Running orcom (boost should be installed)
 ```bash
