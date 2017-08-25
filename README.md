@@ -4,8 +4,8 @@ HARC (HAsh-based Read Compressor) - Tool for compression of genomic reads in FAS
 
 ### Installation
 ```bash
-git clone https://github.com/shubhamchandak94/readcompression.git
-cd readcompression
+git clone https://github.com/shubhamchandak94/HARC.git
+cd HARC
 ./install.sh
 ```
 
