@@ -122,7 +122,7 @@ quality score
 
 ### Computing noise entropy
 The directory util/ contains quality_counts.cpp and noise_entropy.py, which can be used to compute the noise entropy upper bound using the method described in the Supplementary Data (https://github.com/shubhamchandak94/HARC/blob/master/supplementary-data.pdf). To use these, 
-1. Write the quality values (every fourth line of the FASTQ file) to a separate file, e.g., by using
+1. Write the quality values (every fourth line of the FASTQ file) to a separate file, e.g., by using 
 ```bash
 sed -n '4~4p' file.fastq > file.quality
 ```
@@ -134,10 +134,10 @@ g++ util/quality_counts.cpp -O3 -march=native -std=c++11 -o util/quality_counts.
 ```bash
 ./util/quality_counts.out file.quality file.quality_counts
 ```
-4. Update the read length and input file in the header of noise_entropy.py and run
+4. Update the read length and input file in the header of noise_entropy.py and run 
 ```bash
 python util/noise_entropy.py
-```
+``` 
 to get the noise entropies for models of different orders.
 
 ### Other compressors (for evaluation)
