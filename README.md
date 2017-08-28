@@ -13,24 +13,27 @@ cd HARC
 ##### Compression - compresses FASTQ reads. Output written to .harc file
 ```bash
 ./harc -c FASTQ_file [-p] [-t num_threads] [-q]
-```
+
 -p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
 
 -t num_threads - default 8
 
--q = Write quality values and read IDs to .quality and .id files, respectively. Quality values and read IDs are appropriately reordered if -p is not specified. 
-
+-q = Write quality values and read IDs to .quality and .id files, respectively. 
+Quality values and read IDs are appropriately reordered if -p is not specified. 
+```
 
 ##### Decompression - decompresses reads. Output written to .dna.d file
 ```bash
 ./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
-```
+
 -p = Get reads in original order (slower). Only applicable if -p was used during compression.
 
 -t num_threads - default 8
 
--m max_memory - Controls memory-time tradeoff for decompression with -p. Specify max memory in GB (minimum 3 GB for 8 threads). e.g. -m 10 for 10 GB maximum memory. Default: 7 GB (note: less than 3 GB memory required if -p not specified)
-
+-m max_memory - Controls memory-time tradeoff for decompression with -p. 
+Specify max memory in GB (minimum 3 GB for 8 threads). e.g. -m 10 for 10 GB maximum memory. 
+Default: 7 GB (note: less than 3 GB memory required if -p not specified)
+```
 
 ##### Help (this message)
 ```bash
@@ -71,7 +74,7 @@ To preserve the quality and read identifiers, use -q switch during compression, 
 This will write the quality values to file.quality and read identifiers to file.id in the same directory as file.fastq. Since the command was run without the -p flag, the quality values and the IDs will be reordered to match the new order of the reads. Quality value compressor QVZ (available at https://github.com/mikelhernaez/qvz) can be used to directly compress file.quality.
 
 ### Downloading datasets
-###### Usual reads
+###### Genomic sequencing reads
 ```bash
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_1.fastq.gz
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_2.fastq.gz
@@ -118,19 +121,20 @@ quality score
 ```
 
 ### Computing noise entropy
-The directory util/ contains quality_counts.cpp and noise_entropy.py, which can be used to compute the noise entropy upper bound using the method described in the Supplementary Data (https://github.com/shubhamchandak94/HARC/blob/master/supplementary-data.pdf). To use these, first write the quality values (every fourth line of the FASTQ file) to a separate file, e.g., by using
+The directory util/ contains quality_counts.cpp and noise_entropy.py, which can be used to compute the noise entropy upper bound using the method described in the Supplementary Data (https://github.com/shubhamchandak94/HARC/blob/master/supplementary-data.pdf). To use these, 
+1. Write the quality values (every fourth line of the FASTQ file) to a separate file, e.g., by using
 ```bash
 sed -n '4~4p' file.fastq > file.quality
 ```
-Now modify the read length in the header of quality_counts.cpp and compile it by running
+2. Modify the read length in the header of quality_counts.cpp and compile it by running
 ```bash
 g++ util/quality_counts.cpp -O3 -march=native -std=c++11 -o util/quality_counts.out
 ```
-Next, generate the quality counts by running
+3. Generate the quality counts by running
 ```bash
 ./util/quality_counts.out file.quality file.quality_counts
 ```
-Update the read length and input file in the header of noise_entropy.py and run
+4. Update the read length and input file in the header of noise_entropy.py and run
 ```bash
 python util/noise_entropy.py
 ```
