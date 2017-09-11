@@ -78,13 +78,13 @@ compress()
 	 
 	./src/reorder.out $pathname
 #<<<<<<< HEAD:run_default.sh
-	mv $pathname/input_N.dna $pathname/output/input_N.dna
-	mv $pathname/input_clean.dna $pathname/output/input_clean.dna
-	mv $pathname/read_order_N.bin $pathname/output/read_order_N.bin
-	if [[ $preserve_quality == "True" ]];then
-		mv $pathname/input_N.quality $pathname/output/input_N.quality
-		mv $pathname/input_clean.quality $pathname/output/input_clean.quality
-	fi
+	# mv $pathname/input_N.dna $pathname/output/input_N.dna
+	# mv $pathname/input_clean.dna $pathname/output/input_clean.dna
+	# mv $pathname/read_order_N.bin $pathname/output/read_order_N.bin
+	# if [[ $preserve_quality == "True" ]];then
+	# 	mv $pathname/input_N.quality $pathname/output/input_N.quality
+	# 	mv $pathname/input_clean.quality $pathname/output/input_clean.quality
+	# fi
 
 #=======
 #>>>>>>> 5a6551d005a1a95c49abd259bcadb8addc4039fc:harc
@@ -141,12 +141,7 @@ compress()
 		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr ########KEDAR
 		if [[ $preserve_quality == "True" ]];then
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
-#<<<<<<< HEAD:run_default.sh
-			mv $pathname/output.readid $pathname/$(basename "$filename" .fastq).readid
-			rm $pathname/output/*.quality
-#=======
-#			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
-#>>>>>>> 5a6551d005a1a95c49abd259bcadb8addc4039fc:harc
+			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
