@@ -453,17 +453,6 @@ void setglobalarrays()
 	return;
 }
 	
-/*
-void getDataParams()
-{
-	std::string line;
-	std::ifstream myfile(infile_meta, std::ifstream::in);
-	
-	myfile >> readlen;
-	std::cout << "Read length: " << readlen << std::endl;
-	myfile.close();
-}
-*/
 
 std::bitset<2*readlen> stringtobitset(std::string s)
 {

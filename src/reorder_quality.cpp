@@ -12,11 +12,16 @@ uint32_t numreads, numreads_N;
 std::string outfile;
 std::string infile;
 std::string infile_N;
+std::string outfile_id;
+std::string infile_id;
+std::string infile_id_N;
 std::string infile_order;
 std::string infile_order_N_pe;//post-encoding
 
 void reorder_quality();
 void reorder_quality_N();
+void reorder_id();
+void reorder_id_N();
 
 void getDataParams();//populate numreads and numreads_N
 
@@ -26,11 +31,16 @@ int main(int argc, char** argv)
 	outfile = basedir + "/output/output.quality";
 	infile = basedir + "/output/input_clean.quality";
 	infile_N = basedir + "/output/input_N.quality";
+	outfile_id = basedir + "/output/output.id";
+	infile_id = basedir + "/output/input_clean.id";
+	infile_id_N = basedir + "/output/input_N.id";
 	infile_order = basedir + "/output/read_order.bin";
 	infile_order_N_pe = basedir + "/output/read_order_N_pe.bin";
 	getDataParams();
 	reorder_quality_N();
 	reorder_quality();
+	reorder_id_N();
+	reorder_id();
 	return 0;
 }
 
@@ -115,6 +125,92 @@ void reorder_quality_N()
 	}
 	delete[] index_array;
 	delete[] quality;
+	delete[] reverse_index;
+
+	f.close();
+	return;
+}
+
+void reorder_id()
+{
+	std::ofstream f(outfile_id);
+	std::ifstream f_in(infile_id);
+	std::ifstream f_N(infile_id_N);
+	std::ifstream f_order(infile_order,std::ios::binary);
+	uint32_t order;
+	uint32_t *reverse_index = new uint32_t [numreads];
+	for (uint32_t i = 0; i < numreads; i++)
+	{
+		f_order.read((char*)&order,sizeof(uint32_t));
+		reverse_index[order] = i;
+	}
+	f_order.close();
+	uint32_t max_bin_size = numreads/8;
+	std::string s;
+	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
+	{
+		auto numreads_bin = max_bin_size;
+		if (i == numreads/max_bin_size)
+			numreads_bin = numreads%max_bin_size;
+		uint32_t *index_array = new uint32_t [numreads_bin];
+		std::string *id_bin = new std::string [numreads_bin];
+		uint32_t pos = 0;
+		for(uint32_t j = 0; j < numreads; j++)
+		{
+			order = reverse_index[j];
+			std::getline(f_in,s);
+			if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
+			{
+				index_array[order-i*max_bin_size] = pos;
+				id_bin[pos] = s;
+				pos++;
+			}
+		}
+		for(uint32_t j = 0; j < numreads_bin; j++)
+		{
+			f << id_bin[index_array[j]] << "\n";
+		}
+		delete[] index_array;
+		delete[] id_bin;
+	}
+	f_in.close();
+	f << f_N.rdbuf();
+	delete[] reverse_index;
+	f_N.close();
+	f.close();
+	return;
+}
+
+void reorder_id_N()
+{
+	std::ifstream f_N(infile_id_N);
+	std::ifstream f_order_N_pe(infile_order_N_pe,std::ios::binary);
+	uint32_t order;
+	uint32_t *reverse_index = new uint32_t [numreads_N];
+	for (uint32_t i = 0; i < numreads_N; i++)
+	{
+		f_order_N_pe.read((char*)&order,sizeof(uint32_t));
+		reverse_index[order] = i;
+	}
+	f_order_N_pe.close();
+	char s[readlen+1];
+	s[readlen] = '\0';
+	uint32_t *index_array = new uint32_t [numreads_N];
+	std::string *id = new std::string [numreads_N];	
+	uint32_t pos = 0;
+	for(uint32_t j = 0; j < numreads_N; j++)
+	{
+		index_array[reverse_index[j]] = j;
+		std::getline(f_N,id[j]);
+	}
+	f_N.close();
+	std::ofstream f(infile_N);
+	for(uint32_t j = 0; j < numreads_N; j++)
+	{
+		f << id[index_array[j]] << "\n";
+	}
+	delete[] index_array;
+	delete[] id;
 	delete[] reverse_index;
 
 	f.close();
