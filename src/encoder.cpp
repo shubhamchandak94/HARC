@@ -647,8 +647,6 @@ void packbits()
 }
 
 
-// <<<<<<< HEAD
-// std::vector<std::array<long,4>> buildcontig(std::vector<std::string> reads, std::vector<long> pos)
 std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size)
 
 {
@@ -659,23 +657,6 @@ std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::l
 	if(list_size == 1)
 		return count;
 
-	// std::vector<std::array<long,4>> count(readlen,{0,0,0,0});
-	// for(long i = 0; i < readlen; i++)
-	// 	count[i][chartolong[reads[0][i]]] = 1;
-
-	// if(reads.size() == 1)
-	// 	return count;
-
-// =======
-// std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size)
-// {
-	// if(list_size == 1)
-		// return reads.front();
-	// auto reads_it = reads.begin();
-	// std::vector<std::array<long,4>> count(readlen,{0,0,0,0});
-	// for(long i = 0; i < readlen; i++)
-		// count[i][chartolong[(*reads_it)[i]]] = 1;
-// >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 	long prevpos = 0,currentpos;
 	auto pos_it = pos.begin();
 	++reads_it;
@@ -709,15 +690,6 @@ std::string generateRef(std::vector<std::array<long,4>> count)
 	return ref;
 }
 
-// <<<<<<< HEAD
-// <<<<<<< HEAD
-
-// void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos)
-// =======
-// >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
-// =======
-// void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size)
-// >>>>>>> 423ae1669879a3eeeebaebcfaee829d5f19c7b5a
 void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size)
 {
 	std::string ref = generateRef(count);
@@ -735,7 +707,6 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 		return;
 	}
 	long prevj = 0;
-// <<<<<<< HEAD
 	auto pos_it = pos.begin();
 	auto reads_it = reads.begin();
 	auto order_it = order.begin();
@@ -781,7 +752,7 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 			_read_char_id = chartolong[(*reads_it)[j]];
 			_ref_char_id = chartolong[ref[currentpos+j]];
 			bool allowed_alternate_flag = false;
-			if( _read_char_id == 4)
+			if( _read_char_id == 4)  //Temporary to positions with N
 				allowed_alternate_flag = true;
 			else
 				allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alternate_thresh);	
