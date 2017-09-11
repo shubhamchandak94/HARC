@@ -1,43 +1,80 @@
 # HARC
 
-HARC (HAsh-based Read Compressor) - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100 during compression. The algorithm requires C++11 and g++ compiler and works on Linux.
+HARC (HAsh-based Read Compressor) - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100 during compression. The algorithm requires C++11 and g++ compiler and works on Linux. p7zip should already be installed.
 
-#### Installation
+### Installation
 ```bash
-git clone https://github.com/shubhamchandak94/readcompression.git
-cd readcompression
+git clone https://github.com/shubhamchandak94/HARC.git
+cd HARC
 ./install.sh
 ```
 
-#### Usage
+### Usage
 ##### Compression - compresses FASTQ reads. Output written to .harc file
 ```bash
 ./harc -c FASTQ_file [-p] [-t num_threads] [-q]
-```
+
 -p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
 
 -t num_threads - default 8
 
--q = Write quality values and read IDs to .quality and .id files, respectively. Quality values and read IDs are appropriately reordered if -p is not specified. 
-
+-q = Write quality values and read IDs to .quality and .id files, respectively. 
+Quality values and read IDs are appropriately reordered if -p is not specified. 
+```
 
 ##### Decompression - decompresses reads. Output written to .dna.d file
 ```bash
 ./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
-```
+
 -p = Get reads in original order (slower). Only applicable if -p was used during compression.
 
 -t num_threads - default 8
 
--m max_memory - Controls memory-time tradeoff for decompression with -p. Specify max memory in GB (minimum 3 GB for 8 threads). e.g. -m 10 for 10 GB maximum memory. Default: 7 GB (note: less than 3 GB memory required if -p not specified)
-
+-m max_memory - Controls memory-time tradeoff for decompression with -p. 
+Specify max memory in GB (minimum 3 GB for 8 threads). e.g. -m 10 for 10 GB maximum memory. 
+Default: 7 GB (note: less than 3 GB memory required if -p not specified)
+```
 
 ##### Help (this message)
 ```bash
 ./harc -h
 ```
-#### Downloading datasets
-###### Usual reads
+
+### Example Usage of HARC
+For compressing file.fastq in the HARC home directory without preserving order using default 8 threads, 
+```bash
+./harc -c file.fastq
+```
+The compressed file is located in the same directory and is named file.harc.
+
+To decompress file.harc to file.dna.d containing the reads (not in the original order) using 4 threads,
+```bash
+./harc -d file.harc -t 4
+```
+
+For compressing file.fastq while preserving its order, run 
+```bash
+./harc -c file.fastq -p
+```
+
+Now, file.harc also contains the order information and it can be decompressed with or without the -p flag. If -p flag is not used, the reads will be decompressed faster but not in the original order. To decompress and restore the original order, run
+```bash
+./harc -d file.harc -p
+```
+Decompression with -p flag also allows the user to set the maximum memory used during the order restoration step by using the -m flag, e.g., to use at most 10 GB memory for that step while decompressing, run
+```bash
+./harc -d file.harc -p -m 10
+```
+Note, however, that the BSC decompression step uses 350 MB/thread (both with and without -p) irrespective of the -m switch. This component can be controlled by reducing the number of threads. Also, maximum threads used by HARC during decompression is limited by the number of threads used during compression.
+
+To preserve the quality and read identifiers, use -q switch during compression, e.g.,
+```bash
+./harc -c file.fastq -q
+```
+This will write the quality values to file.quality and read identifiers to file.id in the same directory as file.fastq. Since the command was run without the -p flag, the quality values and the IDs will be reordered to match the new order of the reads. Quality value compressor QVZ (available at https://github.com/mikelhernaez/qvz) can be used to directly compress file.quality.
+
+### Downloading datasets
+###### Genomic sequencing reads
 ```bash
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_1.fastq.gz
 wget -b ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR554/SRR554369/SRR554369_2.fastq.gz
@@ -83,7 +120,27 @@ read
 quality score
 ```
 
-#### Other compressors (for evaluation)
+### Computing noise entropy
+The directory util/ contains quality_counts.cpp and noise_entropy.py, which can be used to compute the noise entropy upper bound using the method described in the Supplementary Data (https://github.com/shubhamchandak94/HARC/blob/master/supplementary-data.pdf). To use these, 
+1. Write the quality values (every fourth line of the FASTQ file) to a separate file, e.g., by using 
+```bash
+sed -n '4~4p' file.fastq > file.quality
+```
+2. Modify the read length in the header of quality_counts.cpp and compile it by running
+```bash
+g++ util/quality_counts.cpp -O3 -march=native -std=c++11 -o util/quality_counts.out
+```
+3. Generate the quality counts by running
+```bash
+./util/quality_counts.out file.quality file.quality_counts
+```
+4. Update the read length and input file in the header of noise_entropy.py and run 
+```bash
+python util/noise_entropy.py
+``` 
+to get the noise entropies for models of different orders.
+
+### Other compressors (for evaluation)
 
 ##### Installing & Running orcom (boost should be installed)
 ```bash
@@ -91,13 +148,13 @@ git clone https://github.com/lrog/orcom.git
 cd orcom
 make boost
 cd bin
-./orcom_bin e -iPATH/SRR065390_clean.fastq -oPATH/SRR065390_clean.bin
-./orcom_pack e -iPATH/SRR065390_clean.bin -oPATH/SRR065390_clean.orcom
+./orcom_bin e -iPATH/SRR065390.fastq -oPATH/SRR065390.bin
+./orcom_pack e -iPATH/SRR065390.bin -oPATH/SRR065390.orcom
 ```
 
 ##### Getting orcom ordered file
 ```bash
-./orcom_pack d -iPATH/SRR065390_clean.orcom -oPATH/SRR065390_clean.dna
+./orcom_pack d -iPATH/SRR065390.orcom -oPATH/SRR065390.dna
 ```
 
 The dna file is of the form:
