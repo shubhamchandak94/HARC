@@ -22,6 +22,8 @@ std::string infile_order;
 std::string infile_N;
 std::string infile_order_N_pe;
 std::string infile_singleton;
+std::string infile_flag_N;
+
 
 long chartolong[128];
 char dec_noise[128][128];
@@ -76,6 +78,8 @@ int main(int argc, char** argv)
 	infile_N = basedir + "/output/input_N.dna";
 	infile_order_N_pe =  basedir + "/output/read_order_N_pe.bin";
 	infile_singleton = basedir + "/output/read_singleton.txt";
+	infile_flag_N =  basedir + "/output/read_flag_N.txt";
+
 //	getDataParams(); //populate readlen
 	omp_set_num_threads(num_thr);
 	setglobalarrays();
@@ -103,7 +107,8 @@ void decode()
 		std::ifstream f_noisepos(infile_noisepos+'.'+std::to_string(tid_e));
 		std::ifstream f_rev(infile_rev+'.'+std::to_string(tid_e));
 		std::ofstream f_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
-	
+		std::ifstream f_flag_N(infile_flag_N+'.'+std::to_string(tid_e));
+
 		char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
 		std::bitset<2*readlen> b;
 		currentread[readlen] = '\0';
@@ -111,7 +116,8 @@ void decode()
 		ref[readlen] = '\0';
 		std::string noise;
 		char c;
-		long pos; 
+		long pos;
+		char flag_N; 
 
 		while(f_pos >> std::noskipws >> c)//don't skip whitespaces
 		{
@@ -133,7 +139,9 @@ void decode()
 				prevnoisepos = noisepos;	
 			}
 			c = f_rev.get();
-			if(strchr(currentread,'N')!=NULL)
+			flag_N = f_flag_N.get();
+			//if(strchr(currentread,'N')!=NULL)
+			if(flag_N == '1')
 			{
 				if(c == 'd')
 					f_N_tmp << currentread<<"\n";
@@ -166,6 +174,7 @@ void decode()
 		f_noisepos.close();
 		f_rev.close();
 		f_N_tmp.close();
+		f_flag_N.close();
 	}
 	}
 	numreads = 0;

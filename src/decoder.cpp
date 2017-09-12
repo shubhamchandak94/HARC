@@ -78,7 +78,7 @@ void decode()
 		std::ifstream f_noise(infile_noise+'.'+std::to_string(tid_e));
 		std::ifstream f_noisepos(infile_noisepos+'.'+std::to_string(tid_e));
 		std::ifstream f_rev(infile_rev+'.'+std::to_string(tid_e));
-		std::ofstream f_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
+		//std::ofstream f_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
 		
 		char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
 		currentread[readlen] = '\0';
@@ -107,26 +107,26 @@ void decode()
 				prevnoisepos = noisepos;	
 			}
 			c = f_rev.get();
-			if(strchr(currentread,'N')!=NULL)
-			{
-				if(c == 'd')
-					f_N_tmp << currentread<<"\n";
-				else
-				{
-					reverse_complement(currentread,revread);
-					f_N_tmp << revread<<"\n";
-				}
-			}
+			// if(strchr(currentread,'N')!=NULL)
+			// {
+			// 	if(c == 'd')
+			// 		f_N_tmp << currentread<<"\n";
+			// 	else
+			// 	{
+			// 		reverse_complement(currentread,revread);
+			// 		f_N_tmp << revread<<"\n";
+			// 	}
+			// }
+			// else
+			// {
+			if(c == 'd')
+				f << currentread<<"\n";
 			else
 			{
-				if(c == 'd')
-					f << currentread<<"\n";
-				else
-				{
-					reverse_complement(currentread,revread);
-					f << revread<<"\n";
-				}
+				reverse_complement(currentread,revread);
+				f << revread<<"\n";
 			}
+			//}
 		}
 
 		f.close();
@@ -135,7 +135,7 @@ void decode()
 		f_noise.close();
 		f_noisepos.close();
 		f_rev.close();
-		f_N_tmp.close();
+		//f_N_tmp.close();
 	}//for end
 	}//parallel end
 	std::ofstream f(outfile);
@@ -155,12 +155,12 @@ void decode()
 		f_singleton.read(currentread,readlen);	
 	}
 	f_singleton.close();	
-	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
-	{
-		std::ifstream f_N(infile_N+'.'+std::to_string(tid_e)+".tmp");
-		f << f_N.rdbuf();			
-		f_N.close();
-	}
+	// for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
+	// {
+	// 	std::ifstream f_N(infile_N+'.'+std::to_string(tid_e)+".tmp");
+	// 	f << f_N.rdbuf();			
+	// 	f_N.close();
+	// }
 	std::ifstream f_N(infile_N);
 	f << f_N.rdbuf();
 	f_N.close();

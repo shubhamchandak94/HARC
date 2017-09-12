@@ -64,6 +64,7 @@ std::string outfile_singleton;
 std::string infile_order;
 std::string outdir;
 std::string outfile_order_N_pe;
+std::string outfile_flag_N;
 
 char longtochar[] = {'A','C','G','T','N'};
 long chartolong[128];
@@ -104,10 +105,10 @@ void packbits();
 //void writecontig(std::vector<std::array<long,4>> count,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos);
 // =======
 
-std::string generateRef(std::vector<std::array<long,4>> count);
+std::string generateRef(std::vector<std::array<long,5>> count);
 
-std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size);//using lists to enable faster insertion of singletons
-void writecontig(std::vector<std::array<long,4>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size);
+std::vector<std::array<long,5>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size);//using lists to enable faster insertion of singletons
+void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, std::ofstream &f_flag_N, uint32_t list_size);
 // >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 // =======
 // void writecontig(std::string &ref,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size);
@@ -139,6 +140,7 @@ int main(int argc, char** argv)
 	outfile_noisepos = basedir + "/output/read_noisepos.txt";
 	outfile_singleton = basedir + "/output/read_singleton.txt";
 	outfile_order_N_pe = basedir + "/output/read_order_N_pe.bin";//pe - post encoding
+	outfile_flag_N = basedir + "/output/read_flag_N.txt";
 	
 	omp_set_num_threads(num_thr);
 	getDataParams(); //populate readlen and numreads
@@ -196,7 +198,9 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	std::ofstream f_noisepos(outfile_noisepos+'.'+std::to_string(tid));
 	std::ofstream f_order(infile_order+'.'+std::to_string(tid),std::ios::binary);
 	std::ofstream f_RC(infile_RC+'.'+std::to_string(tid));
-	std::ofstream f_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid),std::ios::binary);	
+	std::ofstream f_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid),std::ios::binary);
+	std::ofstream f_flag_N(outfile_flag_N+'.'+std::to_string(tid),std::ios::binary);
+
 	uint64_t i, stop;
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
@@ -212,7 +216,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	in_flag.seekg(i, in_flag.beg);
 	in_pos.seekg(i*sizeof(uint8_t),in_pos.beg);
 // <<<<<<< HEAD
-	std::vector<std::array<long,4>> count;
+	std::vector<std::array<long,5>> count;
 
 // 	char c;
 // 	std::vector<std::string> reads;
@@ -434,7 +438,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 				}
 //<<<<<<< HEAD
 			
-				writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC, f_order_N_pe,list_size);
+				writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC, f_order_N_pe, f_flag_N, list_size);
 //>>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 // =======
 // 				writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
@@ -466,7 +470,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 // 	writecontig(count,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
 // =======
 	count = buildcontig(reads,pos,list_size);
-	writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
+	writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe, f_flag_N, list_size);
 // >>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 // =======
 // 	ref = buildcontig(reads,pos,list_size);
@@ -647,11 +651,11 @@ void packbits()
 }
 
 
-std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size)
+std::vector<std::array<long,5>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size)
 
 {
 	auto reads_it = reads.begin();
-	std::vector<std::array<long,4>> count(readlen,{0,0,0,0});
+	std::vector<std::array<long,5>> count(readlen,{0,0,0,0,0});
 	for(long i = 0; i < readlen; i++)
 		count[i][chartolong[(*reads_it)[i]]] = 1;
 	if(list_size == 1)
@@ -663,7 +667,7 @@ std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::l
 	++pos_it;
 	for(; pos_it != pos.end(); ++pos_it,++reads_it)
 	{
-		count.insert(count.end(),*pos_it,{0,0,0,0});
+		count.insert(count.end(),*pos_it,{0,0,0,0,0});
 		currentpos = prevpos + *pos_it;
 		for(long i = 0; i < readlen; i++)
 			count[currentpos+i][chartolong[(*reads_it)[i]]] += 1;
@@ -673,13 +677,13 @@ std::vector<std::array<long,4>> buildcontig(std::list<std::string> reads, std::l
 	return count;
 }
 
-std::string generateRef(std::vector<std::array<long,4>> count)
+std::string generateRef(std::vector<std::array<long,5>> count)
 {
 	std::string ref(count.size(),'A');
 	for(long i = 0; i < count.size(); i++)
 	{
 		long max = 0,indmax = 0;
-		for(long j = 0; j < 4; j++)
+		for(long j = 0; j < 5; j++)
 			if(count[i][j]>max)
 			{
 				max = count[i][j];
@@ -690,7 +694,7 @@ std::string generateRef(std::vector<std::array<long,4>> count)
 	return ref;
 }
 
-void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, uint32_t list_size)
+void writecontig(std::vector<std::array<long,5>> count,std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, std::ofstream &f_flag_N, uint32_t list_size)
 {
 	std::string ref = generateRef(count);
 	
@@ -717,10 +721,10 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 		_read_char_id = chartolong[(*reads_it)[j]];
 		_ref_char_id = chartolong[ref[j]];
 		bool allowed_alternate_flag = false;
-		if( _read_char_id == 4)
-			allowed_alternate_flag = true;
-		else
-			allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alternate_thresh);
+		// if( _read_char_id == 4)
+		// 	allowed_alternate_flag = true;
+		// else
+		allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alternate_thresh);
 			
 		if(((*reads_it)[j] != ref[j]) && allowed_alternate_flag)
 		{
@@ -734,9 +738,15 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 	c = readlen;// (to handle breaks in read sequence due to limit on reads.size()
 	f_pos << c;
 	if((*reads_it).find('N')!=std::string::npos)
+	{
 		f_order_N_pe.write((char*)&(*order_it),sizeof(uint32_t));
+		f_flag_N << '1';
+	}
 	else
+	{
 		f_order.write((char*)&(*order_it),sizeof(uint32_t));
+		f_flag_N << '0';
+	}
 	f_RC << *RC_it;
 	long prevpos = 0,currentpos;
 	++pos_it;
@@ -752,10 +762,10 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 			_read_char_id = chartolong[(*reads_it)[j]];
 			_ref_char_id = chartolong[ref[currentpos+j]];
 			bool allowed_alternate_flag = false;
-			if( _read_char_id == 4)  //Temporary to positions with N
-				allowed_alternate_flag = true;
-			else
-				allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alternate_thresh);	
+			// if( _read_char_id == 4)  //Temporary to positions with N
+			// 	allowed_alternate_flag = true;
+			// else
+			allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alternate_thresh);	
 			
 			if(((*reads_it)[j] != ref[currentpos+j]) && allowed_alternate_flag)
 			{
@@ -768,10 +778,18 @@ void writecontig(std::vector<std::array<long,4>> count,std::list<long> &pos, std
 		f_noise << "\n";
 		c = *pos_it;
 		f_pos << c;
+
 		if((*reads_it).find('N')!=std::string::npos)
+		{
 			f_order_N_pe.write((char*)&(*order_it),sizeof(uint32_t));
+			f_flag_N << '1';
+		}
 		else
+		{
 			f_order.write((char*)&(*order_it),sizeof(uint32_t));
+			f_flag_N << '0';
+		}
+		
 		f_RC << *RC_it;
 		prevpos = currentpos;
 	}
