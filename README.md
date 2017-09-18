@@ -89,7 +89,7 @@ For some datasets (e.g. SRR327342 and SRR870667), the two fastq files may have r
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.1.fq.gz
 wget -b http://public.genomics.org.cn/BGI/gutmeta/High_quality_reads/MH0001/081026/MH0001_081026_clean.2.fq.gz
 gunzip MH0001_081026_clean.1.fq.gz MH0001_081026_clean.2.fq.gz
-cat MH0001_081026_clean.1.fq MH0001_081026_clean.2.fq
+cat MH0001_081026_clean.1.fq MH0001_081026_clean.2.fq > MH0001_081026_clean.fq
 ```
 
 ###### Human genome (hg19 - for generating simulated reads)
