@@ -7,6 +7,7 @@ set -e
 # PARAMETERS
 #################
 reorder_thresh=4
+realign_thresh=8
 denoise_thresh=0.0
 
 
@@ -63,7 +64,7 @@ compress()
 
 	echo "#define thresh $reorder_thresh" >> src/config.h
 
-	echo "#define thresh_s 24" >> src/config.h
+	echo "#define thresh_s $realign_thresh" >> src/config.h
 	echo "#define numdict 2" >> src/config.h
 	echo "#define maxsearch 1000" >> src/config.h
 	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
@@ -221,6 +222,7 @@ decompress()
 #	mv $pathname/output/output.dna $pathname/$(basename "$filename" .tar).dna.d
 #=======
 	mv $pathname/output/output.dna $pathname/$(basename "$filename" .harc).dna.d
+    rm -r $pathname/output/
 }
 
 #Initialize variables to default values.
@@ -237,7 +239,7 @@ preserve_order="False"
 preserve_quality="False"
 memory='7'
 
-while getopts ':c:d:t:m:n:pqh' opt; do
+while getopts ':c:d:t:a:m:n:r:pqh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
@@ -245,7 +247,9 @@ while getopts ':c:d:t:m:n:pqh' opt; do
     m) memory=$OPTARG;;
     p) preserve_order="True";;
     q) preserve_quality="True";;
-    n) denoise_thresh=$OPTARG;;	
+    n) denoise_thresh=$OPTARG;;
+    a) realign_thresh=$OPTARG;;
+    r) reorder_thresh=$OPTARG;;	
     h) usage ;;
     \?) usage ;;
     *) usage ;;
