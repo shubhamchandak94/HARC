@@ -437,7 +437,10 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 					prevpos = prevpos + *it;
 				}
 //<<<<<<< HEAD
-			
+				//include singletons in count as well 
+				//negligible effect on compression
+				//hopefully, helps in denoising
+				count = buildcontig(reads,pos,list_size);		
 				writecontig(count,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC, f_order_N_pe, f_flag_N, list_size);
 //>>>>>>> f5f73baa6c4503019b7369c0042d106486fed07f
 // =======
@@ -673,7 +676,9 @@ std::vector<std::array<long,5>> buildcontig(std::list<std::string> reads, std::l
 			count[currentpos+i][chartolong[(*reads_it)[i]]] += 1;
 		prevpos = currentpos;
 	}
-
+	//set counts of N to 0, because we always
+	for(auto it = count.begin(); it!= count.end(); ++it)
+		(*it)[4] = 0;
 	return count;
 }
 
@@ -683,7 +688,8 @@ std::string generateRef(std::vector<std::array<long,5>> count)
 	for(long i = 0; i < count.size(); i++)
 	{
 		long max = 0,indmax = 0;
-		for(long j = 0; j < 5; j++)
+		for(long j = 0; j < 4; j++)
+		//not including N because packbits doesn't expect seq to have N
 			if(count[i][j]>max)
 			{
 				max = count[i][j];
