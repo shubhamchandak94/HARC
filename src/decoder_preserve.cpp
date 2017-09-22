@@ -175,7 +175,8 @@ void decode()
 	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 	{
 		std::ifstream f_in(outfile+'.'+std::to_string(tid_e),std::ios::binary);
-		f << f_in.rdbuf();	
+		f << f_in.rdbuf();
+		f.clear();//clear error flags if f_N is empty	
 		f_in.close();
 	}
 	std::ifstream f_singleton(infile_singleton);
@@ -195,7 +196,8 @@ void decode()
 	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 	{
 		std::ifstream in_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
-		f_N_tmp << in_N_tmp.rdbuf();			
+		f_N_tmp << in_N_tmp.rdbuf();
+		f_N_tmp.clear();//clear error flags if in_N_tmp is empty	
 		in_N_tmp.close();
 	}
 	std::ifstream f_N(infile_N);

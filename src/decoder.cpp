@@ -142,7 +142,8 @@ void decode()
 	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 	{
 		std::ifstream f_in(outfile+'.'+std::to_string(tid_e));
-		f << f_in.rdbuf();			
+		f << f_in.rdbuf();
+		f.clear();//clear error flags (happens in case f_in empty)			
 		f_in.close();
 	}
 	std::ifstream f_singleton(infile_singleton);
@@ -159,11 +160,13 @@ void decode()
 	{
 		std::ifstream f_N(infile_N+'.'+std::to_string(tid_e)+".tmp");
 		f << f_N.rdbuf();			
+		f.clear();//clear error flags (happens in case f_in empty)			
 		f_N.close();
 	}
 	std::ifstream f_N(infile_N);
 	f << f_N.rdbuf();
 	f_N.close();
+	f.close();
 	std::cout<<"Decoding done\n";
 	return;
 }

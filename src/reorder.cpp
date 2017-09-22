@@ -777,7 +777,16 @@ void writetofile(std::bitset<2*readlen> *read)
 		foutpos << finpos.rdbuf();
 		foutorder << finorder.rdbuf();
 		foutorder_s << finorder_s.rdbuf();
-		
+		//clear error flags which occur on rdbuffing empty file
+		fout.clear();
+		fout_s.clear();
+		foutRC.clear();
+		foutflag.clear();
+		foutpos.clear();
+		foutorder.clear();
+		foutorder_s.clear();
+
+			
 		fin.close();
 		fin_s.close();
 		finRC.close();
