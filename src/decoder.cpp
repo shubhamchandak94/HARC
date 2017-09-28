@@ -142,7 +142,8 @@ void decode()
 	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 	{
 		std::ifstream f_in(outfile+'.'+std::to_string(tid_e));
-		f << f_in.rdbuf();			
+		f << f_in.rdbuf();
+		f.clear();//clear error flags if rdbuf empty file	
 		f_in.close();
 	}
 	std::ifstream f_singleton(infile_singleton);

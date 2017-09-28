@@ -5,10 +5,10 @@ from tqdm import tqdm
 from itertools import izip
 
 basename = sys.argv[1]
-infile_reads = basename + ".dna.d"
-infile_quality = basename + ".quality"
+infile_reads = basename + ".clean"
+infile_quality = basename + ".clean.quality"
 infile_readid = basename + ".id"
-outfile_fastq = basename + ".output.fastq"
+outfile_fastq = basename + ".clean.fastq"
 
 f_reads = open(infile_reads,'r')
 f_quality = open(infile_quality, 'r')

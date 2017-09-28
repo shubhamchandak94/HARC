@@ -18,11 +18,10 @@ from subprocess import call
 
 # ## Files to be read
 
-
-input_fastq = sys.argv[1]
-prefix = input_fastq[:-3]
-clean_file = prefix + ".clean"
-denoised_file = prefix + ".fq.dna.d"
+prefix = sys.argv[1]
+input_fastq = prefix + ".fastq"
+clean_file = prefix + ".caps.clean"
+denoised_file = prefix + ".dna.d"
 noisy_file = prefix + ".noisy"
 image_prefix = sys.argv[2] 
 

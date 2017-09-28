@@ -778,6 +778,14 @@ void writetofile(std::bitset<2*readlen> *read)
 		foutorder << finorder.rdbuf();
 		foutorder_s << finorder_s.rdbuf();
 		
+		fout.clear();//clear error flags if rdbuf empty file	
+		fout_s.clear();//clear error flags if rdbuf empty file	
+		foutRC.clear();//clear error flags if rdbuf empty file	
+		foutflag.clear();//clear error flags if rdbuf empty file	
+		foutpos.clear();//clear error flags if rdbuf empty file	
+		foutorder.clear();//clear error flags if rdbuf empty file	
+		foutorder_s.clear();//clear error flags if rdbuf empty file	
+			
 		fin.close();
 		fin_s.close();
 		finRC.close();

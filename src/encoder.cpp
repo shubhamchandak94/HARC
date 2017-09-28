@@ -504,6 +504,8 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 		std::ifstream in_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid));
 		f_order << in_order.rdbuf();
 		f_order_N_pe << in_order_N_pe.rdbuf();
+		f_order.clear();//clear error flags if rdbuf empty file	
+		f_order_N_pe.clear();//clear error flags if rdbuf empty file	
 		remove((infile_order+'.'+std::to_string(tid)).c_str());
 		remove((outfile_order_N_pe+'.'+std::to_string(tid)).c_str());
 	}
