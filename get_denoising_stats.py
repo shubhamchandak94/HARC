@@ -19,9 +19,9 @@ from subprocess import call
 # ## Files to be read
 
 prefix = sys.argv[1]
-input_fastq = prefix + ".fastq"
-clean_file = prefix + ".caps.clean"
-denoised_file = prefix + ".dna.d"
+input_fastq = prefix + ".fq"
+clean_file = prefix + ".clean"
+denoised_file = prefix + ".fq.dna.d"
 noisy_file = prefix + ".noisy"
 image_prefix = sys.argv[2] 
 
@@ -45,7 +45,7 @@ per_position_undetected_errors = np.zeros(readlen+1)
 per_position_new_errors = np.zeros(readlen+1)
 new_errors_hist = np.zeros(readlen+1)
 
-for clean_read, denoised_read, noisy_read in tqdm( izip(open(clean_file), open(denoised_file), open(noisy_file)), total=M,desc="computing edit distance ...", ascii=True):
+for clean_read, denoised_read, noisy_read in tqdm( izip(open(clean_file), open(denoised_file), open(noisy_file)), total=M,desc="computing distance ...", ascii=True):
 
     true_errors = (np.fromstring(clean_read,dtype=np.uint8)!=np.fromstring(noisy_read,dtype=np.uint8))
     after_denoising_errors = (np.fromstring(clean_read,dtype=np.uint8)!=np.fromstring(denoised_read,dtype=np.uint8))

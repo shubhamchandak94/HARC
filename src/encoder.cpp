@@ -738,7 +738,13 @@ void writecontig(std::vector<std::array<long,5>> count,std::list<long> &pos, std
         // if( _read_char_id == 4)
 		// 	allowed_alternate_flag = true;
 		// else
-		allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alt_thresh_per_pos);
+		for(int i = 0; i < 4; i++)
+		{
+			if(i != _ref_char_id)
+				if(count[j][i] >= (int)count[j][_ref_char_id]*alt_thresh_per_pos)
+					allowed_alternate_flag = true;
+		}	
+	//	allowed_alternate_flag = (count[j][_read_char_id] > (int)count[j][_ref_char_id]*alt_thresh_per_pos);
 			
 		if(((*reads_it)[j] != ref[j]) && allowed_alternate_flag)
 		{
@@ -785,7 +791,13 @@ void writecontig(std::vector<std::array<long,5>> count,std::list<long> &pos, std
 			// if( _read_char_id == 4)  //Temporary to positions with N
 			// 	allowed_alternate_flag = true;
 			// else
-			allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alt_thresh_per_pos);	
+			for(int i = 0; i < 4; i++)
+			{
+				if(i != _ref_char_id)
+					if(count[currentpos+j][i] >= (int)count[currentpos+j][_ref_char_id]*alt_thresh_per_pos)
+						allowed_alternate_flag = true;
+			}	
+			//allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alt_thresh_per_pos);	
 			
 			if(((*reads_it)[j] != ref[currentpos+j]) && allowed_alternate_flag)
 			{
