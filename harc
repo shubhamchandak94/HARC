@@ -78,19 +78,11 @@ compress()
 	g++ src/reorder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
 	 
 	./src/reorder.out $pathname
-#<<<<<<< HEAD:run_default.sh
-	# mv $pathname/input_N.dna $pathname/output/input_N.dna
-	# mv $pathname/input_clean.dna $pathname/output/input_clean.dna
-	# mv $pathname/read_order_N.bin $pathname/output/read_order_N.bin
-	# if [[ $preserve_quality == "True" ]];then
-	# 	mv $pathname/input_N.quality $pathname/output/input_N.quality
-	# 	mv $pathname/input_clean.quality $pathname/output/input_clean.quality
-	# fi
-
-#=======
-#>>>>>>> 5a6551d005a1a95c49abd259bcadb8addc4039fc:harc
+	g++ src/reorder_quality_before_encoding.cpp -w -march=native -O3 -fopenmp -std=c++11 -o src/reorder_quality_before_encoding.out
+	./src/reorder_quality_before_encoding.out $pathname
+	
 	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
-	./src/encoder.out $pathname $denoise_thresh
+	./src/encoder.out $pathname $preserve_order $denoise_thresh
 	
 	#remove temporary files
 	rm $pathname/output/temp.dna
@@ -134,21 +126,24 @@ compress()
 	7z a $pathname/output/read_rev.tar.7z $pathname/output/read_rev.tar -mmt=$num_thr
 	./src/libbsc/bsc e $pathname/output/read_seq.tar $pathname/output/read_seq.tar.bsc -b64p -t$num_thr 
 	./src/libbsc/bsc e $pathname/output/read_singleton.txt $pathname/output/read_singleton.txt.bsc -b64p -t$num_thr 
-	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar 
 	if [[ $preserve_order == "True" ]];then
+		g++ src/restore_quality_order.cpp -march=native -O3 -std=c++11 -o src/restore_quality_order.out
+		./src/restore_quality_order.out $pathname	
 		./src/pack_order.out $pathname	
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr ########KEDAR
+		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
 			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
+			rm $pathname/output/*.quality
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
-			echo "Reordering quality values and ids"
-			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
-			./src/reorder_quality.out $pathname
+			echo "Reordering ids"
+			g++ src/reorder_id.cpp -march=native -O3 -std=c++11 -o src/reorder_id.out
+			./src/reorder_id.out $pathname
+			cat $pathname/output/read_aligned_and_singletons.quality $pathname/output/read_unaligned_N.quality > $pathname/output/output.quality
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
 			rm $pathname/output/*.quality
 			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
@@ -156,8 +151,7 @@ compress()
 			echo "Done!"
 		fi	
 	fi
-	rm $pathname/output/*.bin
-	rm $pathname/output/*.singleton
+	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar $pathname/output/*.bin $pathname/output/*.singleton
 	tar -cf $pathname/$(basename "$filename" .fastq).harc -C $pathname/output .
 	rm -r $pathname/output/
 }
@@ -216,11 +210,6 @@ decompress()
 	else
 		./src/decoder.out $pathname $num_thr $num_thr_e
 	fi
-#<<<<<<< HEAD:run_default.sh
-
-	#rm -r $pathname/output/
-#	mv $pathname/output/output.dna $pathname/$(basename "$filename" .tar).dna.d
-#=======
 	mv $pathname/output/output.dna $pathname/$(basename "$filename" .harc).dna.d
     rm -r $pathname/output/
 }
@@ -236,7 +225,8 @@ fi
 
 mode=''
 preserve_order="False"
-preserve_quality="False"
+#preserve_quality always true now
+preserve_quality="True"
 memory='7'
 
 while getopts ':c:d:t:a:m:n:r:pqh' opt; do

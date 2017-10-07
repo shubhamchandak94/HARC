@@ -37,8 +37,8 @@ int main(int argc, char** argv)
 	infile_order = basedir + "/output/read_order.bin";
 	infile_order_N_pe = basedir + "/output/read_order_N_pe.bin";
 	getDataParams();
-	reorder_quality_N();
-	reorder_quality();
+//	reorder_quality_N();
+//	reorder_quality();
 	reorder_id_N();
 	reorder_id();
 	return 0;
@@ -147,31 +147,34 @@ void reorder_id()
 	f_order.close();
 	uint32_t max_bin_size = numreads/8;
 	std::string s;
-	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
+	if(max_bin_size!=0)
 	{
-		auto numreads_bin = max_bin_size;
-		if (i == numreads/max_bin_size)
-			numreads_bin = numreads%max_bin_size;
-		uint32_t *index_array = new uint32_t [numreads_bin];
-		std::string *id_bin = new std::string [numreads_bin];
-		uint32_t pos = 0;
-		for(uint32_t j = 0; j < numreads; j++)
+		for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
 		{
-			order = reverse_index[j];
-			std::getline(f_in,s);
-			if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
+			auto numreads_bin = max_bin_size;
+			if (i == numreads/max_bin_size)
+				numreads_bin = numreads%max_bin_size;
+			uint32_t *index_array = new uint32_t [numreads_bin];
+			std::string *id_bin = new std::string [numreads_bin];
+			uint32_t pos = 0;
+			for(uint32_t j = 0; j < numreads; j++)
 			{
-				index_array[order-i*max_bin_size] = pos;
-				id_bin[pos] = s;
-				pos++;
+				order = reverse_index[j];
+				std::getline(f_in,s);
+				if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
+				{
+					index_array[order-i*max_bin_size] = pos;
+					id_bin[pos] = s;
+					pos++;
+				}
 			}
+			for(uint32_t j = 0; j < numreads_bin; j++)
+			{
+				f << id_bin[index_array[j]] << "\n";
+			}
+			delete[] index_array;
+			delete[] id_bin;
 		}
-		for(uint32_t j = 0; j < numreads_bin; j++)
-		{
-			f << id_bin[index_array[j]] << "\n";
-		}
-		delete[] index_array;
-		delete[] id_bin;
 	}
 	f_in.close();
 	f << f_N.rdbuf();

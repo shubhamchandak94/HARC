@@ -57,23 +57,19 @@ int preprocess()
 	std::ofstream f_id;
 	
 	if(preserve_quality == "True")
+	{
+		f_quality.open(outfilequality);
 		if(preserve_order == "False")	
-		{
-			f_quality.open(outfilequality);
 			f_id.open(outfileid);
-		}
 		else
-		{
-			f_quality.open(outfilequalityfinal);
 			f_id.open(outfileidfinal);
-		}
+	}
 	std::ofstream f_quality_N;
 	std::ofstream f_id_N;
+	f_quality_N.open(outfilequalityN);
 	if(preserve_order == "False" && preserve_quality == "True")
-	{
-		f_quality_N.open(outfilequalityN);
 		f_id_N.open(outfileidN);
-	}
+	
 	int i = 0;
 	uint64_t readnum = 0;
 	uint64_t num_clean = 0;
@@ -110,7 +106,7 @@ int preprocess()
 				break;
 			case 2: break;
 			case 3: if(preserve_quality == "True")
-					if(!flag_N || preserve_order == "True")
+					if(!flag_N)
 						f_quality << line << "\n";
 					else
 						f_quality_N << line << "\n";

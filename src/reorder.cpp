@@ -445,7 +445,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::fill(remainingreads, remainingreads+numreads,1);
 
 	//we go through remainingreads array from behind as that speeds up deletion from bin arrays
-	
+
 	uint32_t firstread = 0, unmatched[num_thr];
 	#pragma omp parallel
 	{

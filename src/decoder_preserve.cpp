@@ -262,37 +262,40 @@ void restore_order()
 		max_bin_size = uint64_t(MAX_BIN_SIZE)*200000000/7;
 	char s[readlen+1];
 	s[readlen] = '\0';
-	std::ofstream f_clean(outfile_clean);
-	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
+	std::ofstream f_clean(outfile_clean);	
+	if(max_bin_size != 0)
 	{
-		std::ifstream f_order(infile_order,std::ios::binary);
-		std::ifstream f(outfile,std::ios::binary);
-		auto numreads_bin = max_bin_size;
-		if (i == numreads/max_bin_size)
-			numreads_bin = numreads%max_bin_size;
-		uint32_t *index_array = new uint32_t [numreads_bin];
-		std::bitset<2*readlen> *reads_bin = new std::bitset<2*readlen> [numreads_bin];	
-		uint32_t order,pos = 0;
-		for(uint32_t j = 0; j < numreads; j++)
+		for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
 		{
-			f_order.read((char*)&order,sizeof(uint32_t));
-			if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
+			std::ifstream f_order(infile_order,std::ios::binary);
+			std::ifstream f(outfile,std::ios::binary);
+			auto numreads_bin = max_bin_size;
+			if (i == numreads/max_bin_size)
+				numreads_bin = numreads%max_bin_size;
+			uint32_t *index_array = new uint32_t [numreads_bin];
+			std::bitset<2*readlen> *reads_bin = new std::bitset<2*readlen> [numreads_bin];	
+			uint32_t order,pos = 0;
+			for(uint32_t j = 0; j < numreads; j++)
 			{
-				index_array[order-i*max_bin_size] = pos;
-				f.seekg(uint64_t(j)*sizeof(std::bitset<2*readlen>), f.beg);
-				f.read((char*)&reads_bin[pos],sizeof(std::bitset<2*readlen>));
-				pos++;
+				f_order.read((char*)&order,sizeof(uint32_t));
+				if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
+				{
+					index_array[order-i*max_bin_size] = pos;
+					f.seekg(uint64_t(j)*sizeof(std::bitset<2*readlen>), f.beg);
+					f.read((char*)&reads_bin[pos],sizeof(std::bitset<2*readlen>));
+					pos++;
+				}
 			}
+			for(uint32_t j = 0; j < numreads_bin; j++)
+			{
+				bitsettostring(reads_bin[index_array[j]],s);
+				f_clean << s << "\n";
+			}
+			delete[] index_array;
+			delete[] reads_bin;
+			f_order.close();
+			f.close();
 		}
-		for(uint32_t j = 0; j < numreads_bin; j++)
-		{
-			bitsettostring(reads_bin[index_array[j]],s);
-			f_clean << s << "\n";
-		}
-		delete[] index_array;
-		delete[] reads_bin;
-		f_order.close();
-		f.close();
 	}
 	f_clean.close();
 	return;
