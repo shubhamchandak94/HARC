@@ -21,7 +21,7 @@ from subprocess import call
 prefix = sys.argv[1]
 input_fastq = prefix + ".fastq"
 clean_file = prefix + ".upper.clean"
-denoised_file = prefix + ".dna.d"
+denoised_file = prefix + ".RECKONER.dna.d"
 noisy_file = prefix + ".noisy"
 image_prefix = sys.argv[2] 
 

@@ -67,7 +67,9 @@ std::string outfile_quality;
 std::string outfile_quality_N;
 
 
+std::string denoise_type = "no_denoising";
 float alternate_thresh = 0.0;
+float quality_thresh = 0.0;
 std::string outfile_singleton;
 std::string infile_order;
 std::string outdir;
@@ -77,7 +79,7 @@ std::string outfile_flag_N;
 char longtochar[] = {'A','C','G','T','N'};
 long chartolong[128];
 char enc_noise[128][128];
-
+double quality_to_p_pbar[42];
 
 //Some global arrays (some initialized in setglobalarrays())
 char revinttochar[8] = {'A','N','G','#','C','#','T','#'};//used in bitsettostring
@@ -119,10 +121,22 @@ int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
 	preserve_order = std::string(argv[2]);
-
 	if(argc > 3)
 	{
-		alternate_thresh = atof(argv[3]);
+		denoise_type = std::string(argv[3]);
+		if(denoise_type == "quality_threshold"){
+			quality_thresh = atof(argv[4]);
+        	}
+		else if(denoise_type == "adaptive_denoising"){
+			alternate_thresh = atof(argv[4]);				
+		}
+		else if(denoise_type == "only_using_counts"){
+			alternate_thresh = atof(argv[4]);
+		}
+		else{
+			std::cout << "Unsupported denoise type: " << denoise_type << std::endl;
+			return 1;
+		}	
 	}
 
 	outdir = basedir + "/output/";
@@ -769,8 +783,12 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 	auto RC_it = RC.begin();
 	auto quality_it = quality.begin(); 
 	long _read_char_id, _ref_char_id;
+	long _read_quality_val;
+	double _read_p_pbar;
 	long prevpos,currentpos;
 	bool firstread = true;//to specially handle pos for first read in contig
+	bool allowed_alternate_flag, is_alternate;
+	double ref_alternate_count_ratio;
 	for(;pos_it!=pos.end(); ++pos_it,++reads_it,++order_it,++RC_it,++quality_it)
 	{
 		if(firstread == true)
@@ -781,9 +799,9 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 		for(long j = 0; j < readlen; j++)
 		{
 			_read_char_id = chartolong[(*reads_it)[j]];
+			_read_quality_val = (*quality_it)[j] - 33;
+			_read_p_pbar = quality_to_p_pbar[_read_quality_val];
 			_ref_char_id = chartolong[ref[currentpos+j]];
-			double alt_thresh_per_pos = alternate_thresh;
-			bool allowed_alternate_flag = false;
 			//double alt_thresh_per_pos = alternate_thresh*(0.5+ 0.5*(j*1.0/readlen));
 			//if(*RC_it == 'r'){
 			//    alt_thresh_per_pos = alternate_thresh*(0.5+ 0.5*((readlen-j-1)*1.0/readlen));
@@ -792,15 +810,29 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 			// if( _read_char_id == 4)  //Temporary to positions with N
 			// 	allowed_alternate_flag = true;
 			// else
-			for(int i = 0; i < 4; i++)
-			{
-				if(i != _ref_char_id)
-					if(count[currentpos+j][i] >= (int)count[currentpos+j][_ref_char_id]*alt_thresh_per_pos)
-						allowed_alternate_flag = true;
-			}
-			//allowed_alternate_flag = (count[currentpos+j][_read_char_id] >= (int)count[currentpos+j][_ref_char_id]*alt_thresh_per_pos);	
+			is_alternate = ((*reads_it)[j] != ref[currentpos+j]);
+			if(is_alternate){
+				allowed_alternate_flag = false;	
+				if(denoise_type=="quality_threshold"){
+					allowed_alternate_flag = (_read_quality_val > quality_thresh); 
+        			}
+				else if(denoise_type == "adaptive_denoising")
+				{
+					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
+					allowed_alternate_flag = (ref_alternate_count_ratio < alternate_thresh*_read_p_pbar);   	
+				}
+				else if(denoise_type == "only_using_counts")
+				{
+					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
+					allowed_alternate_flag = (ref_alternate_count_ratio > alternate_thresh);   	
+				}
+				
+				else{
+				   	allowed_alternate_flag = true; //By default do not correct any noise
+				}
+    			}
 			
-			if(((*reads_it)[j] != ref[currentpos+j]) && allowed_alternate_flag)
+			if(is_alternate && allowed_alternate_flag)
 			{
 				f_noise<<enc_noise[ref[currentpos+j]][(*reads_it)[j]];
 				c = j-prevj;
@@ -900,6 +932,12 @@ void setglobalarrays()
 	chartolong['G'] = 2;
 	chartolong['T'] = 3;
 	chartolong['N'] = 4;
+	
+	for(int i=0; i<42;i++) 
+	{	
+		double _prob = pow(10.0,-((double)i/10.0));
+		quality_to_p_pbar[i] = _prob/(1.0-_prob);
+	}
 	return;
 }
 	

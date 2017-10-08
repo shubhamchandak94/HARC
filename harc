@@ -82,7 +82,7 @@ compress()
 	./src/reorder_quality_before_encoding.out $pathname
 	
 	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
-	./src/encoder.out $pathname $preserve_order $denoise_thresh
+	./src/encoder.out $pathname $preserve_order $denoise_type $denoise_thresh
 	
 	#remove temporary files
 	rm $pathname/output/temp.dna
@@ -228,8 +228,9 @@ preserve_order="False"
 #preserve_quality always true now
 preserve_quality="True"
 memory='7'
+denoise_type="no_denoising"
 
-while getopts ':c:d:t:a:m:n:r:pqh' opt; do
+while getopts ':c:d:t:a:m:n:r:u:pqh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
@@ -240,6 +241,7 @@ while getopts ':c:d:t:a:m:n:r:pqh' opt; do
     n) denoise_thresh=$OPTARG;;
     a) realign_thresh=$OPTARG;;
     r) reorder_thresh=$OPTARG;;	
+    u) denoise_type=$OPTARG;;
     h) usage ;;
     \?) usage ;;
     *) usage ;;
