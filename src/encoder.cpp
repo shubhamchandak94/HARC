@@ -133,6 +133,10 @@ int main(int argc, char** argv)
 		else if(denoise_type == "only_using_counts"){
 			alternate_thresh = atof(argv[4]);
 		}
+		else if(denoise_type == "counts_and_quality"){
+			alternate_thresh = atof(argv[4]);
+			quality_thresh = atof(argv[5]);
+		}
 		else{
 			std::cout << "Unsupported denoise type: " << denoise_type << std::endl;
 			return 1;
@@ -819,14 +823,18 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 				else if(denoise_type == "adaptive_denoising")
 				{
 					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
-					allowed_alternate_flag = (ref_alternate_count_ratio < alternate_thresh*_read_p_pbar);   	
+					allowed_alternate_flag = (ref_alternate_count_ratio > alternate_thresh*_read_p_pbar);   	
 				}
 				else if(denoise_type == "only_using_counts")
 				{
 					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
 					allowed_alternate_flag = (ref_alternate_count_ratio > alternate_thresh);   	
 				}
-				
+				else if(denoise_type == "counts_and_quality")
+				{
+					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
+					allowed_alternate_flag = (_read_quality_val > quality_thresh) || (ref_alternate_count_ratio > alternate_thresh);   		
+				}
 				else{
 				   	allowed_alternate_flag = true; //By default do not correct any noise
 				}

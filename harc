@@ -67,10 +67,10 @@ compress()
 	echo "#define thresh_s $realign_thresh" >> src/config.h
 	echo "#define numdict 2" >> src/config.h
 	echo "#define maxsearch 1000" >> src/config.h
-	echo "#define dict1_start $(( readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100 ))" >> src/config.h
+	echo "#define dict1_start $(( readlen > 100 ? readlen/2-20 : readlen/2-readlen*20/100 ))" >> src/config.h
 	echo "#define dict1_end $((readlen/2-1))" >> src/config.h
 	echo "#define dict2_start $((readlen/2))" >> src/config.h
-	echo "#define dict2_end $(( readlen > 100 ? readlen/2-1+32 : readlen/2-1+readlen*32/100 ))" >> src/config.h
+	echo "#define dict2_end $(( readlen > 100 ? readlen/2-1+20 : readlen/2-1+readlen*20/100 ))" >> src/config.h
 
 	echo "#define readlen $readlen" >> src/config.h
 	echo "#define num_thr $num_thr" >> src/config.h
@@ -82,7 +82,7 @@ compress()
 	./src/reorder_quality_before_encoding.out $pathname
 	
 	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
-	./src/encoder.out $pathname $preserve_order $denoise_type $denoise_thresh
+	./src/encoder.out $pathname $preserve_order $denoise_type $denoise_thresh $quality_thresh
 	
 	#remove temporary files
 	rm $pathname/output/temp.dna
@@ -229,8 +229,9 @@ preserve_order="False"
 preserve_quality="True"
 memory='7'
 denoise_type="no_denoising"
+quality_thresh='-1'
 
-while getopts ':c:d:t:a:m:n:r:u:pqh' opt; do
+while getopts ':c:d:t:a:m:n:r:u:s:pqh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
@@ -239,6 +240,7 @@ while getopts ':c:d:t:a:m:n:r:u:pqh' opt; do
     p) preserve_order="True";;
     q) preserve_quality="True";;
     n) denoise_thresh=$OPTARG;;
+    s) quality_thresh=$OPTARG;;  
     a) realign_thresh=$OPTARG;;
     r) reorder_thresh=$OPTARG;;	
     u) denoise_type=$OPTARG;;
