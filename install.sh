@@ -20,3 +20,4 @@ g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o src/decoder.out
 g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o src/pack_order.out
 g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o src/unpack_order.out
 g++ src/merge_N.cpp -O3 -march=native -std=c++11 -o src/merge_N.out
+g++ util/get_denoising_stats.cpp -std=c++11 -O3 -march=native -o util/get_denoising_stats.out

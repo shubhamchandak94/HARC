@@ -7,6 +7,7 @@
 #include <list>
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 #include <string>
 #include <numeric>
 #include <cstdio>
@@ -15,9 +16,9 @@
 #include "config.h"
 
 uint32_t numreads, numreads_s, numreads_N;
-int numdict_s = 2;
-uint32_t dict_start[2];
-uint32_t dict_end[2];
+int numdict_s = 4;
+uint32_t dict_start[4];
+uint32_t dict_end[4];
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -80,6 +81,8 @@ char longtochar[] = {'A','C','G','T','N'};
 long chartolong[128];
 char enc_noise[128][128];
 double quality_to_p_pbar[42];
+double log_1_p[42];
+double log_p_3[42];
 
 //Some global arrays (some initialized in setglobalarrays())
 char revinttochar[8] = {'A','N','G','#','C','#','T','#'};//used in bitsettostring
@@ -108,10 +111,11 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s, s
 
 void packbits();
 
-std::string generateRef(std::vector<std::array<long,5>> count);
+std::string generateRef(std::vector<std::array<double,5>> count);
 
-std::vector<std::array<long,5>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size);//using lists to enable faster insertion of singletons
-void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::list<std::string> &quality, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, std::ofstream &f_flag_N, std::ofstream &f_quality, std::ofstream &f_quality_N, uint32_t list_size);
+std::vector<std::array<double,5>> buildcontig(std::list<std::string> &reads, std::list<long> &pos, std::list<std::string> &quality, std::uint32_t list_size);
+
+void writecontig(std::vector<std::array<double,5>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::list<std::string> &quality, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, std::ofstream &f_flag_N, std::ofstream &f_quality, std::ofstream &f_quality_N, uint32_t list_size);
 
 void getDataParams();
 
@@ -182,9 +186,13 @@ int main(int argc, char** argv)
 	if(readlen > 50)
 	{
 		dict_start[0] = 0;
-		dict_end[0] = 20;
-		dict_start[1] = 21;
-		dict_end[1] = 41;
+		dict_end[0] = 14;
+		dict_start[1] = 15;
+		dict_end[1] = 29;
+		dict_start[2] = 30;
+		dict_end[2] = 44;
+		dict_start[3] = 45;
+		dict_end[3] = 59;
 	}
 	else
 	{
@@ -250,7 +258,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s, s
 	in_quality.seekg(uint64_t(i)*(readlen+1), in_quality.beg);
 	in_flag.seekg(i, in_flag.beg);
 	in_pos.seekg(i*sizeof(uint8_t),in_pos.beg);
-	std::vector<std::array<long,5>> count;
+	std::vector<std::array<double,5>> count;
 
 // 	char c;
 // 	std::vector<std::string> reads;
@@ -282,7 +290,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s, s
 		{
 			if(list_size!=0)
 			{
-				count = buildcontig(reads,pos,list_size);
+				count = buildcontig(reads,pos,quality,list_size);
 				//writecontig(count,pos,reads,f_seq,f_pos,f_noise,f_noisepos);
 				ref = generateRef(count);
 				//try to align the singleton reads to ref
@@ -478,7 +486,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s, s
 				//include singletons in count as well 
 				//negligible effect on compression
 				//hopefully, helps in denoising
-				count = buildcontig(reads,pos,list_size);		
+				count = buildcontig(reads,pos,quality,list_size);		
 				writecontig(count,pos,reads,order,RC,quality,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC, f_order_N_pe, f_flag_N, f_quality, f_quality_N, list_size);
 			}
 			reads = {current};
@@ -505,7 +513,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s, s
 					
 	}
 
-	count = buildcontig(reads,pos,list_size);
+	count = buildcontig(reads,pos,quality,list_size);
 	writecontig(count,pos,reads,order,RC,quality,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe, f_flag_N, f_quality, f_quality_N, list_size);
 
 	f.close();
@@ -710,11 +718,11 @@ void packbits()
 }
 
 
-std::vector<std::array<long,5>> buildcontig(std::list<std::string> reads, std::list<long> pos, uint32_t list_size)
+std::vector<std::array<double,5>> buildcontig_old(std::list<std::string> &reads, std::list<long> &pos, std::list<std::string> &quality, std::uint32_t list_size)
 
 {
 	auto reads_it = reads.begin();
-	std::vector<std::array<long,5>> count(readlen,{0,0,0,0,0});
+	std::vector<std::array<double,5>> count(readlen,{0,0,0,0,0});
 	for(long i = 0; i < readlen; i++)
 		count[i][chartolong[(*reads_it)[i]]] = 1;
 	if(list_size == 1)
@@ -738,12 +746,85 @@ std::vector<std::array<long,5>> buildcontig(std::list<std::string> reads, std::l
 	return count;
 }
 
-std::string generateRef(std::vector<std::array<long,5>> count)
+std::vector<std::array<double,5>> buildcontig(std::list<std::string> &reads, std::list<long> &pos, std::list<std::string> &quality, std::uint32_t list_size)
+{
+	auto reads_it = reads.begin();
+	auto quality_it = quality.begin();
+	std::vector<std::array<double,5>> count(readlen,{0,0,0,0,0});
+	for(long i = 0; i < readlen; i++)
+	{	
+		if(chartolong[(*reads_it)[i]] == 4)//N
+			;//do nothing, we'll handle N at end
+		else
+			for(int j = 0; j < 4; j++)
+			{
+				if(chartolong[(*reads_it)[i]] == j)
+					count[i][j] = log_1_p[(uint32_t)((*quality_it)[i])-33];
+				else
+					count[i][j] = log_p_3[(uint32_t)((*quality_it)[i])-33];
+			}
+	}
+	if(list_size != 1)
+	{
+		long prevpos = 0,currentpos;
+		auto pos_it = pos.begin();
+		++reads_it;
+		++pos_it;
+		for(; pos_it != pos.end(); ++pos_it,++reads_it,++quality_it)
+		{
+			count.insert(count.end(),*pos_it,{0,0,0,0,0});
+			currentpos = prevpos + *pos_it;
+			for(long i = 0; i < readlen; i++)
+			{
+				if(chartolong[(*reads_it)[i]] == 4)//N
+					;//do nothing, we'll handle N at end
+				else
+					for(int j = 0; j < 4; j++)
+					{
+						if(chartolong[(*reads_it)[i]] == j)
+							count[currentpos+i][j] += log_1_p[(uint32_t)((*quality_it)[i])-33];
+						else
+							count[currentpos+i][j] += log_p_3[(uint32_t)((*quality_it)[i])-33];
+					}
+			}
+			prevpos = currentpos;
+		}
+	}
+	//exponentiate the counts to get back probabilities
+	for(auto it = count.begin(); it!= count.end(); ++it)
+	{
+		//first subtract max count for numerical stability
+		double max_count = (*it)[0];
+		for(int j = 1; j < 4; j++)
+			if((*it)[j] > max_count)
+				max_count = (*it)[j];
+		for(int j = 0; j < 4; j++)
+			(*it)[j] = (*it)[j] - max_count;
+		//exponentiate
+		for(int j = 0; j < 4; j++)
+			(*it)[j] = pow(10,(*it)[j]);	
+		//set count for N to the minimum among the four bases.
+		//Basically we denoise N if we denoise the least likely base
+		double min_count = (*it)[0];
+		for(int j = 1; j < 4; j++)
+			if((*it)[j] < min_count)	
+				min_count = (*it)[j];
+		(*it)[4] = min_count;
+	}
+		
+	//set counts of N to 0, because we always
+//	for(auto it = count.begin(); it!= count.end(); ++it)
+//		(*it)[4] = 0;
+	return count;
+}
+
+std::string generateRef(std::vector<std::array<double,5>> count)
 {
 	std::string ref(count.size(),'A');
 	for(long i = 0; i < count.size(); i++)
 	{
-		long max = 0,indmax = 0;
+		double max = 0;
+		long indmax = 0;
 		for(long j = 0; j < 4; j++)
 		//not including N because packbits doesn't expect seq to have N
 			if(count[i][j]>max)
@@ -756,7 +837,7 @@ std::string generateRef(std::vector<std::array<long,5>> count)
 	return ref;
 }
 
-void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::list<std::string> &quality, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, std::ofstream &f_flag_N, std::ofstream &f_quality, std::ofstream &f_quality_N, uint32_t list_size)
+void writecontig(std::vector<std::array<double,5>> count, std::list<long> &pos, std::list<std::string> &reads, std::list<uint32_t> &order, std::list<char> &RC, std::list<std::string> &quality, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos, std::ofstream& f_order, std::ofstream &f_RC, std::ofstream &f_order_N_pe, std::ofstream &f_flag_N, std::ofstream &f_quality, std::ofstream &f_quality_N, uint32_t list_size)
 {
 	std::string ref = generateRef(count);
 	
@@ -778,6 +859,7 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 		}
 		else
 			f_quality << quality.front() << "\n";
+		f_flag_N << "0";
 		return;
 	}
 	long prevj = 0;
@@ -818,28 +900,27 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 			if(is_alternate){
 				allowed_alternate_flag = false;	
 				if(denoise_type=="quality_threshold"){
-					allowed_alternate_flag = (_read_quality_val > quality_thresh); 
+					allowed_alternate_flag = (_read_quality_val >= quality_thresh); 
         			}
 				else if(denoise_type == "adaptive_denoising")
 				{
 					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
-					allowed_alternate_flag = (ref_alternate_count_ratio > alternate_thresh*_read_p_pbar);   	
+					allowed_alternate_flag = (ref_alternate_count_ratio >= alternate_thresh*_read_p_pbar);   	
 				}
 				else if(denoise_type == "only_using_counts")
 				{
 					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
-					allowed_alternate_flag = (ref_alternate_count_ratio > alternate_thresh);   	
+					allowed_alternate_flag = (ref_alternate_count_ratio >= alternate_thresh);
 				}
 				else if(denoise_type == "counts_and_quality")
 				{
 					ref_alternate_count_ratio = (double)count[currentpos+j][_read_char_id]/count[currentpos+j][_ref_char_id];
-					allowed_alternate_flag = (_read_quality_val > quality_thresh) || (ref_alternate_count_ratio > alternate_thresh);   		
+					allowed_alternate_flag = (_read_quality_val >= quality_thresh) || (ref_alternate_count_ratio >= alternate_thresh);   		
 				}
 				else{
 				   	allowed_alternate_flag = true; //By default do not correct any noise
 				}
     			}
-			
 			if(is_alternate && allowed_alternate_flag)
 			{
 				f_noise<<enc_noise[ref[currentpos+j]][(*reads_it)[j]];
@@ -847,6 +928,9 @@ void writecontig(std::vector<std::array<long,5>> count, std::list<long> &pos, st
 				f_noisepos<<c;
 				prevj = j;
 			}
+		//	change quality to J for denoised bases (did this when trying iterative)
+		// 	if(is_alternate && !allowed_alternate_flag)
+		//		(*quality_it)[j] = 'J';
 		}
 		f_noise << "\n";
 		if(firstread == true)
@@ -945,7 +1029,10 @@ void setglobalarrays()
 	{	
 		double _prob = pow(10.0,-((double)i/10.0));
 		quality_to_p_pbar[i] = _prob/(1.0-_prob);
+		log_1_p[i] = log10(1-_prob);
+		log_p_3[i] = log10(_prob/3);
 	}
+	
 	return;
 }
 	
