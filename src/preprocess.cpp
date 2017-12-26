@@ -129,6 +129,7 @@ int preprocess()
 		std::ofstream f_numreads(outfilenumreads,std::ios::binary);
 		uint32_t num_clean_32 = num_clean;
 		f_numreads.write((char*)&num_clean_32, sizeof(uint32_t));
+		f_numreads.write((char*)&((uint32_t)readnum), sizeof(uint32_t));
 		std::cout << "Read length: " << readlen << "\n";
 		std::cout << "Total number of reads: " << readnum <<"\n";
 		std::cout << "Total number of reads without N: " << num_clean <<"\n";
