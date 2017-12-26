@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cmath>
 #include <cstdio>
 
 std::string infile_order;
@@ -11,7 +12,7 @@ std::string outfile_order_paired;
 std::string outfile_paired_flag_first;
 std::string outfile_paired_flag_N;
 
-uint32_t numreads_total, numreads_clean, numread_N, numreads_by_2; 
+uint32_t numreads_total, numreads_clean, numreads_N, numreads_by_2; 
 
 void populate_arrays(uint32_t* read_order, uint32_t* read_inverse_order, bool* read_flag_N);
 //populate arrays:
@@ -28,6 +29,9 @@ void write_order_paired(uint32_t* read_order, uint32_t* read_inverse_order, bool
 void packbits();
 //pack flag files into 1 bit per flag
 
+void pack_order();
+//pack order_paired into log(numreads_total) bits per entry
+
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
@@ -42,15 +46,16 @@ int main(int argc, char** argv)
 	f_numreads.read((char*)&numreads_clean,sizeof(uint32_t));
 	f_numreads.read((char*)&numreads_total,sizeof(uint32_t));
 	f_numreads.close();
-	numread_by_2 = numreads_total/2;
-	numreads_N = numreads_total - numreads_N;	
+	numreads_by_2 = numreads_total/2;
+	numreads_N = numreads_total - numreads_clean;	
 	
 	uint32_t *read_order = new uint32_t [numreads_clean];
 	uint32_t *read_inverse_order = new uint32_t[numreads_total];
 	bool *read_flag_N = new bool[numreads_total]();
 	populate_arrays(read_order, read_inverse_order, read_flag_N);
-    write_order_paired(read_order, read_inverse_order, read_flag_N);
+    	write_order_paired(read_order, read_inverse_order, read_flag_N);
 	packbits();
+	pack_order();
 	
 	delete[] read_order;
 	delete[] read_inverse_order;
@@ -84,11 +89,11 @@ void populate_arrays(uint32_t* read_order, uint32_t* read_inverse_order, bool* r
 		if(read_flag_N[i] == true)
 			num_N_reads_till_now++;	
 		else
-			read_inverse_order[j++] = num_N_reads_till_now++;
+			read_inverse_order[pos_in_clean++] = num_N_reads_till_now;
 	}
 	for(uint32_t i = 0; i < numreads_clean; i++)
 	{
-		read_order[i] += read_inverse_order[i];
+		read_order[i] += read_inverse_order[read_order[i]];
 	}
 
 	//now fill read_inverse_order
@@ -121,7 +126,8 @@ void write_order_paired(uint32_t* read_order, uint32_t* read_inverse_order, bool
 			else
 			{
 				f_flag_N << '0';	
-				f_order_paired.write((char*)&(read_inverse_order[read_order[i] + numreads_by_2]-i),sizeof(uint32_t));
+				uint32_t temp = (read_inverse_order[read_order[i] + numreads_by_2]-i);	
+				f_order_paired.write((char*)&temp,sizeof(uint32_t));
 			}
 		}
 		else
@@ -138,8 +144,9 @@ void write_order_paired(uint32_t* read_order, uint32_t* read_inverse_order, bool
 			}
 			else
 			{
-				f_flag_N << '0';	
-				f_order_paired.write((char*)&(read_inverse_order[read_order[i] - numreads_by_2]-i),sizeof(uint32_t));
+				f_flag_N << '0';
+				uint32_t temp = (read_inverse_order[read_order[i] - numreads_by_2]-i);	
+				f_order_paired.write((char*)&temp,sizeof(uint32_t));
 			}
 		}			
 	}
@@ -186,13 +193,8 @@ void packbits()
 	std::ofstream f_flag_N(outfile_paired_flag_N+".tmp",std::ios::binary);
 	std::ofstream f_flag_N_tail(outfile_paired_flag_N+".tail");
 	
-	uint8_t chartoint[128];
-	chartoint['0'] = 0;
-	chartoint['1'] = 1;
 	in_flag_N.close();
 	in_flag_N.open(outfile_paired_flag_N);
-	char chararray[8];
-	uint8_t packedchar;
 	for(uint64_t i = 0; i < numreads_clean/8; i++)
 	{
 		in_flag_N.read(chararray,8);
@@ -212,5 +214,57 @@ void packbits()
 	remove((outfile_paired_flag_N).c_str());
 	rename((outfile_paired_flag_N+".tmp").c_str(),(outfile_paired_flag_N).c_str());		
 
+	return;
+}
+
+void pack_order()
+{
+	std::string infile = outfile_order_paired;
+	std::ofstream f_out(infile+".tmp",std::ios::binary);
+	std::ifstream f_in(infile,std::ios::binary);
+	std::ofstream f_tail(infile+".tail",std::ios::binary);
+	
+	uint32_t numreads = numreads_total;
+	uint32_t order;
+	int numbits = (int)(log2(numreads)+1);
+	f_out.write((char*)&numbits, sizeof(int));
+	f_out.write((char*)&numreads, sizeof(uint32_t));
+	uint32_t *order_array = new uint32_t [numbits];
+	for(uint32_t i = 0; i < numreads/32; i++)
+	{
+		std::fill(order_array,order_array+numbits,0);
+		int pos_in_array = 0, pos_in_int = 0;
+		for(int k = 0; k < 32; k++)
+		{
+			f_in.read((char*)&order, sizeof(uint32_t));
+
+			order_array[pos_in_array] |= (order << pos_in_int);
+			if(pos_in_int+numbits > 32)
+			{
+				pos_in_array++;
+				order_array[pos_in_array] = (order >> (32 - pos_in_int));
+				pos_in_int = numbits - (32 - pos_in_int);
+			}
+			else if(pos_in_int+numbits == 32)
+			{
+				pos_in_array++;
+				pos_in_int = 0;
+			}
+			else
+				pos_in_int = pos_in_int + numbits;
+		}
+		for(int k = 0; k < numbits; k++)
+			f_out.write((char*)&order_array[k], sizeof(uint32_t));
+	}
+	for(uint32_t i = 0; i < numreads%32; i++)
+	{
+		f_in.read((char*)&order, sizeof(uint32_t));
+		f_tail.write((char*)&order, sizeof(uint32_t));	
+	}
+	f_tail.close();
+	f_in.close();
+	f_out.close();
+	remove(infile.c_str());
+	rename((infile+".tmp").c_str(),infile.c_str());
 	return;
 }

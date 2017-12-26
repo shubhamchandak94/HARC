@@ -108,7 +108,18 @@ compress()
 	./src/libbsc/bsc e $pathname/output/read_seq.tar $pathname/output/read_seq.tar.bsc -b64p -t$num_thr 
 	./src/libbsc/bsc e $pathname/output/read_singleton.txt $pathname/output/read_singleton.txt.bsc -b64p -t$num_thr 
 	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar 
-	if [[ $preserve_order == "True" ]];then
+	if [[ $paired_end == "True" ]];then
+		./src/pe_encode.out $pathname	
+		7z a $pathname/output/read_order_paired.bin.7z $pathname/output/read_order_paired.bin -mmt=$num_thr
+		7z a $pathname/output/read_paired_flag_first.bin.7z $pathname/output/read_paired_flag_first.bin -mmt=$num_thr
+		7z a $pathname/output/read_paired_flag_N.bin.7z $pathname/output/read_paired_flag_N.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
+		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
+#		if [[ $preserve_quality == "True" ]];then
+#			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
+#			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
+#		fi
+	elif [[ $preserve_order == "True" ]];then
 		./src/pack_order.out $pathname	
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
@@ -129,6 +140,7 @@ compress()
 			echo "Done!"
 		fi	
 	fi
+	7z a $pathname/output/numreads.bin.7z $pathname/output/numreads.bin
 	rm $pathname/output/*.bin
 	rm $pathname/output/*.singleton
 	tar -cf $pathname/$(basename "$filename" .fastq).harc -C $pathname/output .
@@ -202,16 +214,18 @@ fi
 
 mode=''
 preserve_order="False"
+paired_end="False"
 preserve_quality="False"
 memory='7'
 
-while getopts ':c:d:t:m:pqh' opt; do
+while getopts ':c:d:t:m:pqeh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
     t) num_thr=$OPTARG;;
     m) memory=$OPTARG;;
     p) preserve_order="True";;
+    e) paired_end="True";;	
     q) preserve_quality="True";;	
     h) usage ;;
     \?) usage ;;
