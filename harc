@@ -110,15 +110,23 @@ compress()
 	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar 
 	if [[ $paired_end == "True" ]];then
 		./src/pe_encode.out $pathname	
+		if [[ $preserve_quality == "True" ]];then
+			echo "Reordering quality values and ids"
+			./src/pe_decode.out $pathname
+			rm $pathname/output/*.tmp			
+			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
+			./src/reorder_quality.out $pathname
+			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
+			rm $pathname/output/*.quality
+			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
+			rm $pathname/output/*.id
+			echo "Done!"
+		fi
 		7z a $pathname/output/read_order_paired.bin.7z $pathname/output/read_order_paired.bin -mmt=$num_thr
 		7z a $pathname/output/read_paired_flag_first.bin.7z $pathname/output/read_paired_flag_first.bin -mmt=$num_thr
 		7z a $pathname/output/read_paired_flag_N.bin.7z $pathname/output/read_paired_flag_N.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
 		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
-#		if [[ $preserve_quality == "True" ]];then
-#			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
-#			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
-#		fi
 	elif [[ $preserve_order == "True" ]];then
 		./src/pack_order.out $pathname	
 		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
@@ -157,7 +165,13 @@ decompress()
 	fi
 	mkdir -p $pathname/output
 	tar -xf $filename -C $pathname/output
-	if [[ $preserve_order == "True" ]];then
+	if [[ $paired_end == "True" ]];then
+		if [ ! -f $pathname/output/read_order_paired.bin.7z ];then
+			echo "Not compressed using -e flag."
+			usage
+			exit 1
+		fi
+	elif [[ $preserve_order == "True" ]];then
 		if [ ! -f $pathname/output/read_order.bin.7z ];then
 			echo "Not compressed using -p flag. Order cannot be restored"
 			usage
@@ -170,6 +184,7 @@ decompress()
 	./src/libbsc/bsc d $pathname/output/input_N.dna.bsc $pathname/output/input_N.dna -t$num_thr
 	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
 	7z e $pathname/output/read_rev.tar.7z -o$pathname/output/
+	7z e $pathname/output/numreads.bin.7z -o$pathname/output/
 	./src/libbsc/bsc d $pathname/output/read_seq.tar.bsc $pathname/output/read_seq.tar -t$num_thr
 	./src/libbsc/bsc d $pathname/output/read_singleton.txt.bsc $pathname/output/read_singleton.txt -t$num_thr
 	
@@ -181,8 +196,23 @@ decompress()
 	tar -xf $pathname/output/read_seq.tar -C $pathname/output/
 	
 	num_thr_e=$(ls $pathname/output/read_pos.txt* | wc -l) #number of encoding threads
-			
-	if [[ $preserve_order == "True" ]];then
+	if [[ $paired_end == "True" ]];then
+		readlen=$( cat $pathname/output/read_meta.txt )
+		echo "#define readlen $readlen" > src/config.h
+		echo "#define MAX_BIN_SIZE $memory" >> src/config.h
+		echo "#define num_thr $num_thr" >> src/config.h
+		echo "#define num_thr_e $num_thr_e" >> src/config.h
+		g++ src/decoder_preserve.cpp -O3 -march=native -fopenmp -std=c++11 -o src/decoder_preserve.out
+		7z e $pathname/output/read_order_paired.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_paired_flag_first.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_paired_flag_N.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
+		7z e $pathname/output/read_order_N_pe.bin.7z -o$pathname/output/
+		./src/pe_decode.out $pathname
+		./src/decoder_preserve.out $pathname
+		./src/merge_N.out $pathname
+		echo "Done!"
+	elif [[ $preserve_order == "True" ]];then
 		readlen=$( cat $pathname/output/read_meta.txt )
 		echo "#define readlen $readlen" > src/config.h
 		echo "#define MAX_BIN_SIZE $memory" >> src/config.h
