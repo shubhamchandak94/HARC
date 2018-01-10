@@ -14,14 +14,11 @@ std::string outfile_order;
 
 uint32_t numreads_total, numreads_clean, numreads_N, numreads_by_2; 
 
-void write_order();
+void pe_decode();
 //create read_order.bin from the paired order and flag files
 
 void unpackbits();
 //unpack flag files into 1 byte per flag
-
-void unpack_order();
-//unpack order_paired from log(numreads_total) bits per entry to 4 bytes/entry
 
 int main(int argc, char** argv)
 {
@@ -40,7 +37,6 @@ int main(int argc, char** argv)
 	numreads_by_2 = numreads_total/2;
 	numreads_N = numreads_total - numreads_clean;	
 	
-	unpack_order();
 	unpackbits();
 	pe_decode();
 	return 0;
@@ -48,31 +44,26 @@ int main(int argc, char** argv)
 
 void pe_decode()
 {
-	bool *flag
-	std::fill(read_order,read_order+numreads_clean,numreads_total);
 	std::ifstream in_order_paired(infile_order_paired,std::ios::binary);
 	std::ifstream in_paired_flag_first(infile_paired_flag_first);
 	std::ifstream in_paired_flag_N(infile_paired_flag_N);
+	std::ifstream fin_order_N(infile_order_N,std::ios::binary);
 	//first mark locations of pairs containing 'N' reads
 	//these locations can't be used later for assigning positions 
 	std::vector<bool> pairs_with_N(numreads_by_2,false);
 	char flag_N;
 	uint32_t order_paired;
-	for(uint32_t i = 0; i < num_clean; i++)
+	for(uint32_t i = 0; i < numreads_N; i++)
 	{
-		in_paired_flag_N.get(flag_N);
-		in_order_paired.read((char*)&order_paired, sizeof(uint32_t));
-		if(flag_N == '1')
-			pairs_with_N[order_paired%numreads_by_2] = true;
+		fin_order_N.read((char*)&order_paired, sizeof(uint32_t));
+		pairs_with_N[order_paired%numreads_by_2] = true;
 	}
-	in_paired_flag_N.close();
-	in_order_paired.close();
+	fin_order_N.close();
 	
 	//now create index from reordered position to new intended position (numreads_clean --> numreads_total)
 	//size numreads_total because we will reuse it later
 	uint32_t *read_order = new uint32_t[numreads_total];
-	in_order_paired.open(infile_order_paired,std::ios::binary);
-	in_paired_flag_N.open(infile_paired_flag_N);
+	std::fill(read_order, read_order+numreads_total, numreads_total);
 	char flag_first;
 	uint32_t current_pair = 0;//to track position of available pair
 	for(uint32_t i = 0; i < numreads_clean; i++)
@@ -81,13 +72,19 @@ void pe_decode()
 			current_pair++;
 		in_paired_flag_first.get(flag_first);
 		in_paired_flag_N.get(flag_N);
-		in_order_paired.read((char*)&order_paired, sizeof(uint32_t));
 		if(flag_N == '1')
 		{
-			read_order[i] = order_paired;
+			in_order_paired.read((char*)&order_paired, sizeof(uint32_t));
+			if(flag_first == '1')
+				read_order[i] = order_paired;
+			else
+				read_order[i] = order_paired + numreads_by_2;
 		}
 		else
 		{
+			if(read_order[i] != numreads_total)
+				continue;//already done by pair
+			in_order_paired.read((char*)&order_paired, sizeof(uint32_t));
 			if(flag_first == '1')
 			{
 				read_order[i] = current_pair;
@@ -117,7 +114,8 @@ void pe_decode()
 		fin_temp.read((char*)&order_paired, sizeof(uint32_t));
 		read_order[order_paired] = i;
 	}
-	
+	fin_temp.close();
+		
 	//write read_order array to disk to make space for final array
 	f_temp.open(outfile_order,std::ios::binary);
 	for(uint32_t i = 0; i < numreads_total; i++)
@@ -129,7 +127,8 @@ void pe_decode()
 	//now use inverse index stored in file along with read_order_N.bin
 	//to remove gaps and get a map from numreads_clean --> numreads_clean
 	//basically ignore inverse index for N reads
-	std::ifstream fin_order_N(infile_order_N,std::ios::binary);
+
+	fin_order_N.open(infile_order_N,std::ios::binary);
 	fin_temp.open(outfile_order,std::ios::binary);
 	uint32_t pos_in_clean = 0, next_N_read;
 	fin_order_N.read((char*)&next_N_read,sizeof(uint32_t));
@@ -183,6 +182,14 @@ void unpackbits()
 		packedchar/=2; 	
 		f_flag_first << inttochar[packedchar%2];
 		packedchar/=2; 	
+		f_flag_first << inttochar[packedchar%2];
+		packedchar/=2; 	
+		f_flag_first << inttochar[packedchar%2];
+		packedchar/=2; 	
+		f_flag_first << inttochar[packedchar%2];
+		packedchar/=2; 	
+		f_flag_first << inttochar[packedchar%2];
+		packedchar/=2; 	
 		in_flag_first.read((char*)&packedchar,sizeof(uint8_t));
 	}
 	in_flag_first.close();
@@ -195,14 +202,18 @@ void unpackbits()
 	std::ifstream in_flag_N(infile_paired_flag_N,std::ios::binary);
 	std::ofstream f_flag_N(infile_paired_flag_N+".tmp");
 	std::ifstream in_flag_N_tail(infile_paired_flag_N+".tail");
-	char inttochar[2];
-	inttochar[0] = '0';
-	inttochar[1] = '1';
 	
-	uint8_t packedchar;
 	in_flag_N.read((char*)&packedchar,sizeof(uint8_t));
 	while(!in_flag_N.eof())
 	{	
+		f_flag_N << inttochar[packedchar%2];
+		packedchar/=2; 	
+		f_flag_N << inttochar[packedchar%2];
+		packedchar/=2; 	
+		f_flag_N << inttochar[packedchar%2];
+		packedchar/=2; 	
+		f_flag_N << inttochar[packedchar%2];
+		packedchar/=2; 	
 		f_flag_N << inttochar[packedchar%2];
 		packedchar/=2; 	
 		f_flag_N << inttochar[packedchar%2];
@@ -218,59 +229,5 @@ void unpackbits()
 	in_flag_N_tail.close();
 	f_flag_N.close();
 	infile_paired_flag_N = infile_paired_flag_N + ".tmp";
-	return;
-}
-
-void unpack_order()
-{
-	std::string infile = infile_order_paired;
-	std::ofstream f_out(infile+".tmp",std::ios::binary);
-	std::ifstream f_in(infile,std::ios::binary);
-	std::ifstream f_tail(infile+".tail",std::ios::binary);
-	
-	int numbits;
-	uint32_t numreads;
-	f_in.read((char*)&numbits,sizeof(int));
-	f_in.read((char*)&numreads,sizeof(uint32_t));
-	uint32_t order;
-	uint32_t order_array[32];
-	uint32_t *input_array = new uint32_t [numbits];
-	for(uint32_t i = 0; i < numreads/32; i++)
-	{
-		for(int k = 0; k < numbits; k++)
-			f_in.read((char*)&input_array[k], sizeof(uint32_t));
-		
-		int pos_in_int = 0, pos_in_array = 0;
-		
-		uint32_t mask = (0xFFFFFFFF)>>(32-numbits);		
-		for(int k = 0; k < 32; k++)
-		{
-			if(32-pos_in_int > numbits)
-			{
-				order_array[k] = (input_array[pos_in_array]>>pos_in_int) & mask;
-				pos_in_int += numbits;
-			}
-			else if(32-pos_in_int == numbits)
-			{
-				order_array[k] = (input_array[pos_in_array]>>pos_in_int) & mask;
-				pos_in_array++;
-				pos_in_int = 0;
-			}
-			else
-			{
-				order_array[k] = (input_array[pos_in_array]>>pos_in_int) & mask;
-				pos_in_array++;
-				order_array[k] += (input_array[pos_in_array]<<(32-pos_in_int)) & mask;
-				pos_in_int = numbits - (32-pos_in_int);
-			}
-		}
-		for(int k = 0; k < 32; k++)
-			f_out.write((char*)&order_array[k], sizeof(uint32_t));
-	}
-	f_out << f_tail.rdbuf();
-	f_tail.close();
-	f_in.close();
-	f_out.close();
-	infile_order_paired = infile_order_paired+".tmp";
 	return;
 }
