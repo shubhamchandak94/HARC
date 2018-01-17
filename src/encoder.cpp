@@ -204,6 +204,7 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	uint8_t p;
 	uint32_t ord, list_size = 0;//list_size variable introduced because list::size() was running very slowly
 					// on UIUC machine
+	uint32_t num_left_search = 0;//number of reads with flag 2
 	std::list<uint32_t> deleted_rids[numdict_s];
 	while(i < stop)
 	{
@@ -216,6 +217,26 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 		{
 			if(list_size!=0)
 			{
+				//modify pos array to handle negative values due to left-search reads
+				if(num_left_search > 0)
+				{
+					long prev_pos, temp;
+					auto it = pos.begin();
+					prev_pos = *it;
+					*it = readlen;
+					++it;
+					for(long i = 1; i < num_left_search; i++)
+					{
+						temp = *it;
+						*it = prev_pos;
+						prev_pos = temp;
+						++it;
+					}
+					if(it != pos.end())
+					{
+						*it = prev_pos;
+					}	
+				}		
 				ref = buildcontig(reads,pos,list_size);
 				//try to align the singleton reads to ref
 				//first create bitsets from first readlen positions of ref
@@ -410,14 +431,24 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 			order = {ord};
 			RC = {rc};
 			list_size = 1;
+			num_left_search = 0;
 		}
-		else
-		{
+		else if(c == '1') //read found during rightward search
+		{	
 			reads.push_back(current);
 			pos.push_back(p);
 			order.push_back(ord);
 			RC.push_back(rc);
 			list_size++;
+		}
+		else if(c == '2') //read found during leftward search
+		{	
+			reads.push_front(current);
+			pos.push_front(p);
+			order.push_front(ord);
+			RC.push_front(rc);
+			list_size++;
+			num_left_search++;
 		}
 		i++;	
 					

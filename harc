@@ -112,10 +112,11 @@ compress()
 		./src/pe_encode.out $pathname	
 		if [[ $preserve_quality == "True" ]];then
 			echo "Reordering quality values and ids"
-			./src/pe_decode.out $pathname
-			rm $pathname/output/*.tmp			
 			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
 			./src/reorder_quality.out $pathname
+			./src/pe_decode.out $pathname
+			
+			rm $pathname/output/*.tmp			
 			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
 			rm $pathname/output/*.quality
 			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
@@ -230,7 +231,7 @@ decompress()
 		./src/decoder.out $pathname $num_thr $num_thr_e
 	fi
 	mv $pathname/output/output.dna $pathname/$(basename "$filename" .harc).dna.d
-	rm -r $pathname/output/
+ 	rm -r $pathname/output/
 }
 
 #Initialize variables to default values.

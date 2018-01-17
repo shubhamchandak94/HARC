@@ -458,11 +458,14 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::ofstream foutorder_s(outfileorder + ".singleton." + tid_str,std::ofstream::out|std::ios::binary);
 	
 	unmatched[tid] = 0;
-	std::bitset<2*readlen> ref,revref,b;
+	std::bitset<2*readlen> ref,revref,b,first_read;
+	//first_read represents first read of contig, used for left searching
 	int count[4][readlen];
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
-	bool flag = 0, done = 0, prev_unmatched = false;
+	bool flag = 0, done = 0, prev_unmatched = false, left_search_start = false, left_search = false;
+	//left_search_start - true when left search is starting (to avoid double deletion of first read)
+	//left_search - true during left search - needed so that we know when to pick arbitrary read
 	uint32_t current, prev;
 	uint64_t ull;
 	//flag to check if match was found or not
@@ -485,16 +488,23 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 //		numdone++;
 //		if(numdone%1000000==0)
 //			std::cout<<tid<<":"<<numdone<<"\n";
-		//delete the read from the corresponding dictionary bins
-		for(int l = 0; l < numdict; l++)
-		{	b = read[current]&mask1[l];
-			ull = (b>>2*dict_start[l]).to_ullong();
-			startposidx = dict[l].bphf->lookup(ull);
-			//check if any other thread is modifying same dictpos
-			omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
-			dict[l].findpos(dictidx,startposidx);
-			dict[l].remove(dictidx,startposidx,current);
-			omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
+		//delete the read from the corresponding dictionary bins (unless we are starting left search)
+		if(!left_search_start)
+		{
+			for(int l = 0; l < numdict; l++)
+			{	b = read[current]&mask1[l];
+				ull = (b>>2*dict_start[l]).to_ullong();
+				startposidx = dict[l].bphf->lookup(ull);
+				//check if any other thread is modifying same dictpos
+				omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
+				dict[l].findpos(dictidx,startposidx);
+				dict[l].remove(dictidx,startposidx,current);
+				omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
+			}
+		}
+		else
+		{
+			left_search_start = false;
 		}
 		flag = 0;
 		uint32_t k;
@@ -552,9 +562,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						foutflag << 0;//for unmatched
 						foutpos.write((char*)&_readlen,sizeof(uint8_t));
 					}	
-					foutRC << 'd';
+					foutRC << (left_search?'r':'d');
 					foutorder.write((char*)&current,sizeof(uint32_t));
-					foutflag << 1;//for matched
+					foutflag << (left_search?2:1);//for matched
 					foutpos.write((char*)&j,sizeof(uint8_t));
 					
 					prev_unmatched = false;
@@ -616,9 +626,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 						foutflag << 0;//for unmatched
 						foutpos.write((char*)&_readlen,sizeof(uint8_t));
 					}
-					foutRC << 'r';
+					foutRC << (left_search?'d':'r');
 					foutorder.write((char*)&current,sizeof(uint32_t));
-					foutflag << 1;//for matched
+					foutflag << (left_search?2:1);//for matched
 					foutpos.write((char*)&j,sizeof(uint8_t));
 					
 					prev_unmatched = false;
@@ -633,42 +643,55 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		}
 		if(flag == 0)//no match found
 		{
-			for(int64_t j = remainingpos; j>=0; j--)
-			
-				if(remainingreads[j] == 1)
+			if(!left_search) //start left search
+			{
+				left_search = true;
+				left_search_start = true;
+				//update ref and count with RC of first_read
+				updaterefcount(first_read,ref,revref,count,true,true,0);
+			}
+			else //left search done, now pick arbitrary read and start new contig 
+			{
+				left_search = false;
+				for(int64_t j = remainingpos; j>=0; j--)
 				{
-					omp_set_lock(&read_lock[j & 0xFFFFFF]);
-					if(remainingreads[j])//checking again inside critical block
+					if(remainingreads[j] == 1)
 					{
-						current = j;
-						remainingpos = j-1;
-						remainingreads[j] = 0;
-						flag = 1;
-						unmatched[tid]++;
+						omp_set_lock(&read_lock[j & 0xffffff]);
+						if(remainingreads[j])//checking again inside critical block
+						{
+							current = j;
+							remainingpos = j-1;
+							remainingreads[j] = 0;
+							flag = 1;
+							unmatched[tid]++;
+						}
+						omp_unset_lock(&read_lock[j & 0xffffff]);
+						if(flag == 1)
+							break;
 					}
-					omp_unset_lock(&read_lock[j & 0xFFFFFF]);
-					if(flag == 1)
-						break;
-				}
-					
-			if(flag == 0)
-			{
-				if(prev_unmatched == true)//last read was singleton, write it now
+				}		
+				if(flag == 0)
 				{
-					foutorder_s.write((char*)&prev,sizeof(uint32_t));
+					if(prev_unmatched == true)//last read was singleton, write it now
+					{
+						foutorder_s.write((char*)&prev,sizeof(uint32_t));
+					}
+					done = 1;//no reads left
 				}
-				done = 1;//no reads left
-			}
-			else
-			{
-				updaterefcount(read[current],ref,revref,count,true,false,0);
-				if(prev_unmatched == true)//prev read singleton, write it now
+				else
 				{
-					foutorder_s.write((char*)&prev,sizeof(uint32_t));
+					updaterefcount(read[current],ref,revref,count,true,false,0);
+					if(prev_unmatched == true)//prev read singleton, write it now
+					{
+						foutorder_s.write((char*)&prev,sizeof(uint32_t));
+					}
+					prev_unmatched = true;
+					first_read = read[current];
+					prev = current;
 				}
-				prev_unmatched = true;
-				prev = current;
 			}
+			
 		}
 	}//while(!done) end
 	
