@@ -54,8 +54,8 @@ int main(int argc, char** argv)
 	infile_noise = basedir + "/output/read_noise.txt";
 	infile_noisepos = basedir + "/output/read_noisepos.txt";
 	infile_rev = basedir + "/output/read_rev.txt";
-	infile_N = basedir + "/output/input_N.dna";
-	infile_singleton = basedir + "/output/read_singleton.txt";
+	infile_N = basedir + "/output/unaligned_N.txt";
+	infile_singleton = basedir + "/output/unaligned_singleton.txt";
 	getDataParams(); //populate readlen
 	setglobalarrays();
 	decode();
@@ -78,9 +78,10 @@ void decode()
 		std::ifstream f_noise(infile_noise+'.'+std::to_string(tid_e));
 		std::ifstream f_noisepos(infile_noisepos+'.'+std::to_string(tid_e));
 		std::ifstream f_rev(infile_rev+'.'+std::to_string(tid_e));
-		std::ofstream f_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
 		
-		char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
+		char *currentread = new char [readlen+1];
+		char *ref = new char [readlen+1];
+		char *revread = new char [readlen+1];;
 		currentread[readlen] = '\0';
 		revread[readlen] = '\0';
 		ref[readlen] = '\0';
@@ -107,25 +108,12 @@ void decode()
 				prevnoisepos = noisepos;	
 			}
 			c = f_rev.get();
-			if(strchr(currentread,'N')!=NULL)
-			{
-				if(c == 'd')
-					f_N_tmp << currentread<<"\n";
-				else
-				{
-					reverse_complement(currentread,revread);
-					f_N_tmp << revread<<"\n";
-				}
-			}
+			if(c == 'd')
+				f << currentread<<"\n";
 			else
 			{
-				if(c == 'd')
-					f << currentread<<"\n";
-				else
-				{
-					reverse_complement(currentread,revread);
-					f << revread<<"\n";
-				}
+				reverse_complement(currentread,revread);
+				f << revread<<"\n";
 			}
 		}
 
@@ -135,7 +123,6 @@ void decode()
 		f_noise.close();
 		f_noisepos.close();
 		f_rev.close();
-		f_N_tmp.close();
 	}//for end
 	}//parallel end
 	std::ofstream f(outfile);
@@ -155,16 +142,14 @@ void decode()
 		f << currentread << "\n";
 		f_singleton.read(currentread,readlen);	
 	}
-	f_singleton.close();	
-	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
-	{
-		std::ifstream f_N(infile_N+'.'+std::to_string(tid_e)+".tmp");
-		f << f_N.rdbuf();			
-		f.clear();//clear error flags (happens in case f_in empty)			
-		f_N.close();
-	}
+	f_singleton.close();
 	std::ifstream f_N(infile_N);
-	f << f_N.rdbuf();
+	f_N.read(currentread,readlen);
+	while(!f_N.eof())
+	{	
+		f << currentread << "\n";
+		f_N.read(currentread,readlen);	
+	}
 	f_N.close();
 	f.close();
 	std::cout<<"Decoding done\n";

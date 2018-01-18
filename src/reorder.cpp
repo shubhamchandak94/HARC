@@ -16,6 +16,7 @@ uint32_t num_locks = 0x1000000; //limits on number of locks (power of 2  for fas
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
+typedef std::bitset<2*MAX_READ_LEN> bitset;
 
 class bbhashdict
 {
@@ -43,6 +44,8 @@ class bbhashdict
 
 uint32_t numreads = 0;
 
+int maxmatch, thresh, numdict, maxsearch, dict1_start, dict1_end, dict2_start, dict2_end, num_thr, readlen;
+
 std::string infile;
 std::string infilenumreads;
 std::string outfile;
@@ -50,7 +53,6 @@ std::string outfileRC;
 std::string outfileflag;
 std::string outfilepos;
 std::string outfileorder;
-std::string outdir;
 
 //Some global arrays (some initialized in setglobalarrays())
 char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
@@ -59,37 +61,37 @@ char chartorevchar[128];//A-T etc for reverse complement
 int chartoint[128];//A-0,C-1 etc. used in updaterefcount
 int *dict_start;
 int *dict_end; 
-std::bitset<2*readlen> basemask[readlen][128];//bitset for A,G,C,T at each position 
+bitset basemask[MAX_READ_LEN][128];//bitset for A,G,C,T at each position 
 //used in stringtobitset, chartobitset and bitsettostring
-std::bitset<2*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
+bitset positionmask[MAX_READ_LEN];//bitset for each position (1 at two bits and 0 elsewhere)
 //used in bitsettostring
-std::bitset<2*readlen> mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
+bitset mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
 
-std::bitset<2*readlen> stringtobitset(std::string s);
+bitset stringtobitset(std::string s);
 
-void bitsettostring(std::bitset<2*readlen> b,char *s);
+void bitsettostring(bitset b,char *s);
 
-void readDnaFile(std::bitset<2*readlen> *read);
+void readDnaFile(bitset *read);
 
 int getDataParams();
 
-void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict);
+void constructdictionary(bitset *read, bbhashdict *dict);
 
-//void constructdictionary(std::bitset<2*readlen> *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict);
+//void constructdictionary(bitset *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict);
 
-void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask);
+void generatemasks(bitset *mask,bitset *revmask);
 //mask for zeroing the end bits (needed while reordering to compute Hamming distance between shifted reads)
 
-void reorder(std::bitset<2*readlen> *read, bbhashdict *dict);
+void reorder(bitset *read, bbhashdict *dict);
 
-void writetofile(std::bitset<2*readlen> *read);
+void writetofile(bitset *read);
 
-void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, bool rev, int shift);
+void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift);
 //update the clean reference and count matrix
 
 void reverse_complement(char *s, char *s1);
 
-std::bitset<2*readlen> chartobitset(char &s);
+bitset chartobitset(char &s);
 
 void setglobalarrays();
 //setting arrays like chartoint etc.
@@ -97,20 +99,19 @@ void setglobalarrays();
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	outdir = basedir + "/output/";
-	infile = basedir + "/output/input_clean.dna";
-	outfile = basedir + "/output/temp.dna";
-	outfileRC = basedir + "/output/read_rev.txt";
-	outfileflag = basedir + "/output/tempflag.txt";
-	outfilepos = basedir + "/output/temppos.txt";
-	outfileorder = basedir + "/output/read_order.bin";
-	infilenumreads = basedir + "/output/numreads.bin";
-	
+	infile = basedir + "/input_clean.dna";
+	outfile = basedir + "/temp.dna";
+	outfileRC = basedir + "/read_rev.txt";
+	outfileflag = basedir + "/tempflag.txt";
+	outfilepos = basedir + "/temppos.txt";
+	outfileorder = basedir + "/read_order.bin";
+	infilenumreads = basedir + "/numreads.bin";
+
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));	
 	omp_set_num_threads(num_thr);	
 	setglobalarrays();
-	std::bitset<2*readlen> *read = new std::bitset<2*readlen> [numreads];
+	bitset *read = new bitset [numreads];
 	std::cout << "Reading file: " << infile << std::endl;
 	readDnaFile(read);
 	bbhashdict dict[numdict];
@@ -195,9 +196,9 @@ void setglobalarrays()
 }
 	
 
-std::bitset<2*readlen> stringtobitset(std::string s)
+bitset stringtobitset(std::string s)
 {
-	std::bitset<2*readlen> b;
+	bitset b;
 	for(int i = 0; i < readlen; i++)
 		b |= basemask[i][s[i]];
 	return b;
@@ -232,7 +233,7 @@ int getDataParams()
 	return 0;
 }
 
-void readDnaFile(std::bitset<2*readlen> *read)
+void readDnaFile(bitset *read)
 {
 	#pragma omp parallel
 	{
@@ -257,7 +258,7 @@ void readDnaFile(std::bitset<2*readlen> *read)
 	return;
 }
 	
-void generateindexmasks(std::bitset<2*readlen> *mask1)
+void generateindexmasks(bitset *mask1)
 //masks for dictionary positions
 {
 	for(int j = 0; j < numdict; j++)
@@ -269,18 +270,18 @@ void generateindexmasks(std::bitset<2*readlen> *mask1)
 }
 
 
-void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
+void constructdictionary(bitset *read, bbhashdict *dict)
 {
-	std::bitset<2*readlen> mask[numdict];
+	bitset mask[numdict];
 	generateindexmasks(mask);
 	for(int j = 0; j < numdict; j++)
 	{
 		uint64_t *ull = new uint64_t[numreads];
 		#pragma omp parallel
 		{
-		std::bitset<2*readlen> b;
+		bitset b;
 		int tid = omp_get_thread_num();
-		std::ofstream foutkey(outdir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
+		std::ofstream foutkey(basedir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
 		uint32_t i, stop;
 		i = uint64_t(tid)*numreads/omp_get_num_threads();
 		stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
@@ -314,8 +315,8 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 		#pragma omp parallel
 		{
 		int tid = omp_get_thread_num();	
-		std::ifstream finkey(outdir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
-		std::ofstream fouthash(outdir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
+		std::ifstream finkey(basedir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
+		std::ofstream fouthash(basedir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
 		uint64_t currentkey,currenthash;
 		uint32_t i, stop;
 		i = uint64_t(tid)*numreads/omp_get_num_threads();
@@ -329,7 +330,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 			fouthash.write((char*)&currenthash, sizeof(uint64_t));
 		}
 		finkey.close();
-		remove((outdir+std::string("keys.bin.")+std::to_string(tid)).c_str());
+		remove((basedir+std::string("keys.bin.")+std::to_string(tid)).c_str());
 		fouthash.close();
 		}//parallel end
 		
@@ -347,7 +348,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 		uint64_t currenthash;
 		for(int tid = 0; tid < num_thr; tid++)
 		{
-			std::ifstream finhash(outdir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
+			std::ifstream finhash(basedir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
 			finhash.read((char*)&currenthash,sizeof(uint64_t));
 			while(!finhash.eof())
 			{
@@ -366,7 +367,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 		uint32_t i = 0;
 		for(int tid = 0; tid < num_thr; tid++)
 		{
-			std::ifstream finhash(outdir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
+			std::ifstream finhash(basedir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
 			finhash.read((char*)&currenthash,sizeof(uint64_t));
 			while(!finhash.eof())
 			{
@@ -375,7 +376,7 @@ void constructdictionary(std::bitset<2*readlen> *read, bbhashdict *dict)
 				finhash.read((char*)&currenthash,sizeof(uint64_t));
 			}
 			finhash.close();
-			remove((outdir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j)).c_str());
+			remove((basedir+std::string("hash.bin.")+std::to_string(tid)+'.'+std::to_string(j)).c_str());
 		}
 		
 		//correcting startpos array modified during insertion
@@ -426,7 +427,7 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 	return;	
 }
 
-void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
+void reorder(bitset *read, bbhashdict *dict)
 {
 	omp_lock_t *dict_lock = new omp_lock_t [num_locks];
 	omp_lock_t *read_lock = new omp_lock_t [num_locks];
@@ -436,10 +437,10 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		omp_init_lock(&read_lock[j]);
 	}
 	uint8_t _readlen = readlen;//used for writing to binary file
-	std::bitset<2*readlen> mask[maxmatch];
-	std::bitset<2*readlen> revmask[maxmatch];
+	bitset mask[maxmatch];
+	bitset revmask[maxmatch];
 	generatemasks(mask,revmask);
-	std::bitset<2*readlen> mask1[numdict];
+	bitset mask1[numdict];
 	generateindexmasks(mask1);
 	bool *remainingreads = new bool [numreads];
 	std::fill(remainingreads, remainingreads+numreads,1);
@@ -458,9 +459,9 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	std::ofstream foutorder_s(outfileorder + ".singleton." + tid_str,std::ofstream::out|std::ios::binary);
 	
 	unmatched[tid] = 0;
-	std::bitset<2*readlen> ref,revref,b,first_read;
+	bitset ref,revref,b,first_read;
 	//first_read represents first read of contig, used for left searching
-	int count[4][readlen];
+	int count[4][MAX_READ_LEN];
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
 	bool flag = 0, done = 0, prev_unmatched = false, left_search_start = false, left_search = false;
@@ -640,6 +641,10 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 		
 			revref<<=2;
 			ref>>=2;
+			//since actual size of bitset can be larger than 2*readlen, need to mask
+			//so that count works as expected
+			ref = ref&mask[0];
+			revref = revref&mask[0];
 		}
 		if(flag == 0)//no match found
 		{
@@ -710,7 +715,7 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 }
 
 
-void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
+void generatemasks(bitset *mask,bitset *revmask)
 {
 	for(int i = 0; i < maxmatch; i++)
 	{	
@@ -726,7 +731,7 @@ void generatemasks(std::bitset<2*readlen> *mask,std::bitset<2*readlen> *revmask)
 
 
 
-void writetofile(std::bitset<2*readlen> *read)
+void writetofile(bitset *read)
 {
 
 	//convert bitset to string for all num_thr files in parallel
@@ -739,9 +744,7 @@ void writetofile(std::bitset<2*readlen> *read)
 	std::ifstream finRC(outfileRC + '.' + tid_str,std::ifstream::in);
 	std::ifstream finorder(outfileorder + '.' + tid_str,std::ifstream::in|std::ios::binary);
 	std::ifstream finorder_s(outfileorder + ".singleton." + tid_str,std::ifstream::in|std::ios::binary);
-	char s[readlen+1],s1[readlen+1];
-	s[readlen] = '\0';
-	s1[readlen] = '\0';
+	char s[MAX_READ_LEN+1],s1[MAX_READ_LEN+1];
 	uint32_t current;
 	char c;
 	while(finRC >> std::noskipws >> c)//read character by character
@@ -836,7 +839,7 @@ void writetofile(std::bitset<2*readlen> *read)
 	return;
 }
 
-void bitsettostring(std::bitset<2*readlen> b,char *s)
+void bitsettostring(bitset b,char *s)
 {
 	unsigned long long ull,rem;
 	for(int i = 0; i < 2*readlen/64+1; i++)
@@ -849,12 +852,13 @@ void bitsettostring(std::bitset<2*readlen> b,char *s)
 			ull/=4;
 		}
 	}
+	s[readlen] = '\0';
 	return;
 }
 
-std::bitset<2*readlen> chartobitset(char *s)
+bitset chartobitset(char *s)
 {
-	std::bitset<2*readlen> b;
+	bitset b;
 	for(int i = 0; i < readlen; i++)
 		b |= basemask[i][s[i]];
 	return b;
@@ -864,12 +868,13 @@ void reverse_complement(char* s, char* s1)
 {
 	for(int j = 0; j < readlen; j++)
 		s1[j] = chartorevchar[s[readlen-j-1]];
+	s1[readlen] = '\0';
 	return;
 }
 
-void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std::bitset<2*readlen> &revref, int count[][readlen], bool resetcount, bool rev, int shift)
+void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][readlen], bool resetcount, bool rev, int shift)
 {
-	char s[readlen+1],s1[readlen+1],*current;
+	char s[MAX_READ_LEN+1],s1[MAX_READ_LEN+1],*current;
 	bitsettostring(cur,s);
 	if(rev == false)
 		current = s;
@@ -881,7 +886,7 @@ void updaterefcount(std::bitset<2*readlen> cur, std::bitset<2*readlen> &ref, std
 
 	if(resetcount == true)//resetcount - unmatched read so start over
 	{
-		std::memset(count, 0, sizeof(count[0][0]) * 4 * readlen);	
+		std::memset(count, 0, sizeof(count[0][0]) * 4 * MAX_READ_LEN);	
 		for(int i = 0; i < readlen; i++)
 		{	
 			count[chartoint[current[i]]][i] = 1;

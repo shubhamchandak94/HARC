@@ -9,14 +9,11 @@
 
 uint32_t numreads, numreads_N;
 
-std::string outfile;
-std::string infile;
-std::string infile_N;
+std::string outfile_quality;
+std::string infile_quality;
 std::string outfile_id;
 std::string infile_id;
-std::string infile_id_N;
 std::string infile_order;
-std::string infile_order_N_pe;//post-encoding
 
 void reorder_quality();
 void reorder_quality_N();

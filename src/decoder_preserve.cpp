@@ -20,38 +20,36 @@ std::string infile_noisepos;
 std::string infile_rev;
 std::string infile_order;
 std::string infile_N;
-std::string infile_order_N_pe;
 std::string infile_singleton;
+
+typedef std::bitset<3*MAX_READ_LEN> bitset;
 
 long chartolong[128];
 char dec_noise[128][128];
 char chartorevchar[128];
-char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
-std::bitset<2*readlen> basemask[readlen][128];//bitset for A,G,C,T at each position 
+char revinttochar[8] = {'A','N','G','#','C','#','T','#'};//used in bitsettostring
+bitset basemask[MAX_READ_LEN][128];//bitset for A,G,C,T at each position 
 //used in stringtobitset, chartobitset and bitsettostring
-std::bitset<2*readlen> positionmask[readlen];//bitset for each position (1 at two bits and 0 elsewhere)
+bitset positionmask[MAX_READ_LEN];//bitset for each position (1 at two bits and 0 elsewhere)
 //used in bitsettostring
-std::bitset<2*readlen> mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
+bitset mask63;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
 
 
 void decode();
 
 void restore_order();
 
-void restore_order_N();
-
 void unpackbits();
 
-std::bitset<2*readlen> stringtobitset(std::string s);
+bitset stringtobitset(std::string s);
 
-std::bitset<2*readlen> chartobitset(char *s);
+bitset chartobitset(char *s);
 
-void bitsettostring(std::bitset<2*readlen> b,char *s);
+void bitsettostring(bitset b,char *s);
 
 void reverse_complement(char* s, char* s1);
 
 std::string buildcontig(std::vector<std::string> reads, std::vector<long> pos);
-
 
 void writecontig(std::string ref,std::vector<long> pos, std::vector<std::string> reads, std::ofstream& f_seq, std::ofstream& f_pos, std::ofstream& f_noise, std::ofstream& f_noisepos);
 
@@ -64,8 +62,7 @@ uint32_t numreads = 0;
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	outfile = basedir + "/output/output.tmp";
-	outfile_clean = basedir + "/output/output_clean.dna";
+	outfile = basedir + "/output/output.dna";
 	infile_seq = basedir + "/output/read_seq.txt";
 	infile_meta = basedir + "/output/read_meta.txt";
 	infile_pos = basedir + "/output/read_pos.txt";
@@ -73,14 +70,12 @@ int main(int argc, char** argv)
 	infile_noisepos = basedir + "/output/read_noisepos.txt";
 	infile_rev = basedir + "/output/read_rev.txt";
 	infile_order = basedir + "/output/read_order.bin";
-	infile_N = basedir + "/output/input_N.dna";
+	infile_N = basedir + "/output/unaligned_N.txt";
 	infile_order_N_pe =  basedir + "/output/read_order_N_pe.bin";
-	infile_singleton = basedir + "/output/read_singleton.txt";
-//	getDataParams(); //populate readlen
+	infile_singleton = basedir + "/output/unaligned_singleton.txt";
 	omp_set_num_threads(num_thr);
 	setglobalarrays();
 	decode();
-	restore_order_N();
 	restore_order();
 	return 0;
 }
@@ -102,10 +97,9 @@ void decode()
 		std::ifstream f_noise(infile_noise+'.'+std::to_string(tid_e));
 		std::ifstream f_noisepos(infile_noisepos+'.'+std::to_string(tid_e));
 		std::ifstream f_rev(infile_rev+'.'+std::to_string(tid_e));
-		std::ofstream f_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
 	
-		char currentread[readlen+1],ref[readlen+1],revread[readlen+1];
-		std::bitset<2*readlen> b;
+		char currentread[MAX_READ_LEN+1],ref[MAX_READ_LEN+1],revread[MAX_READ_LEN+1];
+		bitset b;
 		currentread[readlen] = '\0';
 		revread[readlen] = '\0';
 		ref[readlen] = '\0';
@@ -133,30 +127,17 @@ void decode()
 				prevnoisepos = noisepos;	
 			}
 			c = f_rev.get();
-			if(strchr(currentread,'N')!=NULL)
+			numreads_thr[tid]++;
+			if(c == 'd')
 			{
-				if(c == 'd')
-					f_N_tmp << currentread<<"\n";
-				else
-				{
-					reverse_complement(currentread,revread);
-					f_N_tmp << revread<<"\n";
-				}
+				b = chartobitset(currentread);
+				f.write((char*)&b,sizeof(bitset));
 			}
 			else
 			{
-				numreads_thr[tid]++;
-				if(c == 'd')
-				{
-					b = chartobitset(currentread);
-					f.write((char*)&b,sizeof(std::bitset<2*readlen>));
-				}
-				else
-				{
-					reverse_complement(currentread,revread);
-					b = chartobitset(revread);
-					f.write((char*)&b,sizeof(std::bitset<2*readlen>));
-				}
+				reverse_complement(currentread,revread);
+				b = chartobitset(revread);
+				f.write((char*)&b,sizeof(bitset));
 			}
 		}
 		f.close();
@@ -165,7 +146,6 @@ void decode()
 		f_noise.close();
 		f_noisepos.close();
 		f_rev.close();
-		f_N_tmp.close();
 	}
 	}
 	numreads = 0;
@@ -176,70 +156,33 @@ void decode()
 	{
 		std::ifstream f_in(outfile+'.'+std::to_string(tid_e),std::ios::binary);
 		f << f_in.rdbuf();
-		f.clear();//clear error flags if f_N is empty	
+		f.clear();//clear error flags if f_in is empty	
 		f_in.close();
 	}
 	std::ifstream f_singleton(infile_singleton);
-	char currentread[readlen+1];
-	std::bitset<2*readlen> b;
-	currentread[readlen] = '\0';
+	char currentread[MAX_READ_LEN+1];
+	bitset b;
 	f_singleton.read(currentread,readlen);
 	while(!f_singleton.eof())
 	{	
 		numreads++;
 		b = chartobitset(currentread);
-		f.write((char*)&b,sizeof(std::bitset<2*readlen>));
+		f.write((char*)&b,sizeof(bitset));
 		f_singleton.read(currentread,readlen);
 	}
 	f_singleton.close();
-	std::ofstream f_N_tmp(infile_N+".tmp",std::ios::binary);	
-	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
-	{
-		std::ifstream in_N_tmp(infile_N+'.'+std::to_string(tid_e)+".tmp");
-		f_N_tmp << in_N_tmp.rdbuf();
-		f_N_tmp.clear();//clear error flags if in_N_tmp is empty	
-		in_N_tmp.close();
-	}
 	std::ifstream f_N(infile_N);
-	f_N_tmp << f_N.rdbuf();
-	f_N_tmp.close();
+	f_N.read(currentread,readlen);
+	while(!f_N.eof())
+	{
+		numreads++;
+		b = chartobitset(currentread);
+		f.write((char*)&b,sizeof(bitset));
+		f_N.read(currentread,readlen);
+	}
 	f_N.close();
-	rename((infile_N+".tmp").c_str(), infile_N.c_str());
+	f.close();
 	std::cout<<"Decoding done\n";
-	return;
-}
-
-void restore_order_N()
-{
-	std::string line;
-	std::ifstream f_N(infile_N);
-	uint32_t numreads_N = 0;
-	while(std::getline(f_N,line))
-		numreads_N++;
-	f_N.close();
-	f_N.open(infile_N);
-		
-	std::ifstream f_order(infile_order_N_pe,std::ios::binary);
-	uint32_t *index_array = new uint32_t [numreads_N];
-	char(*reads_N)[readlen+1] = new char [numreads_N][readlen+1];
-	uint32_t order;
-	for(uint32_t j = 0; j < numreads_N; j++)
-	{
-		f_order.read((char*)&order,sizeof(uint32_t));
-		index_array[order] = j;
-		f_N.getline(reads_N[j],readlen+1);
-	}
-	f_N.close();
-	std::ofstream out_N(infile_N);
-	
-	for(uint32_t j = 0; j < numreads_N; j++)
-	{
-		out_N << reads_N[index_array[j]] << "\n";
-	}
-	delete[] index_array;
-	delete[] reads_N;
-	f_order.close();
-	out_N.close();
 	return;
 }
 
@@ -251,9 +194,8 @@ void restore_order()
 		max_bin_size = uint64_t(3)*200000000/7;
 	else 
 		max_bin_size = uint64_t(MAX_BIN_SIZE)*200000000/7;
-	char s[readlen+1];
-	s[readlen] = '\0';
-	std::ofstream f_clean(outfile_clean);
+	char s[MAX_READ_LEN+1];
+	std::ofstream fout(outfile+".tmp");
 	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
 	{
 		std::ifstream f_order(infile_order,std::ios::binary);
@@ -262,7 +204,7 @@ void restore_order()
 		if (i == numreads/max_bin_size)
 			numreads_bin = numreads%max_bin_size;
 		uint32_t *index_array = new uint32_t [numreads_bin];
-		std::bitset<2*readlen> *reads_bin = new std::bitset<2*readlen> [numreads_bin];	
+		bitset *reads_bin = new bitset [numreads_bin];	
 		uint32_t order,pos = 0;
 		for(uint32_t j = 0; j < numreads; j++)
 		{
@@ -270,22 +212,24 @@ void restore_order()
 			if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
 			{
 				index_array[order-i*max_bin_size] = pos;
-				f.seekg(uint64_t(j)*sizeof(std::bitset<2*readlen>), f.beg);
-				f.read((char*)&reads_bin[pos],sizeof(std::bitset<2*readlen>));
+				f.seekg(uint64_t(j)*sizeof(bitset), f.beg);
+				f.read((char*)&reads_bin[pos],sizeof(bitset));
 				pos++;
 			}
 		}
 		for(uint32_t j = 0; j < numreads_bin; j++)
 		{
 			bitsettostring(reads_bin[index_array[j]],s);
-			f_clean << s << "\n";
+			fout << s << "\n";
 		}
 		delete[] index_array;
 		delete[] reads_bin;
 		f_order.close();
 		f.close();
 	}
-	f_clean.close();
+	fout.close();
+	remove(outfile.c_str());
+	rename((outfile+".tmp").c_str(),outfile.c_str());
 	return;
 }
 
@@ -401,6 +345,7 @@ void reverse_complement(char* s, char* s1)
 {
 	for(int j = 0; j < readlen; j++)
 		s1[j] = chartorevchar[s[readlen-j-1]];
+	s1[readlen] = '\0';
 	return;
 }
 
@@ -437,52 +382,61 @@ void setglobalarrays()
 	chartorevchar['G'] = 'C';
 	chartorevchar['T'] = 'A';
 	chartorevchar['N'] = 'N';
-	for(int i = 0; i < 64; i++)
-		mask64[i] = 1;
+	for(int i = 0; i < 63; i++)
+		mask63[i] = 1;
 	for(int i = 0; i < readlen; i++)
 	{
-		basemask[i]['A'][2*i] = 0;
-		basemask[i]['A'][2*i+1] = 0;
-		basemask[i]['C'][2*i] = 0;
-		basemask[i]['C'][2*i+1] = 1;
-		basemask[i]['G'][2*i] = 1;
-		basemask[i]['G'][2*i+1] = 0;
-		basemask[i]['T'][2*i] = 1;
-		basemask[i]['T'][2*i+1] = 1;
-		positionmask[i][2*i] = 1;
-		positionmask[i][2*i+1] = 1;
+		basemask[i]['A'][3*i] = 0;
+		basemask[i]['A'][3*i+1] = 0;
+		basemask[i]['A'][3*i+2] = 0;
+		basemask[i]['C'][3*i] = 0;
+		basemask[i]['C'][3*i+1] = 0;
+		basemask[i]['C'][3*i+2] = 1;
+		basemask[i]['G'][3*i] = 0;
+		basemask[i]['G'][3*i+1] = 1;
+		basemask[i]['G'][3*i+2] = 0;
+		basemask[i]['T'][3*i] = 0;
+		basemask[i]['T'][3*i+1] = 1;
+		basemask[i]['T'][3*i+2] = 1;
+		basemask[i]['N'][3*i] = 1;
+		basemask[i]['N'][3*i+1] = 0;
+		basemask[i]['N'][3*i+2] = 0;
+		positionmask[i][3*i] = 1;
+		positionmask[i][3*i+1] = 1;
+		positionmask[i][3*i+2] = 1;
 	}		
 	return;
 }
 	
 
-std::bitset<2*readlen> stringtobitset(std::string s)
+bitset stringtobitset(std::string s)
 {
-	std::bitset<2*readlen> b;
+	bitset b;
 	for(int i = 0; i < readlen; i++)
 		b |= basemask[i][s[i]];
 	return b;
 }
 
-void bitsettostring(std::bitset<2*readlen> b,char *s)
+void bitsettostring(bitset b,char *s)
 {
 	unsigned long long ull,rem;
-	for(int i = 0; i < (2*readlen)/64+1; i++)
+	for(int i = 0; i < (3*readlen)/63+1; i++)
 	{	
-		ull = (b&mask64).to_ullong();
-		b>>=64;
-		for(int j = 32*i  ; j < 32*i+32 && j < readlen ; j++)
+		ull = (b&mask63).to_ullong();
+		b>>=63;
+		for(int j = 21*i  ; j < 21*i+21 && j < readlen ; j++)
 		{
-			s[j] = revinttochar[ull%4];	
-			ull/=4;
+			s[j] = revinttochar[ull%8];	
+			ull/=8;
 		}
 	}
+	s[readlen] = '\0';
 	return;
 }
 
-std::bitset<2*readlen> chartobitset(char *s)
+bitset chartobitset(char *s)
 {
-	std::bitset<2*readlen> b;
+	bitset b;
 	for(int i = 0; i < readlen; i++)
 		b |= basemask[i][s[i]];
 	return b;

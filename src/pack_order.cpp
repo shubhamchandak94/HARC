@@ -12,7 +12,7 @@ void pack_order();//pack order into least number of bits possible
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	infile = basedir + "/output/read_order.bin";
+	infile = basedir + "/read_order.bin";
 	pack_order();
 	return 0;
 }

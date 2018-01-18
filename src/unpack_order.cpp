@@ -12,7 +12,7 @@ void unpack_order();//unpack order into 32 bits per uint
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	infile = basedir + "/output/read_order.bin";
+	infile = basedir + "/read_order.bin";
 	unpack_order();
 	return 0;
 }

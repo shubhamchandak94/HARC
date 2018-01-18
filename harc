@@ -35,11 +35,7 @@ exit 0
 compress()
 {
 	pathname=$(dirname $filename)
-	if [ -d "$pathname/output" ]; then
-  		echo "Directory named output already exists in directory containing FASTQ file. Remove directory and run again."
-		exit 1
-	fi
-	mkdir -p $pathname/output/
+	tempdir=$(mktemp -d -p $pathname)
 	echo "*** Preprocessing ***"
 	echo $filename
 	readlen="$(head -2 $filename | tail -1 | wc -L)"
@@ -47,8 +43,7 @@ compress()
 		echo "Maximum read length exceeded" 
 		exit 1
 	fi
-	./src/preprocess.out $filename $pathname $preserve_order $preserve_quality $readlen
-	readlen="$(head $pathname/output/input_clean.dna | wc -L)"
+	./src/preprocess.out $filename $tempdir $preserve_quality $readlen
 	echo "#define maxmatch $((readlen/2))" > src/config.h
 	echo "#define thresh 4" >> src/config.h
 	echo "#define thresh_s 24" >> src/config.h
@@ -62,176 +57,163 @@ compress()
 	echo "#define readlen $readlen" >> src/config.h
 	echo "#define num_thr $num_thr" >> src/config.h
 
-	g++ src/reorder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/reorder.out
-	 
-	./src/reorder.out $pathname
-	g++ src/encoder.cpp -w -march=native -O3 -fopenmp -lpthread -std=c++11 -o src/encoder.out
-	./src/encoder.out $pathname
+	./src/reorder.out $tempdir $readlen $num_thr
+	./src/encoder.out $tempdir $readlen $num_thr
 	
 	#remove temporary files
-	rm $pathname/output/temp.dna
-	rm $pathname/output/tempflag.txt
-	rm $pathname/output/temppos.txt
-	rm $pathname/output/read_rev.txt
+	rm $tempdir/temp.dna
+	rm $tempdir/tempflag.txt
+	rm $tempdir/temppos.txt
+	rm $tempdir/read_rev.txt
 	
 	#tar files produced by the threads
-	mkdir -p $pathname/output/read_noise
-	mv $pathname/output/read_noise.txt* $pathname/output/read_noise
-	mkdir -p $pathname/output/read_noisepos
-	mv $pathname/output/read_noisepos.txt* $pathname/output/read_noisepos
-	mkdir -p $pathname/output/read_pos
-	mv $pathname/output/read_pos.txt* $pathname/output/read_pos
-	mkdir -p $pathname/output/read_seq
-	mv $pathname/output/read_seq.txt* $pathname/output/read_seq
-	mkdir -p $pathname/output/read_rev
-	mv $pathname/output/read_rev.txt* $pathname/output/read_rev
+	mkdir -p $tempdir/read_noise
+	mv $tempdir/read_noise.txt* $tempdir/read_noise
+	mkdir -p $tempdir/read_noisepos
+	mv $tempdir/read_noisepos.txt* $tempdir/read_noisepos
+	mkdir -p $tempdir/read_pos
+	mv $tempdir/read_pos.txt* $tempdir/read_pos
+	mkdir -p $tempdir/read_seq
+	mv $tempdir/read_seq.txt* $tempdir/read_seq
+	mkdir -p $tempdir/read_rev
+	mv $tempdir/read_rev.txt* $tempdir/read_rev
 
-	tar -cf	$pathname/output/read_noise.tar -C $pathname/output/read_noise .
-	tar -cf	$pathname/output/read_noisepos.tar -C $pathname/output/read_noisepos .
-	tar -cf	$pathname/output/read_pos.tar -C $pathname/output/read_pos .
-	tar -cf	$pathname/output/read_seq.tar -C $pathname/output/read_seq .
-	tar -cf	$pathname/output/read_rev.tar -C $pathname/output/read_rev .
+	tar -cf	$tempdir/read_noise.tar -C $tempdir/read_noise .
+	tar -cf	$tempdir/read_noisepos.tar -C $tempdir/read_noisepos .
+	tar -cf	$tempdir/read_pos.tar -C $tempdir/read_pos .
+	tar -cf	$tempdir/read_seq.tar -C $tempdir/read_seq .
+	tar -cf	$tempdir/read_rev.tar -C $tempdir/read_rev .
 	
-	rm -r $pathname/output/read_noise
-	rm -r $pathname/output/read_noisepos
-	rm -r $pathname/output/read_pos
-	rm -r $pathname/output/read_seq
-	rm -r $pathname/output/read_rev
+	rm -r $tempdir/read_noise
+	rm -r $tempdir/read_noisepos
+	rm -r $tempdir/read_pos
+	rm -r $tempdir/read_seq
+	rm -r $tempdir/read_rev
 	
 	#compress and create tarball
-	./src/libbsc/bsc e $pathname/output/read_pos.tar $pathname/output/read_pos.tar.bsc -b64p -t$num_thr
-	./src/libbsc/bsc e $pathname/output/read_noise.tar $pathname/output/read_noise.tar.bsc -b64p -t$num_thr 
-	7z a $pathname/output/read_noisepos.tar.7z $pathname/output/read_noisepos.tar -mmt=$numt_thr
-	./src/libbsc/bsc e $pathname/output/input_N.dna $pathname/output/input_N.dna.bsc -b64p -t$num_thr
-	7z a $pathname/output/read_meta.txt.7z $pathname/output/read_meta.txt -mmt=$numt_thr
-	7z a $pathname/output/read_rev.tar.7z $pathname/output/read_rev.tar -mmt=$num_thr
-	./src/libbsc/bsc e $pathname/output/read_seq.tar $pathname/output/read_seq.tar.bsc -b64p -t$num_thr 
-	./src/libbsc/bsc e $pathname/output/read_singleton.txt $pathname/output/read_singleton.txt.bsc -b64p -t$num_thr 
-	rm $pathname/output/*.txt $pathname/output/*.dna $pathname/output/*.tar 
+	./src/libbsc/bsc e $tempdir/read_pos.tar $tempdir/read_pos.tar.bsc -b64p -t$num_thr
+	./src/libbsc/bsc e $tempdir/read_noise.tar $tempdir/read_noise.tar.bsc -b64p -t$num_thr 
+	7z a $tempdir/read_noisepos.tar.7z $tempdir/read_noisepos.tar -mmt=$numt_thr
+	./src/libbsc/bsc e $tempdir/unaligned_N.txt $tempdir/unaligned_N.txt.bsc -b64p -t$num_thr
+	7z a $tempdir/read_meta.txt.7z $tempdir/read_meta.txt -mmt=$num_thr
+	7z a $tempdir/read_rev.tar.7z $tempdir/read_rev.tar -mmt=$num_thr
+	./src/libbsc/bsc e $tempdir/read_seq.tar $tempdir/read_seq.tar.bsc -b64p -t$num_thr 
+	./src/libbsc/bsc e $tempdir/unaligned_singleton.txt $tempdir/unaligned_singleton.txt.bsc -b64p -t$num_thr 
+	rm $tempdir/*.txt $tempdir/*.dna $tempdir/*.tar 
 	if [[ $paired_end == "True" ]];then
-		./src/pe_encode.out $pathname	
+		./src/pe_encode.out $tempdir	
 		if [[ $preserve_quality == "True" ]];then
 			echo "Reordering quality values and ids"
 			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
-			./src/reorder_quality.out $pathname
-			./src/pe_decode.out $pathname
+			./src/reorder_quality.out $tempdir
+			./src/pe_decode.out $tempdir
 			
-			rm $pathname/output/*.tmp			
-			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
-			rm $pathname/output/*.quality
-			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
-			rm $pathname/output/*.id
+			rm $tempdir/*.tmp			
+			mv $tempdir/output.quality $pathname/$(basename "$filename" .fastq).quality
+			rm $tempdir/*.quality
+			mv $tempdir/output.id $pathname/$(basename "$filename" .fastq).id
+			rm $tempdir/*.id
 			echo "Done!"
 		fi
-		7z a $pathname/output/read_order_paired.bin.7z $pathname/output/read_order_paired.bin -mmt=$num_thr
-		7z a $pathname/output/read_paired_flag_first.bin.7z $pathname/output/read_paired_flag_first.bin -mmt=$num_thr
-		7z a $pathname/output/read_paired_flag_N.bin.7z $pathname/output/read_paired_flag_N.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
+		7z a $tempdir/read_order_paired.bin.7z $tempdir/read_order_paired.bin -mmt=$num_thr
+		7z a $tempdir/read_paired_flag_first.bin.7z $tempdir/read_paired_flag_first.bin -mmt=$num_thr
+		7z a $tempdir/read_paired_flag_N.bin.7z $tempdir/read_paired_flag_N.bin -mmt=$num_thr
+		7z a $tempdir/read_order_N.bin.7z $tempdir/read_order_N.bin -mmt=$num_thr
+		7z a $tempdir/read_order_N_pe.bin.7z $tempdir/read_order_N_pe.bin -mmt=$num_thr
 	elif [[ $preserve_order == "True" ]];then
-		./src/pack_order.out $pathname	
-		7z a $pathname/output/read_order.bin.7z $pathname/output/read_order.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N.bin.7z $pathname/output/read_order_N.bin -mmt=$num_thr
-		7z a $pathname/output/read_order_N_pe.bin.7z $pathname/output/read_order_N_pe.bin -mmt=$num_thr
+		./src/pack_order.out $tempdir	
+		7z a $tempdir/read_order.bin.7z $tempdir/read_order.bin -mmt=$num_thr
+		7z a $tempdir/read_order_N.bin.7z $tempdir/read_order_N.bin -mmt=$num_thr
+		7z a $tempdir/read_order_N_pe.bin.7z $tempdir/read_order_N_pe.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
-			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
-			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
+			mv $tempdir/output.quality $pathname/$(basename "$filename" .fastq).quality
+			mv $tempdir/output.id $pathname/$(basename "$filename" .fastq).id
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
 			echo "Reordering quality values and ids"
 			g++ src/reorder_quality.cpp -march=native -O3 -std=c++11 -o src/reorder_quality.out
-			./src/reorder_quality.out $pathname
-			mv $pathname/output/output.quality $pathname/$(basename "$filename" .fastq).quality
-			rm $pathname/output/*.quality
-			mv $pathname/output/output.id $pathname/$(basename "$filename" .fastq).id
-			rm $pathname/output/*.id
+			./src/reorder_quality.out $tempdir
+			mv $tempdir/output.quality $pathname/$(basename "$filename" .fastq).quality
+			rm $tempdir/*.quality
+			mv $tempdir/output.id $pathname/$(basename "$filename" .fastq).id
+			rm $tempdir/*.id
 			echo "Done!"
 		fi	
 	fi
-	7z a $pathname/output/numreads.bin.7z $pathname/output/numreads.bin
-	rm $pathname/output/*.bin
-	rm $pathname/output/*.singleton
-	tar -cf $pathname/$(basename "$filename" .fastq).harc -C $pathname/output .
-	rm -r $pathname/output/
+	7z a $tempdir/numreads.bin.7z $tempdir/numreads.bin
+	rm $tempdir/*.bin
+	rm $tempdir/*.singleton
+	tar -cf $pathname/$(basename "$filename" .fastq).harc -C $tempdir .
+	rm -r $tempdir/
 }
 
 decompress()
 {
 	echo "Decompression ..."
 	pathname=$(dirname $filename)
-	if [ -d "$pathname/output" ]; then
-  		echo "Directory named output already exists in directory containing .tar file. Remove directory and run again."
-		exit 1
-	fi
-	mkdir -p $pathname/output
-	tar -xf $filename -C $pathname/output
+	tempdir=$(mktemp -d -p $pathname)
+	tar -xf $filename -C $tempdir
 	if [[ $paired_end == "True" ]];then
-		if [ ! -f $pathname/output/read_order_paired.bin.7z ];then
+		if [ ! -f $tempdir/read_order_paired.bin.7z ];then
 			echo "Not compressed using -e flag."
 			usage
 			exit 1
 		fi
 	elif [[ $preserve_order == "True" ]];then
-		if [ ! -f $pathname/output/read_order.bin.7z ];then
+		if [ ! -f $tempdir/read_order.bin.7z ];then
 			echo "Not compressed using -p flag. Order cannot be restored"
 			usage
 			exit 1
 		fi
 	fi
-	./src/libbsc/bsc d $pathname/output/read_pos.tar.bsc $pathname/output/read_pos.tar -t$num_thr
-	./src/libbsc/bsc d $pathname/output/read_noise.tar.bsc $pathname/output/read_noise.tar -t$num_thr
-	7z e $pathname/output/read_noisepos.tar.7z -o$pathname/output/
-	./src/libbsc/bsc d $pathname/output/input_N.dna.bsc $pathname/output/input_N.dna -t$num_thr
-	7z e $pathname/output/read_meta.txt.7z -o$pathname/output/
-	7z e $pathname/output/read_rev.tar.7z -o$pathname/output/
-	7z e $pathname/output/numreads.bin.7z -o$pathname/output/
-	./src/libbsc/bsc d $pathname/output/read_seq.tar.bsc $pathname/output/read_seq.tar -t$num_thr
-	./src/libbsc/bsc d $pathname/output/read_singleton.txt.bsc $pathname/output/read_singleton.txt -t$num_thr
+	./src/libbsc/bsc d $tempdir/read_pos.tar.bsc $tempdir/read_pos.tar -t$num_thr
+	./src/libbsc/bsc d $tempdir/read_noise.tar.bsc $tempdir/read_noise.tar -t$num_thr
+	7z e $tempdir/read_noisepos.tar.7z -o$tempdir/
+	./src/libbsc/bsc d $tempdir/unaligned_N.txt.bsc $tempdir/unaligned_N.txt -t$num_thr
+	7z e $tempdir/read_meta.txt.7z -o$tempdir/
+	7z e $tempdir/read_rev.tar.7z -o$tempdir/
+	7z e $tempdir/numreads.bin.7z -o$tempdir/
+	./src/libbsc/bsc d $tempdir/read_seq.tar.bsc $tempdir/read_seq.tar -t$num_thr
+	./src/libbsc/bsc d $tempdir/unaligned_singleton.txt.bsc $tempdir/unaligned_singleton.txt -t$num_thr
 	
 	
-	tar -xf $pathname/output/read_pos.tar -C $pathname/output/
-	tar -xf $pathname/output/read_noisepos.tar -C $pathname/output/
-	tar -xf $pathname/output/read_noise.tar -C $pathname/output/
-	tar -xf $pathname/output/read_rev.tar -C $pathname/output/
-	tar -xf $pathname/output/read_seq.tar -C $pathname/output/
+	tar -xf $tempdir/read_pos.tar -C $tempdir/
+	tar -xf $tempdir/read_noisepos.tar -C $tempdir/
+	tar -xf $tempdir/read_noise.tar -C $tempdir/
+	tar -xf $tempdir/read_rev.tar -C $tempdir/
+	tar -xf $tempdir/read_seq.tar -C $tempdir/
 	
-	num_thr_e=$(ls $pathname/output/read_pos.txt* | wc -l) #number of encoding threads
+	num_thr_e=$(ls $tempdir/read_pos.txt* | wc -l) #number of encoding threads
 	if [[ $paired_end == "True" ]];then
-		readlen=$( cat $pathname/output/read_meta.txt )
+		readlen=$( cat $tempdir/read_meta.txt )
 		echo "#define readlen $readlen" > src/config.h
 		echo "#define MAX_BIN_SIZE $memory" >> src/config.h
 		echo "#define num_thr $num_thr" >> src/config.h
 		echo "#define num_thr_e $num_thr_e" >> src/config.h
-		g++ src/decoder_preserve.cpp -O3 -march=native -fopenmp -std=c++11 -o src/decoder_preserve.out
-		7z e $pathname/output/read_order_paired.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_paired_flag_first.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_paired_flag_N.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_order_N_pe.bin.7z -o$pathname/output/
-		./src/pe_decode.out $pathname
-		./src/decoder_preserve.out $pathname
-		./src/merge_N.out $pathname
+		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
+		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
+		7z e $tempdir/read_paired_flag_N.bin.7z -o$tempdir/
+		7z e $tempdir/read_order_N.bin.7z -o$tempdir/
+		./src/pe_decode.out $tempdir
+		./src/decoder_preserve.out $tempdir
 		echo "Done!"
 	elif [[ $preserve_order == "True" ]];then
-		readlen=$( cat $pathname/output/read_meta.txt )
+		readlen=$( cat $tempdir/read_meta.txt )
 		echo "#define readlen $readlen" > src/config.h
 		echo "#define MAX_BIN_SIZE $memory" >> src/config.h
 		echo "#define num_thr $num_thr" >> src/config.h
 		echo "#define num_thr_e $num_thr_e" >> src/config.h
-		g++ src/decoder_preserve.cpp -O3 -march=native -fopenmp -std=c++11 -o src/decoder_preserve.out
-		7z e $pathname/output/read_order.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_order_N.bin.7z -o$pathname/output/
-		7z e $pathname/output/read_order_N_pe.bin.7z -o$pathname/output/
-		./src/unpack_order.out $pathname
-		./src/decoder_preserve.out $pathname
-		./src/merge_N.out $pathname
+		7z e $tempdir/read_order.bin.7z -o$tempdir/
+		7z e $tempdir/read_order_N.bin.7z -o$tempdir/
+		./src/unpack_order.out $tempdir
+		./src/decoder_preserve.out $tempdir
 		echo "Done!"
 	else
-		./src/decoder.out $pathname $num_thr $num_thr_e
+		./src/decoder.out $tempdir $num_thr $num_thr_e
 	fi
-	mv $pathname/output/output.dna $pathname/$(basename "$filename" .harc).dna.d
- 	rm -r $pathname/output/
+	mv $tempdir/output.dna $pathname/$(basename "$filename" .harc).dna.d
+ 	rm -r $tempdir/
 }
 
 #Initialize variables to default values.
