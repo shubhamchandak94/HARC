@@ -11,6 +11,7 @@
 #include <omp.h>
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 
 uint32_t num_locks = 0x1000000; //limits on number of locks (power of 2  for fast mod)
 
@@ -44,8 +45,11 @@ class bbhashdict
 
 uint32_t numreads = 0;
 
-int maxmatch, thresh, numdict, maxsearch, dict1_start, dict1_end, dict2_start, dict2_end, num_thr, readlen;
+int maxmatch, thresh = 4, numdict = 2, maxsearch = 1000, num_thr, readlen;
+int dict_start[2];
+int dict_end[2]; 
 
+std::string basedir;
 std::string infile;
 std::string infilenumreads;
 std::string outfile;
@@ -59,8 +63,7 @@ char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
 char inttochar[] = {'A','C','G','T'};
 char chartorevchar[128];//A-T etc for reverse complement
 int chartoint[128];//A-0,C-1 etc. used in updaterefcount
-int *dict_start;
-int *dict_end; 
+
 bitset basemask[MAX_READ_LEN][128];//bitset for A,G,C,T at each position 
 //used in stringtobitset, chartobitset and bitsettostring
 bitset positionmask[MAX_READ_LEN];//bitset for each position (1 at two bits and 0 elsewhere)
@@ -98,7 +101,7 @@ void setglobalarrays();
 
 int main(int argc, char** argv)
 {
-	std::string basedir = std::string(argv[1]);
+	basedir = std::string(argv[1]);
 	infile = basedir + "/input_clean.dna";
 	outfile = basedir + "/temp.dna";
 	outfileRC = basedir + "/read_rev.txt";
@@ -106,7 +109,15 @@ int main(int argc, char** argv)
 	outfilepos = basedir + "/temppos.txt";
 	outfileorder = basedir + "/read_order.bin";
 	infilenumreads = basedir + "/numreads.bin";
-
+	
+	readlen = atoi(argv[2]);
+	num_thr = atoi(argv[3]);
+	maxmatch = readlen/2;
+	dict_start[0] =  readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100;
+	dict_end[0] = readlen/2-1;
+	dict_start[1] = readlen/2;
+	dict_end[1] = readlen > 100 ? readlen/2-1+32 : readlen/2-1+readlen*32/100;
+	
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));	
 	omp_set_num_threads(num_thr);	
@@ -136,47 +147,8 @@ void setglobalarrays()
 	chartoint['C'] = 1;
 	chartoint['G'] = 2;
 	chartoint['T'] = 3;
-	#if numdict == 1
-	{
-		dict_start = new int[1];
-		dict_end = new int[1];
-		dict_start[0] = dict1_start;
-		dict_end[0] = dict1_end;
-	}
-	#elif numdict == 2
-	{
-		dict_start = new int[2];
-		dict_end = new int[2];
-		dict_start[0] = dict1_start;
-		dict_end[0] = dict1_end;
-		dict_start[1] = dict2_start;
-		dict_end[1] = dict2_end;
-	}
-	#elif numdict == 3
-	{
-		dict_start = new int[3];
-		dict_end = new int[3];
-		dict_start[0] = dict1_start;
-		dict_end[0] = dict1_end;
-		dict_start[1] = dict2_start;
-		dict_end[1] = dict2_end;
-		dict_start[2] = dict3_start;
-		dict_end[2] = dict3_end;
-	}
-	#elif numdict == 4
-	{
-		dict_start = new int[4];
-		dict_end = new int[4];
-		dict_start[0] = dict1_start;
-		dict_end[0] = dict1_end;
-		dict_start[1] = dict2_start;
-		dict_end[1] = dict2_end;
-		dict_start[2] = dict3_start;
-		dict_end[2] = dict3_end;
-		dict_start[3] = dict4_start;
-		dict_end[3] = dict4_end;
-	}
-	#endif
+
+	
 	for(int i = 0; i < 64; i++)
 		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)
@@ -872,7 +844,7 @@ void reverse_complement(char* s, char* s1)
 	return;
 }
 
-void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][readlen], bool resetcount, bool rev, int shift)
+void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift)
 {
 	char s[MAX_READ_LEN+1],s1[MAX_READ_LEN+1],*current;
 	bitsettostring(cur,s);

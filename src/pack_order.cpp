@@ -6,6 +6,9 @@
 #include <algorithm>
 
 std::string infile;
+std::string infilenumreads;
+
+uint32_t numreads;
 
 void pack_order();//pack order into least number of bits possible
 
@@ -13,6 +16,11 @@ int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
 	infile = basedir + "/read_order.bin";
+	infilenumreads = basedir + "/numreads.bin";
+	std::ifstream f_numreads(infilenumreads, std::ios::binary);
+	f_numreads.seekg(4);
+	f_numreads.read((char*)&numreads,sizeof(uint32_t));
+	f_numreads.close();
 	pack_order();
 	return 0;
 }
@@ -23,16 +31,7 @@ void pack_order()
 	std::ifstream f_in(infile,std::ios::binary);
 	std::ofstream f_tail(infile+".tail",std::ios::binary);
 	
-	uint32_t numreads = 0;
 	uint32_t order;
-	f_in.read((char*)&order, sizeof(uint32_t));
-	while(!f_in.eof())
-	{
-		numreads++;
-		f_in.read((char*)&order, sizeof(uint32_t));
-	}
-	f_in.close();
-	f_in.open(infile,std::ios::binary);
 	int numbits = (int)(log2(numreads)+1);
 	f_out.write((char*)&numbits, sizeof(int));
 	f_out.write((char*)&numreads, sizeof(uint32_t));

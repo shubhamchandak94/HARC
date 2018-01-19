@@ -10,6 +10,7 @@
 #include <string>
 #include <numeric>
 #include <cstdio>
+#include <cstdlib>
 #include <omp.h>
 #include "BooPHF.h"
 #include "config.h"
@@ -18,6 +19,10 @@ uint32_t numreads, numreads_s, numreads_N;
 int numdict_s = 2;
 uint32_t dict_start[2];
 uint32_t dict_end[2];
+int thresh_s = 24;
+int maxsearch = 1000;
+int readlen, num_thr;
+
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -47,6 +52,7 @@ class bbhashdict
 	}	
 };
 
+std::string basedir;
 std::string infile;
 std::string infile_flag;
 std::string infile_pos;
@@ -110,7 +116,7 @@ void setglobalarrays();
 
 int main(int argc, char** argv)
 {
-	std::string basedir = std::string(argv[1]);
+	basedir = std::string(argv[1]);
 	infile = basedir + "/temp.dna";
 	infile_pos = basedir + "/temppos.txt";
 	infile_flag = basedir + "/tempflag.txt";
@@ -126,8 +132,12 @@ int main(int argc, char** argv)
 	outfile_noisepos = basedir + "/read_noisepos.txt";
 	outfile_singleton = basedir + "/unaligned_singleton.txt";
 	infilenumreads = basedir + "/numreads.bin";	
+
+	readlen = atoi(argv[2]);
+	num_thr = atoi(argv[3]);
+
 	omp_set_num_threads(num_thr);
-	getDataParams(); //populate readlen and numreads
+	getDataParams(); //populate numreads
 	setglobalarrays();
 	bitset *read = new bitset [numreads_s+numreads_N];
 	uint32_t *order_s = new uint32_t [numreads_s+numreads_N];
@@ -171,9 +181,10 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s)
 	generateindexmasks(mask1);
 	bitset readlen_mask;//mask which is 1 at valid positions (needed since size of bitset can be larger)
 	readlen_mask.reset();
-	for(int j = 0; j < 3*readlen; j++);
+	for(int j = 0; j < 3*readlen; j++)
+	{
 		readlen_mask[j] = 1;
-		
+	}	
 	std::cout<<"Encoding reads\n";
 	#pragma omp parallel 
 	{
@@ -515,7 +526,7 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s)
 		if(remainingreads[i] == 1)
 		{
 			matched_N--;
-			f_N << bitsettostring(read[i]) << "\n";
+			f_N << bitsettostring(read[i]);
 			f_order.write((char*)&order_s[i],sizeof(uint32_t));
 		}
 	f_order.close();
@@ -801,12 +812,13 @@ void getDataParams()
 	f_numreads.close();
 	
 	std::ifstream myfile_s(infile+".singleton", std::ifstream::in);
-	numreads_s = 0; 
+	numreads_s = 0;
+	std::string line; 
 	while (std::getline(myfile_s, line))
 		++numreads_s;
 	myfile_s.close();
 	numreads = numreads_clean - numreads_s;
-	numreads_N = numreads_total - numreads_N;
+	numreads_N = numreads_total - numreads_clean;
 
 	std::cout << "Read length: " << readlen << std::endl;
 	std::cout << "Number of non-singleton reads: " << numreads << std::endl;

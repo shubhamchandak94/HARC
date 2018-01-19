@@ -22,6 +22,8 @@ std::string infile_order;
 std::string infile_N;
 std::string infile_singleton;
 
+int readlen, MAX_BIN_SIZE, num_thr, num_thr_e;
+
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
 long chartolong[128];
@@ -62,17 +64,22 @@ uint32_t numreads = 0;
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	outfile = basedir + "/output/output.dna";
-	infile_seq = basedir + "/output/read_seq.txt";
-	infile_meta = basedir + "/output/read_meta.txt";
-	infile_pos = basedir + "/output/read_pos.txt";
-	infile_noise = basedir + "/output/read_noise.txt";
-	infile_noisepos = basedir + "/output/read_noisepos.txt";
-	infile_rev = basedir + "/output/read_rev.txt";
-	infile_order = basedir + "/output/read_order.bin";
-	infile_N = basedir + "/output/unaligned_N.txt";
-	infile_order_N_pe =  basedir + "/output/read_order_N_pe.bin";
-	infile_singleton = basedir + "/output/unaligned_singleton.txt";
+	outfile = basedir + "/output.dna";
+	infile_seq = basedir + "/read_seq.txt";
+	infile_meta = basedir + "/read_meta.txt";
+	infile_pos = basedir + "/read_pos.txt";
+	infile_noise = basedir + "/read_noise.txt";
+	infile_noisepos = basedir + "/read_noisepos.txt";
+	infile_rev = basedir + "/read_rev.txt";
+	infile_order = basedir + "/read_order.bin";
+	infile_N = basedir + "/unaligned_N.txt";
+	infile_singleton = basedir + "/unaligned_singleton.txt";
+
+	readlen = atoi(argv[2]);
+	MAX_BIN_SIZE = atoi(argv[3]);
+	num_thr = atoi(argv[4]);
+	num_thr_e = atoi(argv[5]);
+
 	omp_set_num_threads(num_thr);
 	setglobalarrays();
 	decode();
