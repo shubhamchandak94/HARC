@@ -16,7 +16,6 @@ g++ src/preprocess.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess.o
 g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/decoder.out
 g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pack_order.out
 g++ src/pe_encode.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pe_encode.out
-g++ src/pe_decode.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pe_decode.out
 g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/unpack_order.out
 
 for (( i=1; i<=8; i++))
@@ -27,5 +26,6 @@ do
 	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/reorder.out
 	g++ src/encoder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/encoder.out
 	g++ src/decoder_preserve.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/decoder_preserve.out
+	g++ src/decoder_pe.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/decoder_pe.out
 done
 rm src/config.h

@@ -46,7 +46,7 @@ void decode(bool *flag_first);
 
 void generate_order_from_paired(bool *flag_first);
 
-void restore_order_2();
+void restore_order();
 
 void unpackbits();
 
@@ -66,8 +66,6 @@ void getDataParams();
 
 void setglobalarrays();
 
-uint32_t numreads = 0;
-
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
@@ -84,7 +82,7 @@ int main(int argc, char** argv)
 	infile_singleton = basedir + "/unaligned_singleton.txt";
 	infilenumreads = basedir + "/numreads.bin";
 	infile_order_paired = basedir + "/read_order_paired.bin";
-	infile_paired_flag_first + "read_paired_flag_first.bin";
+	infile_paired_flag_first = basedir + "/read_paired_flag_first.bin";
 	
 	readlen = atoi(argv[2]);
 	MAX_BIN_SIZE = atoi(argv[3]);
@@ -100,7 +98,7 @@ int main(int argc, char** argv)
 	omp_set_num_threads(num_thr);
 	setglobalarrays();
 	
-	bool *flag_first = new [numreads];//flag indicating first reads of pair
+	bool *flag_first = new bool [numreads];//flag indicating first reads of pair
 	
 	generate_order_from_paired(flag_first);
 	
@@ -109,7 +107,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-void decode()
+void decode(bool *flag_first)
 {
 	std::cout << "Decoding reads\n";
 	unpackbits();
@@ -123,8 +121,8 @@ void decode()
 		{
 			std::ifstream f_rev(infile_rev+'.'+std::to_string(tid_e), std::ifstream::ate | std::ifstream::binary);	
 			numreads_thr[tid] += f_rev.tellg();//size of f_rev file
+			f_rev.close();
 		}
-		f_rev.close();
 	}		
 	#pragma omp parallel
 	{
@@ -202,7 +200,8 @@ void decode()
 			}
 			pos_in_flag_first++;
 		}
-		f.close();
+		f_1.close();
+		f_2.close();
 		f_seq.close();
 		f_pos.close();
 		f_noise.close();
@@ -224,7 +223,7 @@ void decode()
 		f_in_2.close();
 	}
 	uint32_t pos_in_flag_first = 0;
-	for(int i = 0; i < tid; i++)
+	for(int i = 0; i < num_thr; i++)
 		pos_in_flag_first += numreads_thr[i];
 	std::ifstream f_singleton(infile_singleton);
 	char currentread[MAX_READ_LEN+1];
@@ -328,7 +327,7 @@ void generate_order_from_paired(bool *flag_first)
 	//decode order_paired and flag_first into read_order 
 	for(uint32_t i = 0; i < numreads; i++)
 	{
-		if(read_order[i] == numreads)//this position already filled
+		if(read_order[i] != numreads)//this position already filled
 			continue;
 		in_paired_flag_first.get(c);
 		in_order_paired.read((char*)&order_paired, sizeof(uint32_t));
@@ -345,7 +344,8 @@ void generate_order_from_paired(bool *flag_first)
 			flag_first[i] = 0;
 			read_order[i+order_paired] = current_pair;
 			flag_first[i+order_paired] = 1;
-		}	
+		}
+		current_pair++;	
 	}
 	
 	//now we'll need the inverse index, before doing that write to file to save memory

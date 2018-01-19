@@ -107,9 +107,6 @@ compress()
 		fi
 		7z a $tempdir/read_order_paired.bin.7z $tempdir/read_order_paired.bin -mmt=$num_thr
 		7z a $tempdir/read_paired_flag_first.bin.7z $tempdir/read_paired_flag_first.bin -mmt=$num_thr
-		7z a $tempdir/read_paired_flag_N.bin.7z $tempdir/read_paired_flag_N.bin -mmt=$num_thr
-		7z a $tempdir/read_order_N.bin.7z $tempdir/read_order_N.bin -mmt=$num_thr
-		7z a $tempdir/read_order_N_pe.bin.7z $tempdir/read_order_N_pe.bin -mmt=$num_thr
 	elif [[ $preserve_order == "True" ]];then
 		./$harcdir/bin/pack_order.out $tempdir	
 		7z a $tempdir/read_order.bin.7z $tempdir/read_order.bin -mmt=$num_thr
@@ -179,20 +176,20 @@ decompress()
 	if [[ $paired_end == "True" ]];then
 		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
-		7z e $tempdir/read_paired_flag_N.bin.7z -o$tempdir/
-		7z e $tempdir/read_order_N.bin.7z -o$tempdir/
-		./$harcdir/bin/pe_decode.out $tempdir
-		./$harcdir/bin/len_$mult32/decoder_preserve.out $tempdir $readlen $memory $num_thr $num_thr_e
+		./$harcdir/bin/len_$mult32/decoder_pe.out $tempdir $readlen $memory $num_thr $num_thr_e
+		mv $tempdir/output_1.dna $pathname/$(basename "$filename" .harc)_1.dna.d
+		mv $tempdir/output_2.dna $pathname/$(basename "$filename" .harc)_2.dna.d
 		echo "Done!"
 	elif [[ $preserve_order == "True" ]];then
 		7z e $tempdir/read_order.bin.7z -o$tempdir/
 		./$harcdir/bin/unpack_order.out $tempdir
 		./$harcdir/bin/len_$mult32/decoder_preserve.out $tempdir $readlen $memory $num_thr $num_thr_e
+		mv $tempdir/output.dna $pathname/$(basename "$filename" .harc).dna.d
 		echo "Done!"
 	else
 		./$harcdir/bin/decoder.out $tempdir $num_thr $num_thr_e
+		mv $tempdir/output.dna $pathname/$(basename "$filename" .harc).dna.d
 	fi
-	mv $tempdir/output.dna $pathname/$(basename "$filename" .harc).dna.d
 	rm -r $tempdir/
 }
 

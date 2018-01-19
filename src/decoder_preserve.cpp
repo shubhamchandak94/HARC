@@ -11,7 +11,6 @@
 #include "config.h"
 
 std::string outfile;
-std::string outfile_clean;
 std::string infile_seq;
 std::string infile_meta;
 std::string infile_pos;

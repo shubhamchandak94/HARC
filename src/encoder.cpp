@@ -957,7 +957,7 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 		{
 		bitset b;
 		int tid = omp_get_thread_num();
-		std::ofstream foutkey(basedir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
+		std::ofstream foutkey(basedir+std::string("/keys.bin.")+std::to_string(tid),std::ios::binary);
 		uint32_t i, stop;
 		i = uint64_t(tid)*(numreads_s+numreads_N)/omp_get_num_threads();
 		stop = uint64_t(tid+1)*(numreads_s+numreads_N)/omp_get_num_threads();
@@ -991,8 +991,8 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 		#pragma omp parallel
 		{
 		int tid = omp_get_thread_num();	
-		std::ifstream finkey(basedir+std::string("keys.bin.")+std::to_string(tid),std::ios::binary);
-		std::ofstream fouthash(basedir+std::string("hash.bin.")+std::to_string(tid),std::ios::binary);
+		std::ifstream finkey(basedir+std::string("/keys.bin.")+std::to_string(tid),std::ios::binary);
+		std::ofstream fouthash(basedir+std::string("/hash.bin.")+std::to_string(tid),std::ios::binary);
 		uint64_t currentkey,currenthash;
 		uint32_t i, stop;
 		i = uint64_t(tid)*(numreads_s+numreads_N)/omp_get_num_threads();
@@ -1006,7 +1006,7 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 			fouthash.write((char*)&currenthash, sizeof(uint64_t));
 		}
 		finkey.close();
-		remove((basedir+std::string("keys.bin.")+std::to_string(tid)).c_str());
+		remove((basedir+std::string("/keys.bin.")+std::to_string(tid)).c_str());
 		fouthash.close();
 		}//parallel end
 			
@@ -1015,7 +1015,7 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 		uint64_t currenthash;
 		for(int tid = 0; tid < num_thr; tid++)
 		{
-			std::ifstream finhash(basedir+std::string("hash.bin.")+std::to_string(tid),std::ios::binary);
+			std::ifstream finhash(basedir+std::string("/hash.bin.")+std::to_string(tid),std::ios::binary);
 			finhash.read((char*)&currenthash,sizeof(uint64_t));
 			while(!finhash.eof())
 			{
@@ -1034,7 +1034,7 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 		uint32_t i = 0;
 		for(int tid = 0; tid < num_thr; tid++)
 		{
-			std::ifstream finhash(basedir+std::string("hash.bin.")+std::to_string(tid),std::ios::binary);
+			std::ifstream finhash(basedir+std::string("/hash.bin.")+std::to_string(tid),std::ios::binary);
 			finhash.read((char*)&currenthash,sizeof(uint64_t));
 			while(!finhash.eof())
 			{
@@ -1043,7 +1043,7 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 				finhash.read((char*)&currenthash,sizeof(uint64_t));
 			}
 			finhash.close();
-			remove((basedir+std::string("hash.bin.")+std::to_string(tid)).c_str());
+			remove((basedir+std::string("/hash.bin.")+std::to_string(tid)).c_str());
 		}
 		
 		//correcting startpos array modified during insertion
