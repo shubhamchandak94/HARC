@@ -148,7 +148,6 @@ void setglobalarrays()
 	chartoint['G'] = 2;
 	chartoint['T'] = 3;
 
-	
 	for(int i = 0; i < 64; i++)
 		mask64[i] = 1;
 	for(int i = 0; i < readlen; i++)

@@ -99,7 +99,8 @@ int main(int argc, char** argv)
 	setglobalarrays();
 	
 	bool *flag_first = new bool [numreads];//flag indicating first reads of pair
-	
+
+	unpackbits();	
 	generate_order_from_paired(flag_first);
 	
 	decode(flag_first);
@@ -110,7 +111,6 @@ int main(int argc, char** argv)
 void decode(bool *flag_first)
 {
 	std::cout << "Decoding reads\n";
-	unpackbits();
 	uint32_t numreads_thr[num_thr];
 	//first calculate numreads in each thread, this is needed for accessing flag_first to know which reads are first in pair
 	#pragma omp parallel
@@ -123,7 +123,8 @@ void decode(bool *flag_first)
 			numreads_thr[tid] += f_rev.tellg();//size of f_rev file
 			f_rev.close();
 		}
-	}		
+	}
+
 	#pragma omp parallel
 	{
 	int tid = omp_get_thread_num();
@@ -340,6 +341,7 @@ void generate_order_from_paired(bool *flag_first)
 		}
 		else
 		{
+			if(c!='0') std::cout << c << "\n";
 			read_order[i] = current_pair+numreads_by_2;
 			flag_first[i] = 0;
 			read_order[i+order_paired] = current_pair;

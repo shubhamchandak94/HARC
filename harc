@@ -44,12 +44,13 @@ compress()
 		echo "Maximum read length exceeded" 
 		exit 1
 	fi
-	#calculate smallest multiple of 32 bigger than or equal to readlen
-	mult32=$((($readlen-1)/32*32+32))	
+	#calculate bitset sizes for reorder and encoder
+	bitset_size_reorder=$(((2*$readlen-1)/64*64+64))	
+	bitset_size_encoder=$(((3*$readlen-1)/64*64+64))	
 	
 	./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
-	./$harcdir/bin/len_$mult32/reorder.out $tempdir $readlen $num_thr
-	./$harcdir/bin/len_$mult32/encoder.out $tempdir $readlen $num_thr
+	./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $readlen $num_thr
+	./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $readlen $num_thr
 	
 	#remove temporary files
 	rm $tempdir/temp.dna
@@ -111,13 +112,13 @@ compress()
 		./$harcdir/bin/pack_order.out $tempdir	
 		7z a $tempdir/read_order.bin.7z $tempdir/read_order.bin -mmt=$num_thr
 		if [[ $preserve_quality == "True" ]];then
-			mv $tempdir/output.quality $pathname/$(basename "$filename" .fastq).quality
-			mv $tempdir/output.id $pathname/$(basename "$filename" .fastq).id
+			mv $tempdir/input.quality $pathname/$(basename "$filename" .fastq).quality
+			mv $tempdir/input.id $pathname/$(basename "$filename" .fastq).id
 		fi
 	else
 		if [[ $preserve_quality == "True" ]];then
 			echo "Reordering quality values and ids"
-			./$harcdir/bin/reorder_quality.out $tempdir
+			./$harcdir/bin/reorder_quality.out $tempdir $readlen
 			mv $tempdir/output.quality $pathname/$(basename "$filename" .fastq).quality
 			rm $tempdir/*.quality
 			mv $tempdir/output.id $pathname/$(basename "$filename" .fastq).id
@@ -171,19 +172,20 @@ decompress()
 	
 	num_thr_e=$(ls $tempdir/read_pos.txt* | wc -l) #number of encoding threads
 	readlen=$( cat $tempdir/read_meta.txt )
-	#calculate smallest multiple of 32 bigger than or equal to readlen
+	#calculate bitset size for decoder
+	bitset_size_decoder=$(((3*$readlen-1)/64*64+64))	
 	mult32=$((($readlen-1)/32*32+32))	
 	if [[ $paired_end == "True" ]];then
 		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
-		./$harcdir/bin/len_$mult32/decoder_pe.out $tempdir $readlen $memory $num_thr $num_thr_e
+		./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $readlen $memory $num_thr $num_thr_e
 		mv $tempdir/output_1.dna $pathname/$(basename "$filename" .harc)_1.dna.d
 		mv $tempdir/output_2.dna $pathname/$(basename "$filename" .harc)_2.dna.d
 		echo "Done!"
 	elif [[ $preserve_order == "True" ]];then
 		7z e $tempdir/read_order.bin.7z -o$tempdir/
 		./$harcdir/bin/unpack_order.out $tempdir
-		./$harcdir/bin/len_$mult32/decoder_preserve.out $tempdir $readlen $memory $num_thr $num_thr_e
+		./$harcdir/bin/decoder_preserve/decoder_preserve_$bitset_size_decoder".out" $tempdir $readlen $memory $num_thr $num_thr_e
 		mv $tempdir/output.dna $pathname/$(basename "$filename" .harc).dna.d
 		echo "Done!"
 	else

@@ -111,7 +111,7 @@ void packbits()
 	in_flag_first.open(outfile_paired_flag_first);
 	char chararray[8];
 	uint8_t packedchar;
-	for(uint64_t i = 0; i < numreads/8; i++)
+	for(uint64_t i = 0; i < numreads_by_2/8; i++)
 	{
 		in_flag_first.read(chararray,8);
 		
@@ -122,14 +122,13 @@ void packbits()
 		f_flag_first.write((char*)&packedchar,sizeof(uint8_t));
 	}
 	f_flag_first.close();
-	in_flag_first.read(chararray,numreads%8);
-	for(int i=0; i<numreads%8;i++)
+	in_flag_first.read(chararray,numreads_by_2%8);
+	for(int i=0; i<numreads_by_2%8;i++)
 		f_flag_first_tail << chararray[i];
 	f_flag_first_tail.close();
 	in_flag_first.close();
 	remove((outfile_paired_flag_first).c_str());
 	rename((outfile_paired_flag_first+".tmp").c_str(),(outfile_paired_flag_first).c_str());		
-
 	return;
 }
 

@@ -17,15 +17,25 @@ g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/decoder.out
 g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pack_order.out
 g++ src/pe_encode.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pe_encode.out
 g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/unpack_order.out
+g++ src/reorder_quality.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/reorder_quality.out
 
-for (( i=1; i<=8; i++))
+mkdir -p bin/reorder
+for bitset_size in 64 128 192 256 320 384 448 512
 do
-	j=$(($i*32))
-	mkdir -p bin/len_$j
-	echo "#define MAX_READ_LEN $j" > src/config.h
-	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/reorder.out
-	g++ src/encoder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/encoder.out
-	g++ src/decoder_preserve.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/decoder_preserve.out
-	g++ src/decoder_pe.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/len_$j/decoder_pe.out
+	max_read_len=$(($bitset_size/2))
+	echo "#define MAX_READ_LEN $max_read_len" > src/config.h
+	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/reorder/reorder_$bitset_size".out"
+done
+
+mkdir -p bin/encoder
+mkdir -p bin/decoder_preserve
+mkdir -p bin/decoder_pe
+for bitset_size in 64 128 192 256 320 384 448 512 576 640 704 768
+do
+	max_read_len=$(($bitset_size/3))
+	echo "#define MAX_READ_LEN $max_read_len" > src/config.h
+	g++ src/encoder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/encoder/encoder_$bitset_size".out"
+	g++ src/decoder_preserve.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_preserve/decoder_preserve_$bitset_size".out"
+	g++ src/decoder_pe.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_pe/decoder_pe_$bitset_size".out"
 done
 rm src/config.h
