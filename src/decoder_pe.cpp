@@ -228,6 +228,7 @@ void decode(bool *flag_first)
 		pos_in_flag_first += numreads_thr[i];
 	std::ifstream f_singleton(infile_singleton);
 	char currentread[MAX_READ_LEN+1];
+	currentread[readlen] = '\0';
 	bitset b;
 	f_singleton.read(currentread,readlen);
 	while(!f_singleton.eof())
