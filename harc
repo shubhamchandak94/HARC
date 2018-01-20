@@ -60,8 +60,10 @@ compress()
 		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
 	fi
 	./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $readlen $num_thr
+	rm $tempdir/input_clean.dna
 	./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $readlen $num_thr
-	
+	rm $tempdir/input_N.dna
+
 	#remove temporary files
 	rm $tempdir/temp.dna
 	rm $tempdir/tempflag.txt
