@@ -134,7 +134,7 @@ void reorder_quality_N()
 void reorder_id()
 {
 	std::ofstream f(outfile_id);
-	std::ifstream f_in(infile_id);
+	std::ifstream f_in;
 	std::ifstream f_N(infile_id_N);
 	std::ifstream f_order(infile_order,std::ios::binary);
 	uint32_t order;
@@ -149,6 +149,7 @@ void reorder_id()
 	std::string s;
 	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
 	{
+		f_in.open(infile_id);
 		auto numreads_bin = max_bin_size;
 		if (i == numreads/max_bin_size)
 			numreads_bin = numreads%max_bin_size;
@@ -172,8 +173,8 @@ void reorder_id()
 		}
 		delete[] index_array;
 		delete[] id_bin;
+		f_in.close();
 	}
-	f_in.close();
 	f << f_N.rdbuf();
 	delete[] reverse_index;
 	f_N.close();
