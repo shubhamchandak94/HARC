@@ -37,6 +37,7 @@ compress()
 	harcdir=$(dirname $BASH_SOURCE)
 	pathname=$(dirname $filename)
 	tempdir=$(mktemp -d -p $pathname)
+	trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
 	echo $filename
 	readlen="$(head -2 $filename | tail -1 | wc -L)"
@@ -48,7 +49,16 @@ compress()
 	bitset_size_reorder=$(((2*$readlen-1)/64*64+64))	
 	bitset_size_encoder=$(((3*$readlen-1)/64*64+64))	
 	
-	./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
+	if [[ $paired_end == "True" ]];then
+		if [[ $filename_2 == '' ]];then
+			echo "Second file needed in PE mode"
+			exit 1
+		fi
+		echo $filename_2
+		./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality $readlen
+	else
+		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
+	fi
 	./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $readlen $num_thr
 	./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $readlen $num_thr
 	
@@ -96,13 +106,12 @@ compress()
 		./$harcdir/bin/pe_encode.out $tempdir	
 		if [[ $preserve_quality == "True" ]];then
 			echo "Reordering quality values and ids"
-			./$harcdir/bin/reorder_quality.out $tempdir
-			./$harcdir/bin/pe_decode.out $tempdir
-			
-			rm $tempdir/*.tmp			
-			mv $tempdir/output.quality $pathname/$(basename "$filename" .fastq).quality
+			./$harcdir/bin/reorder_quality_pe.out $tempdir $readlen
+			mv $tempdir/output_1.quality $pathname/$(basename "$filename" _1.fastq)_1.quality
+			mv $tempdir/output_2.quality $pathname/$(basename "$filename" _1.fastq)_2.quality
 			rm $tempdir/*.quality
-			mv $tempdir/output.id $pathname/$(basename "$filename" .fastq).id
+			mv $tempdir/output_1.id $pathname/$(basename "$filename" _1.fastq)_1.id
+			mv $tempdir/output_2.id $pathname/$(basename "$filename" _1.fastq)_2.id
 			rm $tempdir/*.id
 			echo "Done!"
 		fi
@@ -129,7 +138,11 @@ compress()
 	7z a $tempdir/numreads.bin.7z $tempdir/numreads.bin
 	rm $tempdir/*.bin
 	rm $tempdir/*.singleton
-	tar -cf $pathname/$(basename "$filename" .fastq).harc -C $tempdir .
+	if [[ $paired_end == "True" ]];then
+		tar -cf $pathname/$(basename "$filename" _1.fastq).harc -C $tempdir .
+	else
+		tar -cf $pathname/$(basename "$filename" .fastq).harc -C $tempdir .
+	fi
 	rm -r $tempdir/
 }
 
@@ -139,6 +152,7 @@ decompress()
 	harcdir=$(dirname $BASH_SOURCE)
 	pathname=$(dirname $filename)
 	tempdir=$(mktemp -d -p $pathname)
+	trap "rm -rf $tempdir" EXIT
 	tar -xf $filename -C $tempdir
 	if [[ $paired_end == "True" ]];then
 		if [ ! -f $tempdir/read_order_paired.bin.7z ];then
@@ -205,15 +219,17 @@ if [ $NUMARGS -eq 0 ]; then
 fi
 
 mode=''
+filename_2=''
 preserve_order="False"
 paired_end="False"
 preserve_quality="False"
 memory='7'
 
-while getopts ':c:d:t:m:pqeh' opt; do
+while getopts ':c:2:d:t:m:pqeh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c' && filename=$OPTARG;;
     d) [[ -n "$mode" ]] && usage || mode='d' && filename=$OPTARG;;
+    2) filename_2=$OPTARG;;	
     t) num_thr=$OPTARG;;
     m) memory=$OPTARG;;
     p) preserve_order="True";;

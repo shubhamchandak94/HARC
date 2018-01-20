@@ -13,11 +13,13 @@ cp src/libbsc/bsc bin/
 
 #Compilation of some files
 g++ src/preprocess.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess.out
+g++ src/preprocess_pe.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess_pe.out
 g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/decoder.out
 g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pack_order.out
 g++ src/pe_encode.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pe_encode.out
 g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/unpack_order.out
 g++ src/reorder_quality.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/reorder_quality.out
+g++ src/reorder_quality_pe.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/reorder_quality_pe.out
 
 mkdir -p bin/reorder
 for bitset_size in 64 128 192 256 320 384 448 512
