@@ -7,14 +7,37 @@ mkdir -p data
 rm -rf src/libbsc
 git clone https://github.com/shubhamchandak94/libbsc.git src/libbsc
 (cd src/libbsc && make)
+cp src/libbsc/bsc bin/
 
 #pip install --user distance biopython joblib tqdm
 
 #Compilation of some files
-g++ src/preprocess.cpp -O3 -march=native -fopenmp -std=c++11 -o src/preprocess.out
-g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o src/decoder.out
-g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o src/pack_order.out
-g++ src/pe_encode.cpp -O3 -march=native -fopenmp -std=c++11 -o src/pe_encode.out
-g++ src/pe_decode.cpp -O3 -march=native -fopenmp -std=c++11 -o src/pe_decode.out
-g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o src/unpack_order.out
-g++ src/merge_N.cpp -O3 -march=native -std=c++11 -o src/merge_N.out
+g++ src/preprocess.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess.out
+g++ src/preprocess_pe.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess_pe.out
+g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/decoder.out
+g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pack_order.out
+g++ src/pe_encode.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pe_encode.out
+g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/unpack_order.out
+g++ src/reorder_quality.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/reorder_quality.out
+g++ src/reorder_quality_pe.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/reorder_quality_pe.out
+
+mkdir -p bin/reorder
+for bitset_size in 64 128 192 256 320 384 448 512
+do
+	max_read_len=$(($bitset_size/2))
+	echo "#define MAX_READ_LEN $max_read_len" > src/config.h
+	g++ src/reorder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/reorder/reorder_$bitset_size".out"
+done
+
+mkdir -p bin/encoder
+mkdir -p bin/decoder_preserve
+mkdir -p bin/decoder_pe
+for bitset_size in 64 128 192 256 320 384 448 512 576 640 704 768
+do
+	max_read_len=$(($bitset_size/3))
+	echo "#define MAX_READ_LEN $max_read_len" > src/config.h
+	g++ src/encoder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/encoder/encoder_$bitset_size".out"
+	g++ src/decoder_preserve.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_preserve/decoder_preserve_$bitset_size".out"
+	g++ src/decoder_pe.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_pe/decoder_pe_$bitset_size".out"
+done
+rm src/config.h

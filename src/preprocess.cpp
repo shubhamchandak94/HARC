@@ -7,14 +7,9 @@ std::string outfileclean;
 std::string outfileN;
 std::string outfileorderN;
 std::string outfilequality;
-std::string outfilequalityN;
-std::string outfilequalityfinal;
 std::string outfileid;
-std::string outfileidN;
-std::string outfileidfinal;
 std::string outfilenumreads;
 
-std::string preserve_order;
 std::string preserve_quality;
 
 int readlen;
@@ -26,19 +21,14 @@ int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[2]);
 	infile = std::string(argv[1]);
-	preserve_order = std::string(argv[3]);
-	preserve_quality = std::string(argv[4]);
-	readlen = atoi(argv[5]);
-	outfileclean = basedir + "/output/input_clean.dna";
-	outfileN = basedir + "/output/input_N.dna";
-	outfileorderN = basedir + "/output/read_order_N.bin";
-	outfilequality = basedir + "/output/input_clean.quality";
-	outfilequalityN = basedir + "/output/input_N.quality";
-	outfilequalityfinal = basedir + "/output/output.quality";
-	outfileid = basedir + "/output/input_clean.id";
-	outfileidN = basedir + "/output/input_N.id";
-	outfileidfinal = basedir + "/output/output.id";
-	outfilenumreads = basedir + "/output/numreads.bin";
+	preserve_quality = std::string(argv[3]);
+	readlen = atoi(argv[4]);
+	outfileclean = basedir + "/input_clean.dna";
+	outfileN = basedir + "/input_N.dna";
+	outfileorderN = basedir + "/read_order_N.bin";
+	outfilequality = basedir + "/input.quality";
+	outfileid = basedir + "/input.id";
+	outfilenumreads = basedir + "/numreads.bin";
 	int status = preprocess();
 	if(status != 0)
 		return -1;
@@ -57,23 +47,10 @@ int preprocess()
 	std::ofstream f_id;
 	
 	if(preserve_quality == "True")
-		if(preserve_order == "False")	
-		{
-			f_quality.open(outfilequality);
-			f_id.open(outfileid);
-		}
-		else
-		{
-			f_quality.open(outfilequalityfinal);
-			f_id.open(outfileidfinal);
-		}
-	std::ofstream f_quality_N;
-	std::ofstream f_id_N;
-	if(preserve_order == "False" && preserve_quality == "True")
 	{
-		f_quality_N.open(outfilequalityN);
-		f_id_N.open(outfileidN);
-	}
+		f_quality.open(outfilequality);
+		f_id.open(outfileid);
+	}	
 	int i = 0;
 	uint64_t readnum = 0;
 	uint64_t num_clean = 0;
@@ -83,10 +60,7 @@ int preprocess()
 		switch(i)
 		{
 			case 0:	if(preserve_quality == "True")
-					if(!flag_N || preserve_order == "True")
-						f_id << line << "\n";
-					else
-						f_id_N << line << "\n";
+					f_id << line << "\n";
 				break;
 			case 1: //f << line << "\n";
 				if(line.length() != readlen)
@@ -110,10 +84,7 @@ int preprocess()
 				break;
 			case 2: break;
 			case 3: if(preserve_quality == "True")
-					if(!flag_N || preserve_order == "True")
-						f_quality << line << "\n";
-					else
-						f_quality_N << line << "\n";
+					f_quality << line << "\n";
 				readnum++;
 				break;
 		}
