@@ -103,7 +103,7 @@ compress()
 	7z a $tempdir/read_rev.tar.7z $tempdir/read_rev.tar -mmt=$num_thr
 	./$harcdir/bin/bsc e $tempdir/read_seq.tar $tempdir/read_seq.tar.bsc -b64p -t$num_thr 
 	./$harcdir/bin/bsc e $tempdir/unaligned_singleton.txt $tempdir/unaligned_singleton.txt.bsc -b64p -t$num_thr 
-	rm $tempdir/*.txt $tempdir/*.dna $tempdir/*.tar 
+	rm $tempdir/*.txt $tempdir/*.tar 
 	if [[ $paired_end == "True" ]];then
 		./$harcdir/bin/pe_encode.out $tempdir	
 		if [[ $preserve_quality == "True" ]];then
