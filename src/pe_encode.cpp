@@ -25,9 +25,13 @@ void write_order_paired(uint32_t* read_order, uint32_t* read_inverse_order);
 void packbits();
 //pack flag files into 1 bit per flag
 
+void generate_order_preserve(uint32_t* read_order);
+//generate order file for half the reads
+
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
+	std::string preserve_order = std::string(argv[2]);
 	infilenumreads = basedir + "/numreads.bin";
 	infile_order = basedir + "/read_order.bin";
 	outfile_order_paired = basedir + "/read_order_paired.bin";
@@ -44,7 +48,10 @@ int main(int argc, char** argv)
 	populate_arrays(read_order, read_inverse_order);
     	write_order_paired(read_order, read_inverse_order);
 	packbits();
-	
+
+	if(preserve_order == "True")
+		generate_order_preserve(read_order);
+		
 	delete[] read_order;
 	delete[] read_inverse_order;
 	return 0;
@@ -132,3 +139,17 @@ void packbits()
 	return;
 }
 
+void generate_order_preserve(uint32_t* read_order)
+{
+	std::ofstream fout_order(infile_order,std::ios::binary);
+	uint32_t order;
+	for(uint32_t i = 0; i < numreads; i++)
+	{
+		if(read_order[i] < numreads_by_2)
+		{
+			fout_order.write((char*)&read_order[i],sizeof(uint32_t));
+		}
+	}
+	fout_order.close();
+	return;
+}

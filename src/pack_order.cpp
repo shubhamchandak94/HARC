@@ -7,7 +7,6 @@
 
 std::string infile;
 std::string infilenumreads;
-
 uint32_t numreads;
 
 void pack_order();//pack order into least number of bits possible
@@ -15,12 +14,15 @@ void pack_order();//pack order into least number of bits possible
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
+	std::string paired_end = std::string(argv[2]);
 	infile = basedir + "/read_order.bin";
 	infilenumreads = basedir + "/numreads.bin";
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
 	f_numreads.close();
+	if(paired_end == "True")
+		numreads = numreads/2;
 	pack_order();
 	return 0;
 }

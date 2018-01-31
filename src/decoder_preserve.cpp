@@ -21,7 +21,7 @@ std::string infile_order;
 std::string infile_N;
 std::string infile_singleton;
 
-int readlen, MAX_BIN_SIZE, num_thr, num_thr_e;
+int readlen, num_thr, num_thr_e;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -75,9 +75,8 @@ int main(int argc, char** argv)
 	infile_singleton = basedir + "/unaligned_singleton.txt";
 
 	readlen = atoi(argv[2]);
-	MAX_BIN_SIZE = atoi(argv[3]);
-	num_thr = atoi(argv[4]);
-	num_thr_e = atoi(argv[5]);
+	num_thr = atoi(argv[3]);
+	num_thr_e = atoi(argv[4]);
 
 	omp_set_num_threads(num_thr);
 	setglobalarrays();
@@ -196,11 +195,7 @@ void decode()
 void restore_order()
 {
 	std::cout << "Restoring order\n";
-	uint64_t max_bin_size;
-	if(MAX_BIN_SIZE <= 3)
-		max_bin_size = uint64_t(3)*200000000/7;
-	else 
-		max_bin_size = uint64_t(MAX_BIN_SIZE)*200000000/7;
+	uint64_t max_bin_size = 200000000;
 	char s[MAX_READ_LEN+1];
 	std::ofstream fout(outfile+".tmp");
 	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)

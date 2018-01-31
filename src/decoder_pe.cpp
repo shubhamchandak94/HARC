@@ -24,10 +24,11 @@ std::string infile_singleton;
 std::string infilenumreads;
 std::string infile_order_paired;
 std::string infile_paired_flag_first;
+std::string infile_order;
 
-
-int readlen, MAX_BIN_SIZE, num_thr, num_thr_e;
+int readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2; 
+std::string preserve_order;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -46,7 +47,7 @@ void decode(bool *flag_first);
 
 void generate_order_from_paired(bool *flag_first);
 
-void restore_order();
+void restore_order(std::string outfile, std::string infile_order);
 
 void unpackbits();
 
@@ -83,11 +84,12 @@ int main(int argc, char** argv)
 	infilenumreads = basedir + "/numreads.bin";
 	infile_order_paired = basedir + "/read_order_paired.bin";
 	infile_paired_flag_first = basedir + "/read_paired_flag_first.bin";
-	
+	infile_order = basedir + "/read_order.bin";	
+
 	readlen = atoi(argv[2]);
-	MAX_BIN_SIZE = atoi(argv[3]);
-	num_thr = atoi(argv[4]);
-	num_thr_e = atoi(argv[5]);
+	num_thr = atoi(argv[3]);
+	num_thr_e = atoi(argv[4]);
+	preserve_order = std::string(argv[5]);
 
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
@@ -104,7 +106,11 @@ int main(int argc, char** argv)
 	generate_order_from_paired(flag_first);
 	
 	decode(flag_first);
-	restore_order();
+	delete[] flag_first;
+		
+	restore_order(outfile_2, outfile_order_2);
+	if(preserve_order == "True")
+		restore_order(outfile_1, infile_order);
 	return 0;
 }
 
@@ -137,7 +143,11 @@ void decode(bool *flag_first)
 	
 	for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
 	{
-		std::ofstream f_1(outfile_1+'.'+std::to_string(tid_e));
+		std::ofstream f_1;
+		if(preserve_order == "True")
+			f_1.open(outfile_1+'.'+std::to_string(tid_e),std::ios::binary);
+		else
+			f_1.open(outfile_1+'.'+std::to_string(tid_e));
 		std::ofstream f_2(outfile_2+'.'+std::to_string(tid_e),std::ios::binary);
 		std::ifstream f_seq(infile_seq+'.'+std::to_string(tid_e));
 		std::ifstream f_pos(infile_pos+'.'+std::to_string(tid_e));
@@ -178,7 +188,13 @@ void decode(bool *flag_first)
 			{
 				if(flag_first[pos_in_flag_first])
 				{
-					f_1 << currentread << "\n";
+					if(preserve_order == "True")
+					{
+						b = chartobitset(currentread);
+						f_1.write((char*)&b,sizeof(bitset));
+					}
+					else
+						f_1 << currentread << "\n";
 				}	
 				else
 				{
@@ -191,7 +207,13 @@ void decode(bool *flag_first)
 				reverse_complement(currentread,revread);
 				if(flag_first[pos_in_flag_first])
 				{
-					f_1 << revread << "\n";
+					if(preserve_order == "True")
+					{
+						b = chartobitset(revread);
+						f_1.write((char*)&b,sizeof(bitset));
+					}
+					else							
+						f_1 << revread << "\n";
 				}	
 				else
 				{
@@ -210,7 +232,11 @@ void decode(bool *flag_first)
 		f_rev.close();
 	}
 	}
-	std::ofstream f_1(outfile_1);
+	std::ofstream f_1;	
+	if(preserve_order == "True")
+		f_1.open(outfile_1,std::ios::binary);
+	else
+		f_1.open(outfile_1);
 	std::ofstream f_2(outfile_2,std::ios::binary);
 	for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 	{
@@ -235,7 +261,13 @@ void decode(bool *flag_first)
 	{	
 		if(flag_first[pos_in_flag_first])
 		{
-			f_1 << currentread << "\n";
+			if(preserve_order == "True")
+			{
+				b = chartobitset(currentread);
+				f_1.write((char*)&b,sizeof(bitset));
+			}
+			else
+				f_1 << currentread << "\n";
 		}
 		else
 		{			
@@ -252,7 +284,13 @@ void decode(bool *flag_first)
 	{
 		if(flag_first[pos_in_flag_first])
 		{
-			f_1 << currentread << "\n";
+			if(preserve_order == "True")
+			{
+				b = chartobitset(currentread);
+				f_1.write((char*)&b,sizeof(bitset));
+			}
+			else
+				f_1 << currentread << "\n";
 		}
 		else
 		{			
@@ -269,20 +307,16 @@ void decode(bool *flag_first)
 	return;
 }
 
-void restore_order()
+void restore_order(std::string outfile, std::string infile_order)
 {
 	std::cout << "Restoring order\n";
-	uint64_t max_bin_size;
-	if(MAX_BIN_SIZE <= 3)
-		max_bin_size = uint64_t(3)*200000000/7;
-	else 
-		max_bin_size = uint64_t(MAX_BIN_SIZE)*200000000/7;
+	uint64_t max_bin_size = 200000000;
 	char s[MAX_READ_LEN+1];
-	std::ofstream fout(outfile_2+".tmp");
+	std::ofstream fout(outfile+".tmp");
 	for (uint32_t i = 0; i <= numreads_by_2/max_bin_size; i++)
 	{
-		std::ifstream f_order(outfile_order_2,std::ios::binary);
-		std::ifstream f(outfile_2,std::ios::binary);
+		std::ifstream f_order(infile_order,std::ios::binary);
+		std::ifstream f(outfile,std::ios::binary);
 		auto numreads_bin = max_bin_size;
 		if (i == numreads_by_2/max_bin_size)
 			numreads_bin = numreads_by_2%max_bin_size;
@@ -311,8 +345,8 @@ void restore_order()
 		f.close();
 	}
 	fout.close();
-	remove(outfile_2.c_str());
-	rename((outfile_2+".tmp").c_str(),outfile_2.c_str());
+	remove(outfile.c_str());
+	rename((outfile+".tmp").c_str(),outfile.c_str());
 	return;
 }
 
@@ -396,14 +430,32 @@ void generate_order_from_paired(bool *flag_first)
 	
 	//Finally, write the order for second reads of pair 
 	f_temp.open(outfile_order_2,std::ios::binary);
+	uint32_t j = 0;
 	for(uint32_t i = 0; i < numreads; i++)
 	{
 		if(!flag_first[i])
 		{
 			f_temp.write((char*)&read_order[i], sizeof(uint32_t));
+			read_order[j] = read_order[i];//storing for preserve_order step
+			j++;
 		}
 	}
 	f_temp.close();
+
+	if(preserve_order == "True")//in this case, we need to map the order obtained above to the true positions
+	{
+		//first load from read_order.bin into second half of read_order array
+		fin_temp.open(infile_order,std::ios::binary);
+		for(uint32_t i = 0; i < numreads_by_2; i++)
+			fin_temp.read((char*)&read_order[numreads_by_2+i], sizeof(uint32_t));
+		fin_temp.close();
+	
+		//now compose the two permutations and write result to read_order_2.bin
+		f_temp.open(outfile_order_2,std::ios::binary);
+		for(uint32_t i = 0; i < numreads_by_2; i++)	
+			f_temp.write((char*)&read_order[numreads_by_2+read_order[i]], sizeof(uint32_t));
+		f_temp.close();
+	}
 	delete[] read_order;
 	return;
 }
