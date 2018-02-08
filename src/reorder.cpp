@@ -749,64 +749,29 @@ void writetofile(bitset *read)
 	}
 
 	//Now combine the num_thr files
-	std::ofstream fout(outfile,std::ofstream::out);
 	std::ofstream fout_s(outfile+".singleton",std::ofstream::out);
-	std::ofstream foutRC(outfileRC,std::ofstream::out);
-	std::ofstream foutflag(outfileflag,std::ofstream::out);
-	std::ofstream foutpos(outfilepos,std::ofstream::out|std::ios::binary);
-	std::ofstream foutorder(outfileorder,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder_s(outfileorder+".singleton",std::ofstream::out|std::ios::binary);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
 		std::string tid_str = std::to_string(tid);
-		std::ifstream fin(outfile + '.' + tid_str,std::ifstream::in);
 		std::ifstream fin_s(outfile + ".singleton." + tid_str,std::ifstream::in);
-		std::ifstream finRC(outfileRC + '.' + tid_str,std::ifstream::in);
-		std::ifstream finflag(outfileflag + '.' + tid_str,std::ifstream::in);
-		std::ifstream finpos(outfilepos + '.' + tid_str,std::ifstream::in|std::ios::binary);
-		std::ifstream finorder(outfileorder + '.'  + tid_str,std::ifstream::in|std::ios::binary);
 		std::ifstream finorder_s(outfileorder + ".singleton." + tid_str,std::ifstream::in|std::ios::binary);
 		
-		fout << fin.rdbuf();//write entire file
 		fout_s << fin_s.rdbuf();//write entire file
-		foutRC << finRC.rdbuf();
-		foutflag << finflag.rdbuf();
-		foutpos << finpos.rdbuf();
-		foutorder << finorder.rdbuf();
 		foutorder_s << finorder_s.rdbuf();
-		//clear error flags which occur on rdbuffing empty file
-		fout.clear();
-		fout_s.clear();
-		foutRC.clear();
-		foutflag.clear();
-		foutpos.clear();
-		foutorder.clear();
-		foutorder_s.clear();
 
+		//clear error flags which occur on rdbuffing empty file
+		fout_s.clear();
+		foutorder_s.clear();
 			
-		fin.close();
 		fin_s.close();
-		finRC.close();
-		finflag.close();
-		finorder.close();
 		finorder_s.close();
-		finpos.close();
-		
-		remove((outfile + '.' + tid_str).c_str());
+	
 		remove((outfile + ".singleton." + tid_str).c_str());
-		remove((outfileRC + '.' + tid_str).c_str());
-		remove((outfileflag + '.' + tid_str).c_str());
-		remove((outfilepos + '.' + tid_str).c_str());
-		remove((outfileorder + '.' + tid_str).c_str());
 		remove((outfileorder + ".singleton." + tid_str).c_str());
 	}
-	fout.close();
 	fout_s.close();
-	foutRC.close();
-	foutflag.close();
-	foutorder.close();
 	foutorder_s.close();
-	foutpos.close();
 	return;
 }
 

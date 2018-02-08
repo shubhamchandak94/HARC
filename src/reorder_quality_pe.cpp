@@ -24,8 +24,8 @@ std::string infilenumreads;
 void generate_order();
 //generate reordering information for the two separate files (pairs) from read_order.bin
 
-void reorder_quality(std::string infile_quality, std::string outfile_quality, std::string infile_order, uint32_t numreads);
-void reorder_id(std::string infile_id, std::string outfile_id, std::string infile_order, uint32_t numreads);
+void reorder_quality();
+void reorder_id();
 
 int main(int argc, char** argv)
 {
@@ -49,10 +49,8 @@ int main(int argc, char** argv)
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 	generate_order();
-	reorder_quality(infile_quality_1,outfile_quality_1,outfile_order,numreads_by_2);
-	reorder_quality(infile_quality_2,outfile_quality_2,outfile_order,numreads_by_2);
-	reorder_id(infile_id_1,outfile_id_1,outfile_order,numreads_by_2);
-	reorder_id(infile_id_2,outfile_id_2,outfile_order,numreads_by_2);
+	reorder_quality();
+	reorder_id();
 	return 0;
 }
 
@@ -74,97 +72,54 @@ void generate_order()
 	return;
 }
 
-void reorder_quality(std::string infile_quality, std::string outfile_quality, std::string infile_order, uint32_t numreads)
+void reorder_quality()
 {
-	std::ofstream f(outfile_quality);
-	std::ifstream f_in(infile_quality);
-	std::ifstream f_order(infile_order,std::ios::binary);
-	uint32_t order;
-	uint32_t *reverse_index = new uint32_t [numreads];
-	for (uint32_t i = 0; i < numreads; i++)
+	char *quality = new char [numreads_by_2*(readlen+1)];
+	std::string infile_quality[2] = {infile_quality_1,infile_quality_2};		
+	std::string outfile_quality[2] = {outfile_quality_1,outfile_quality_2};
+	for(int k = 0; k < 2; k++)
 	{
-		f_order.read((char*)&order,sizeof(uint32_t));
-		reverse_index[order] = i;
-	}
-	f_order.close();
-	uint64_t max_bin_size = numreads/2;
-	for (uint64_t i = 0; i <= numreads/max_bin_size; i++)
-	{
-		uint64_t numreads_bin = max_bin_size;
-		if (i == numreads/max_bin_size)
-			numreads_bin = numreads%max_bin_size;
-		uint32_t *index_array = new uint32_t [numreads_bin];
-		char *quality_bin = new char [numreads_bin*(readlen+1)];	
-		uint64_t pos = 0;
-		for(uint64_t j = 0; j < numreads; j++)
+		std::ofstream f(outfile_quality[k]);
+		std::ifstream f_in(infile_quality[k]);
+		std::ifstream f_order(outfile_order,std::ios::binary);
+		uint32_t order;
+		for (uint64_t i = 0; i < numreads_by_2; i++)
+			f_in.getline((quality+i*(readlen+1)),readlen+1);
+		for (uint64_t i = 0; i < numreads_by_2; i++)
 		{
-			order = reverse_index[j];
-			if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
-			{
-				index_array[order-i*max_bin_size] = pos;
-				f_in.seekg(j*(readlen+1), f_in.beg);
-				f_in.getline((quality_bin+pos*(readlen+1)),readlen+1);
-				pos++;
-			}
+			f_order.read((char*)&order,sizeof(uint32_t));
+			f << (quality+uint64_t(order)*(readlen+1)) << "\n";	
 		}
-		for(uint64_t j = 0; j < numreads_bin; j++)
-		{
-			f << (quality_bin+uint64_t(index_array[j])*(readlen+1)) << "\n";
-		}
-
-		delete[] index_array;
-		delete[] quality_bin;
+		f_in.close();
+		f.close();
+		f_order.close();
 	}
-	f_in.close();
-	delete[] reverse_index;
-	f.close();
+	delete[] quality;
 	return;
 }
 
-void reorder_id(std::string infile_id, std::string outfile_id, std::string infile_order, uint32_t numreads)
+void reorder_id()
 {
-	std::ofstream f(outfile_id);
-	std::ifstream f_in;
-	std::ifstream f_order(infile_order,std::ios::binary);
-	uint32_t order;
-	uint32_t *reverse_index = new uint32_t [numreads];
-	for (uint32_t i = 0; i < numreads; i++)
+	std::string *id = new std::string [numreads_by_2];
+	std::string infile_id[2] = {infile_id_1,infile_id_2};		
+	std::string outfile_id[2] = {outfile_id_1,outfile_id_2};
+	for(int k = 0; k < 2; k++)
 	{
-		f_order.read((char*)&order,sizeof(uint32_t));
-		reverse_index[order] = i;
-	}
-	f_order.close();
-	uint32_t max_bin_size = numreads/2;
-	std::string s;
-	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
-	{
-		f_in.open(infile_id);
-		auto numreads_bin = max_bin_size;
-		if (i == numreads/max_bin_size)
-			numreads_bin = numreads%max_bin_size;
-		uint32_t *index_array = new uint32_t [numreads_bin];
-		std::string *id_bin = new std::string [numreads_bin];
-		uint32_t pos = 0;
-		for(uint32_t j = 0; j < numreads; j++)
+		std::ofstream f(outfile_id[k]);
+		std::ifstream f_in(infile_id[k]);
+		std::ifstream f_order(outfile_order,std::ios::binary);
+		uint32_t order;
+		for (uint64_t i = 0; i < numreads_by_2; i++)
+			std::getline(f_in,id[i]);
+		for (uint64_t i = 0; i < numreads_by_2; i++)
 		{
-			order = reverse_index[j];
-			std::getline(f_in,s);
-			if (order >= i*max_bin_size && order < i*max_bin_size + numreads_bin)
-			{
-				index_array[order-i*max_bin_size] = pos;
-				id_bin[pos] = s;
-				pos++;
-			}
-		}
-		for(uint32_t j = 0; j < numreads_bin; j++)
-		{
-			f << id_bin[index_array[j]] << "\n";
+			f_order.read((char*)&order,sizeof(uint32_t));
+			f << id[order] << "\n";	
 		}
 		f_in.close();
-		delete[] index_array;
-		delete[] id_bin;
+		f.close();
+		f_order.close();
 	}
-	delete[] reverse_index;
-	f.close();
+	delete[] id;
 	return;
 }

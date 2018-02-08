@@ -36,7 +36,7 @@ compress()
 	harcdir=$(dirname $BASH_SOURCE)
 	pathname=$(dirname $filename)
 	tempdir=$(mktemp -d -p $pathname)
-	trap "rm -rf $tempdir" EXIT
+#	trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
 	echo $filename
 	readlen="$(head -2 $filename | tail -1 | wc -L)"
@@ -62,12 +62,6 @@ compress()
 	rm $tempdir/input_clean.dna
 	./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $readlen $num_thr
 	rm $tempdir/input_N.dna
-
-	#remove temporary files
-	rm $tempdir/temp.dna
-	rm $tempdir/tempflag.txt
-	rm $tempdir/temppos.txt
-	rm $tempdir/read_rev.txt
 	
 	#tar files produced by the threads
 	mkdir -p $tempdir/read_noise

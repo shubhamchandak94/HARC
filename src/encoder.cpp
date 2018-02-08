@@ -189,33 +189,22 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s)
 	#pragma omp parallel 
 	{
 	int tid = omp_get_thread_num();
-	std::ifstream f(infile);
-	std::ifstream in_flag(infile_flag);
-	std::ifstream in_pos(infile_pos,std::ios::binary);
-	std::ifstream in_order(infile_order,std::ios::binary);
-	std::ifstream in_RC(infile_RC);
+	std::ifstream f(infile+'.'+std::to_string(tid));
+	std::ifstream in_flag(infile_flag+'.'+std::to_string(tid));
+	std::ifstream in_pos(infile_pos+'.'+std::to_string(tid),std::ios::binary);
+	std::ifstream in_order(infile_order+'.'+std::to_string(tid),std::ios::binary);
+	std::ifstream in_RC(infile_RC+'.'+std::to_string(tid));
 	std::ofstream f_seq(outfile_seq+'.'+std::to_string(tid));
 	std::ofstream f_pos(outfile_pos+'.'+std::to_string(tid));
 	std::ofstream f_noise(outfile_noise+'.'+std::to_string(tid));
 	std::ofstream f_noisepos(outfile_noisepos+'.'+std::to_string(tid));
-	std::ofstream f_order(infile_order+'.'+std::to_string(tid),std::ios::binary);
-	std::ofstream f_RC(infile_RC+'.'+std::to_string(tid));
-	uint64_t i, stop;
+	std::ofstream f_order(infile_order+'.'+std::to_string(tid)+".tmp",std::ios::binary);
+	std::ofstream f_RC(infile_RC+'.'+std::to_string(tid)+".tmp");
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
 	uint64_t ull;
 	bool flag = 0;
 	//flag to check if match was found or not
-	//doing initial setup and first read
-	i = uint64_t(tid)*numreads/omp_get_num_threads();//spread out first read equally
-	stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
-	if(tid == omp_get_num_threads()-1)
-		stop = numreads;
-	f.seekg(uint64_t(i)*(readlen+1), f.beg);
-	in_flag.seekg(i, in_flag.beg);
-	in_pos.seekg(i*sizeof(uint8_t),in_pos.beg);
-	in_order.seekg(i*sizeof(uint32_t),in_order.beg);
-	in_RC.seekg(i,in_RC.beg);
 	std::string current,ref;
 	bitset forward_bitset,reverse_bitset,b;
 	char c,rc;
@@ -228,10 +217,9 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s)
 					// on UIUC machine
 	uint32_t num_left_search = 0;//number of reads with flag 2
 	std::list<uint32_t> deleted_rids[numdict_s];
-	while(i < stop)
+	while(in_flag >> c)
 	{
 		std::getline(f,current);
-		c = in_flag.get();
 		rc = in_RC.get();
 		in_pos.read((char*)&p,sizeof(uint8_t));
 		in_order.read((char*)&ord,sizeof(uint32_t));
@@ -474,7 +462,6 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s)
 			list_size++;
 			num_left_search++;
 		}
-		i++;	
 					
 	}
 	ref = buildcontig(reads,pos,list_size);
@@ -498,10 +485,16 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s)
 	std::ofstream f_meta(outfile_meta);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
-		std::ifstream in_order(infile_order+'.'+std::to_string(tid));
+		std::ifstream in_order(infile_order+'.'+std::to_string(tid)+".tmp");
 		f_order << in_order.rdbuf();
 		f_order.clear();//clear error flag in case in_order is empty
 		remove((infile_order+'.'+std::to_string(tid)).c_str());
+		remove((infile_order+'.'+std::to_string(tid)+".tmp").c_str());
+		rename((infile_RC+'.'+std::to_string(tid)+".tmp").c_str(),(infile_RC+'.'+std::to_string(tid)).c_str());
+		remove((infile_RC+'.'+std::to_string(tid)+".tmp").c_str());
+		remove((infile_flag+'.'+std::to_string(tid)).c_str());
+		remove((infile_pos+'.'+std::to_string(tid)).c_str());
+		remove((infile+'.'+std::to_string(tid)).c_str());
 	}
 	f_meta << readlen << "\n";
 	f_meta.close();
@@ -852,22 +845,24 @@ void correct_order(uint32_t *order_s)
 		order_s[i] += cumulative_N_reads[order_s[i]];
 
 	//Now correct for clean reads (this is stored on file)
-	std::ifstream fin_order(infile_order, std::ios::binary);
-	std::ofstream fout_order(infile_order+".tmp", std::ios::binary);
-	uint32_t pos;
-	for(uint32_t i = 0; i < numreads; i++)
+	for(int tid = 0; tid < num_thr; tid++)
 	{
+		std::ifstream fin_order(infile_order+'.'+std::to_string(tid), std::ios::binary);
+		std::ofstream fout_order(infile_order+'.'+std::to_string(tid)+".tmp", std::ios::binary);
+		uint32_t pos;
 		fin_order.read((char*)&pos, sizeof(uint32_t));
-		pos += cumulative_N_reads[pos];
-		fout_order.write((char*)&pos, sizeof(uint32_t));
+		while(!fin_order.eof())
+		{
+			pos += cumulative_N_reads[pos];
+			fout_order.write((char*)&pos, sizeof(uint32_t));
+			fin_order.read((char*)&pos, sizeof(uint32_t));
+		}
+		fin_order.close();
+		fout_order.close();
+		remove((infile_order+'.'+std::to_string(tid)).c_str());
+		rename((infile_order+'.'+std::to_string(tid)+".tmp").c_str(),(infile_order+'.'+std::to_string(tid)).c_str());
 	}
-	fin_order.close();
-	fout_order.close();
-
-	remove(infile_order.c_str());
 	remove(infile_order_N.c_str());
-	rename((infile_order+".tmp").c_str(),infile_order.c_str());
-
 	delete[] read_flag_N;
 	delete[] cumulative_N_reads;
 	return;
