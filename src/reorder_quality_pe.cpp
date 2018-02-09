@@ -107,7 +107,6 @@ void reorder_id()
 	std::string outfile_id[2] = {outfile_id_1,outfile_id_2};
 	for(int k = 0; k < 2; k++)
 	{
-	//	std::ofstream f(outfile_id[k]);
 		std::ifstream f_in(infile_id[k]);
 		std::ifstream f_order(outfile_order,std::ios::binary);
 		uint32_t order;
@@ -115,7 +114,7 @@ void reorder_id()
 			std::getline(f_in,id[i]);
 		f_in.close();
 	
-		const char *outfile_compressed_id = (basedir+"compressed_id_"+std::to_string(k)+".bin").c_str();
+		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin.0").c_str();
 		struct compressor_info_t comp_info;
 		comp_info.id_array = id;
 		comp_info.f_order = &f_order;
@@ -124,17 +123,7 @@ void reorder_id()
 		comp_info.fcomp = fopen(outfile_compressed_id, "w");
 		compress((void *)&comp_info);
 		fclose(comp_info.fcomp);
-			
-		/*
-		for (uint64_t i = 0; i < numreads_by_2; i++)
-		{
-			f_order.read((char*)&order,sizeof(uint32_t));
-			f << id[order] << "\n";	
-		}
-		f_in.close();
-		f.close();
-		f_order.close();
-		*/
+		f_order.close();		
 	}
 	delete[] id;
 	return;

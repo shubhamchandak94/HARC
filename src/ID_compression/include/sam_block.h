@@ -61,8 +61,7 @@ struct sam_line_t{
 
 
 struct compressor_info_t{
-//    FILE *fsam;
-//    FILE *fref;
+      FILE *f_id;
       FILE *fcomp;
       std::string *id_array;  
       std::ifstream *f_order;	
@@ -111,9 +110,7 @@ typedef struct sam_block_t{
     std::ifstream *f_order;
     uint32_t numreads;
     uint32_t current_read_number;    		
-//    FILE *fs;
     stream_model *codebook_model;
-    uint32_t current_line; // used for decompression
 }*sam_block;
 
 
@@ -152,9 +149,7 @@ int decompress_id(Arithmetic_stream as, id_models model, char *id);
 
 
 int compress_line(Arithmetic_stream as, sam_block samBlock);
-int compress_block(Arithmetic_stream as, sam_block samBlock);
-int decompress_block(Arithmetic_stream as, sam_block samBlock);
-int decompress_line(Arithmetic_stream as, sam_block samBlock, uint8_t lossiness);
+int decompress_line(Arithmetic_stream as, sam_block samBlock, FILE *f_id);
 void* compress(void *thread_info);
 void* decompress(void *thread_info);
 

@@ -1,6 +1,6 @@
 # Makefile for building C programs
 
-OBJ=sam_models.o sam_file_allocation.o  Arithmetic_stream.o stream_model.o compression.o io_functions.o id_compression.o  ../../reorder_quality_pe.cpp
+OBJ=sam_models.o sam_file_allocation.o  Arithmetic_stream.o stream_model.o compression.o io_functions.o id_compression.o ../../decompress_quality_id.cpp #../../reorder_quality_pe.cpp
 CC=g++
 RM=rm -f
 
