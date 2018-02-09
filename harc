@@ -36,7 +36,7 @@ compress()
 	harcdir=$(dirname $BASH_SOURCE)
 	pathname=$(dirname $filename)
 	tempdir=$(mktemp -d -p $pathname)
-#	trap "rm -rf $tempdir" EXIT
+	trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
 	echo $filename
 	readlen="$(head -2 $filename | tail -1 | wc -L)"
@@ -54,7 +54,7 @@ compress()
 			exit 1
 		fi
 		echo $filename_2
-		./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality $readlen
+		./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality $readlen 1
 	else
 		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
 	fi

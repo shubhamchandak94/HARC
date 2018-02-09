@@ -12,9 +12,19 @@ std::string outfilenumreads;
 
 std::string preserve_quality;
 
-int readlen;
+int readlen, quantization_level;
+//quantization level:
+//0:lossless
+//1:Illumina 8 binning
+//2:Binary thresholding
+
+char quantization_table[128];
+
+void generate_quantization_table();
 
 int preprocess();
+
+int quantize(std::string &line);
 
 int main(int argc, char** argv)
 {
@@ -23,6 +33,7 @@ int main(int argc, char** argv)
 	infile[1] = std::string(argv[2]);
 	preserve_quality = std::string(argv[4]);
 	readlen = atoi(argv[5]);
+	quantization_level = atoi(argv[6]);
 	outfileclean = basedir + "/input_clean.dna";
 	outfileN = basedir + "/input_N.dna";
 	outfileorderN = basedir + "/read_order_N.bin";
@@ -31,6 +42,7 @@ int main(int argc, char** argv)
 	outfileid[0] = basedir + "/input_1.id";
 	outfileid[1] = basedir + "/input_2.id";
 	outfilenumreads = basedir + "/numreads.bin";
+	generate_quantization_table();
 	int status = preprocess();
 	if(status != 0)
 		return -1;
@@ -91,7 +103,18 @@ int preprocess()
 					break;
 				case 2: break;
 				case 3: if(preserve_quality == "True")
+					{
+						if(line.length() != readlen)
+						{
+							std::cout << "Read length not fixed. Found two different quality lengths: "<< readlen << " and " << line.length() << "\n";
+							return -1;
+						}
+						if(quantize(line) == -1)
+						{
+							std::cout << "Invalid quality value found [outside 0 - 41].\n";
+						}	
 						f_quality << line << "\n";
+					}
 					readnum++;
 					break;
 			}
@@ -123,4 +146,46 @@ int preprocess()
 		f_numreads.close();
 	}	
 	return 0;	
+}
+
+int quantize(std::string &line)
+{
+	if(quantization_level == 0)
+	{
+		for(int i = 0; i < readlen; i++)
+			if(line[i] > 33+41 || line[i] < 33)//TODO update later
+				return -1;
+	}
+	else
+		for(int i = 0; i < readlen; i++)
+			line[i] = quantization_table[line[i]];
+	return 0;
+}
+
+void generate_quantization_table()
+{
+	switch(quantization_level)
+	{
+		case 1: for(uint8_t i = 0; i <= 33+9; i++)
+				quantization_table[i] = 33+6;
+			for(uint8_t i = 33+10; i <= 33+19; i++)
+				quantization_table[i] = 33+15;
+			for(uint8_t i = 33+20; i <= 33+24; i++)
+				quantization_table[i] = 33+22;
+			for(uint8_t i = 33+25; i <= 33+29; i++)
+				quantization_table[i] = 33+27;
+			for(uint8_t i = 33+30; i <= 33+34; i++)
+				quantization_table[i] = 33+33;
+			for(uint8_t i = 33+35; i <= 33+39; i++)
+				quantization_table[i] = 33+37;
+			for(uint8_t i = 33+40; i <= 127; i++)
+				quantization_table[i] = 33+40;
+			break;
+		case 2: for(uint8_t i = 0; i <= 33+20; i++)
+				quantization_table[i] = 33+6;
+			for(uint8_t i = 33+21; i <= 127; i++)
+				quantization_table[i] = 33+40;
+			break;
+	}
+	return;		
 }
