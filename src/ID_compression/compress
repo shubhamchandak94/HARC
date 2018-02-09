@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -o xtrace
+
+#./bin/program ../mpeg/ERP001960/NA12878_S1.sam 1960_12878_compressed ../mpeg/ERP001960/hg19.fa
+
+
+#./bin/program /john9/scr1/reglong/ERP002490/NA12877_S1.sam  /john9/scr1/reglong/ERP002490/12877_compressed /john9/scr1/reglong/ERP002490/hg19.fa
+
+#./bin/program ../mpeg/RNAseq/K562_cytosol_LID8465_TopHat_v2.sam K562_compressed ../mpeg/RNAseq/hg19.fa
+
+#./bin/program /john9/scr1/reglong/ERP002490/error.sam /john9/scr1/reglong/ERP002490/error_compressed /john9/scr1/reglong/ERP002490/chr3
+#./bin/program /john7/scr1/reglong/ERP002490/NA12882_S1.sam /john7/scr1/reglong/ERP002490/12882_compressed /john7/scr1/reglong/ERP002490/hg19.fa
+#./bin/program /john8/scr1/reglong/ERP002490/NA12878_S1.sam /john8/scr1/reglong/ERP002490/12878_compressed /john7/scr1/reglong/ERP002490/hg19.fa
+
+#./bin/program /john6/scr1/reglong/ERP001960/NA12879_S1.sam /john6/scr1/reglong/ERP001960/12879_compressed /john6/scr1/reglong/ERP001960/hg19.fa
+
+#./bin/program ../mpeg/9827.sam 9827_compressed ../mpeg/hs37d5.fa
+#./bin/program ../mpeg/17/9799.sam ../mpeg/17/9799_compressed.sam ../mpeg/17/ecolik12.fa
+#./bin/program ../mpeg/DH10B/MiSeq_Ecoli_DH10B_110721_PF.sam ../mpeg/DH10B/MiSeq_compressed ../mpeg/DH10B/EcoliDH10B.fa
+
+#./bin/program /john6/scr1/reglong/ERP001960/NA12877_S1.sam /john6/scr1/reglong/ERP001960/1960_12877_compressed /john6/scr1/reglong/ERP001960/hg19.fa
+
+#./bin/program ../mpeg/NA21144.chrom11/NA21144.chrom11.ILLUMINA.bwa.GIH.low_coverage.20130415.sam ../mpeg/NA21144.chrom11/chrom11_compressed ../mpeg/NA21144.chrom11/hs37d5_11.fa
+
+#./bin/program ../cbc_sam/dna/ce_short.sam ce_compressed ../cbc_sam/dna/ce.fa
+#./bin/program -x ../cbc_sam/dna/ce_compressed ce_uncompressed ../cbc_sam/dna/ce.fa
+
+./bin/program dna/ce.sam ce_compressed dna/ce.fa

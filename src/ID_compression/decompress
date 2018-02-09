@@ -1,0 +1,7 @@
+#!/bin/bash
+#./bin/program -x chrom11_compressed uncompressed ../mpeg/NA21144.chrom11/hs37d5_11.fa
+#./bin/program -x K562_compressed uncompressed ../mpeg/RNAseq/hg19.fa
+#./bin/program -x 9827_compressed uncompressed ../mpeg/hs37d5.fa
+#./bin/program -x /john7/scr1/reglong/ERP002490/12882_compressed /john7/scr1/reglong/ERP002490/12882_uncompressed /john7/scr1/reglong/ERP002490/hg19.fa
+
+./bin/program -x ce_compressed ce_uncompressed dna/ce.fa

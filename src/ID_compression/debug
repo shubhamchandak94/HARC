@@ -1,0 +1,4 @@
+#!/bin/bash
+gdb --args bin/program ../mpeg/ERP001960/NA12878_S1.sam 1960_12878_compressed ../mpeg/ERP001960/hg19.fa
+#gdb --args bin/program ../dna/ce_part.sam compressed ../dna/ce.fa
+#gdb --args bin/program -x chrom11_compressed uncompressed ../mpeg/ce.fa
