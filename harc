@@ -112,8 +112,8 @@ compress()
 				mv $tempdir/output_1.quality $pathname/$(basename "$filename" _1.fastq)_1.quality
 				mv $tempdir/output_2.quality $pathname/$(basename "$filename" _1.fastq)_2.quality
 				rm $tempdir/*.quality
-				mv $tempdir/output_1.id $pathname/$(basename "$filename" _1.fastq)_1.id
-				mv $tempdir/output_2.id $pathname/$(basename "$filename" _1.fastq)_2.id
+				#mv $tempdir/output_1.id $pathname/$(basename "$filename" _1.fastq)_1.id
+				#mv $tempdir/output_2.id $pathname/$(basename "$filename" _1.fastq)_2.id
 				rm $tempdir/*.id
 				echo "Done!"
 			fi

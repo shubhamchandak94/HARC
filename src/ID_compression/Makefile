@@ -1,4 +1,5 @@
 all:
+	echo $(MAKE)
 	$(MAKE) -C src
 	mkdir -p bin
 	mv src/program bin/program

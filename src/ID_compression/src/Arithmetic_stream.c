@@ -43,41 +43,6 @@ struct io_stream_t *alloc_io_stream(uint8_t mode, FILE *fp) {
             rtn->fp = fp;
             fread(rtn->buf, sizeof(uint8_t), IO_STREAM_BUF_LEN, rtn->fp);
             break;
-        case UPLOAD:
-            clean_compressed_dir(rtn);
-            rtn->fileCtr = 0;
-            break;
-        case DOWNLOAD:
-            clean_compressed_dir(rtn);
-            rtn->fileCtr = 0;
-            sprintf(rtn->filePath, IDOFILE_PATH_ROOT "%010d", rtn->fileCtr);
-            rtn->fileCtr++;
-            
-            while (file_available == 0) ;
-            rtn->fp = fopen(rtn->filePath, "r");
-            fread(rtn->buf, sizeof(uint8_t), IO_STREAM_BUF_LEN, rtn->fp);
-            fclose(rtn->fp);
-            remove(rtn->filePath);
-            file_available--;
-            break;
-        case REMOTE_DECOMPRESSION:
-            rtn->fileCtr = 0;
-            sprintf(rtn->filePath, IDOFILE_PATH_ROOT "%010d", rtn->fileCtr);
-            rtn->fileCtr++;
-            
-            //define the "ready" file
-            strcpy(lockname, rtn->filePath);
-            strcat(lockname, "_ready");
-            //
-            
-            while ( (rc = access( lockname, F_OK )) == -1) ;
-            remove(lockname);
-            
-            rtn->fp = fopen(rtn->filePath, "r");
-            fread(rtn->buf, sizeof(uint8_t), IO_STREAM_BUF_LEN, rtn->fp);
-            fclose(rtn->fp);
-            remove(rtn->filePath);
-            break;
 
         default:
             break;
