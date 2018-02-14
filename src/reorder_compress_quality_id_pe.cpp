@@ -11,7 +11,8 @@
 #include "qv_compressor.h"
 #include "cluster.h"
 
-
+uint8_t paired_id_code;
+std::string preserve_order;
 uint32_t numreads, numreads_by_2;
 int readlen, quantization_level;
 //quantization level:
@@ -55,10 +56,12 @@ int main(int argc, char** argv)
 	infilenumreads = basedir + "/numreads.bin";
 
 	readlen = atoi(argv[2]);
+	preserve_order = std::string(argv[3]);	
 //	quantization_level = atoi(argv[3]);
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
+	f_numreads.read((char*)&paired_id_code,sizeof(uint8_t));
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 	generate_order();
@@ -69,19 +72,31 @@ int main(int argc, char** argv)
 
 void generate_order()
 {
-	std::ifstream fin_order(infile_order,std::ios::binary);
-	std::ofstream fout_order(outfile_order,std::ios::binary);
-	uint32_t order;
-	for(uint32_t i = 0; i < numreads; i++)
+	if(preserve_order == "True") //write fake order information in this case to provide common interface
 	{
-		fin_order.read((char*)&order,sizeof(uint32_t));
-		if(order < numreads_by_2)
+		std::ofstream fout_order(outfile_order,std::ios::binary);
+		for(uint32_t i = 0; i < numreads_by_2; i++)
 		{
-			fout_order.write((char*)&order,sizeof(uint32_t));
+			fout_order.write((char*)&i,sizeof(uint32_t));
 		}
+		fout_order.close();
 	}
-	fin_order.close();
-	fout_order.close();
+	else
+	{
+		std::ifstream fin_order(infile_order,std::ios::binary);
+		std::ofstream fout_order(outfile_order,std::ios::binary);
+		uint32_t order;
+		for(uint32_t i = 0; i < numreads; i++)
+		{
+			fin_order.read((char*)&order,sizeof(uint32_t));
+			if(order < numreads_by_2)
+			{
+				fout_order.write((char*)&order,sizeof(uint32_t));
+			}
+		}
+		fin_order.close();
+		fout_order.close();
+	}
 	return;
 }
 
@@ -124,6 +139,8 @@ void reorder_id()
 //	std::string outfile_id[2] = {outfile_id_1,outfile_id_2};
 	for(int k = 0; k < 2; k++)
 	{
+		if(paired_id_code !=0 && k == 1)
+			break;	
 		std::ifstream f_in(infile_id[k]);
 		std::ifstream f_order(outfile_order,std::ios::binary);
 		uint32_t order;

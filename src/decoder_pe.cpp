@@ -13,6 +13,8 @@
 std::string outfile_1;
 std::string outfile_2;
 std::string outfile_order_2;
+std::string infile_quality[2];
+std::string infile_id[2];
 std::string infile_seq;
 std::string infile_meta;
 std::string infile_pos;
@@ -28,7 +30,8 @@ std::string infile_order;
 
 int readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2; 
-std::string preserve_order;
+uint8_t paired_id_code;
+std::string preserve_order, preserve_quality;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -47,7 +50,10 @@ void decode(bool *flag_first);
 
 void generate_order_from_paired(bool *flag_first);
 
-void restore_order(std::string outfile, std::string infile_order);
+void restore_order(std::string outfile, std::string infile_order, int filenum);
+//filenum 1 or 2
+
+void modify_id(std::string &id, uint8_t paired_id_code);
 
 void unpackbits();
 
@@ -70,9 +76,13 @@ void setglobalarrays();
 int main(int argc, char** argv)
 {
 	std::string basedir = std::string(argv[1]);
-	outfile_1 = basedir + "/output_1.dna";
-	outfile_2 = basedir + "/output_2.dna";
+	outfile_1 = basedir + "/output_1.txt";
+	outfile_2 = basedir + "/output_2.txt";
 	outfile_order_2 = basedir + "/read_order_2.bin";
+	infile_quality[0] = basedir + "/quality_1.txt";
+	infile_quality[1] = basedir + "/quality_2.txt";
+	infile_id[0] = basedir + "/id_1.txt";
+	infile_id[1] = basedir + "/id_2.txt";
 	infile_seq = basedir + "/read_seq.txt";
 	infile_meta = basedir + "/read_meta.txt";
 	infile_pos = basedir + "/read_pos.txt";
@@ -90,10 +100,12 @@ int main(int argc, char** argv)
 	num_thr = atoi(argv[3]);
 	num_thr_e = atoi(argv[4]);
 	preserve_order = std::string(argv[5]);
-
+	preserve_quality = std::string(argv[6]);
+	
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
+	f_numreads.read((char*)&paired_id_code,sizeof(uint8_t));
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 
@@ -108,9 +120,9 @@ int main(int argc, char** argv)
 	decode(flag_first);
 	delete[] flag_first;
 		
-	restore_order(outfile_2, outfile_order_2);
+	restore_order(outfile_2, outfile_order_2, 2);
 	if(preserve_order == "True")
-		restore_order(outfile_1, infile_order);
+		restore_order(outfile_1, infile_order, 1);
 	return 0;
 }
 
@@ -307,12 +319,35 @@ void decode(bool *flag_first)
 	return;
 }
 
-void restore_order(std::string outfile, std::string infile_order)
+void restore_order(std::string outfile, std::string infile_order, int filenum)
 {
 	std::cout << "Restoring order\n";
 	uint64_t max_bin_size = 200000000;
 	char s[MAX_READ_LEN+1];
 	std::ofstream fout(outfile+".tmp");
+	std::ifstream fin_quality;
+	std::ifstream fin_id;
+	bool paired_id_match = false;
+	std::string quality, id;
+	if(preserve_quality == "True")
+	{
+		if(filenum == 1)
+		{
+			fin_quality.open(infile_quality[0]+".0");
+			fin_id.open(infile_id[0]+".0");
+		}	
+		else
+		{
+			fin_quality.open(infile_quality[1]+".0");
+			if(paired_id_code != 0)
+			{
+				fin_id.open(infile_id[0]+".0");
+				paired_id_match = true;
+			}
+			else
+				fin_id.open(infile_id[1]+".0");
+		}
+	}	
 	for (uint32_t i = 0; i <= numreads_by_2/max_bin_size; i++)
 	{
 		std::ifstream f_order(infile_order,std::ios::binary);
@@ -334,11 +369,25 @@ void restore_order(std::string outfile, std::string infile_order)
 				pos++;
 			}
 		}
-		for(uint32_t j = 0; j < numreads_bin; j++)
-		{
-			bitsettostring(reads_bin[index_array[j]],s);
-			fout << s << "\n";
-		}
+		if(preserve_quality == "True")
+			for(uint32_t j = 0; j < numreads_bin; j++)
+			{
+				bitsettostring(reads_bin[index_array[j]],s);
+				std::getline(fin_quality,quality);
+				std::getline(fin_id,id);
+				if(paired_id_match)
+					modify_id(id,paired_id_code);
+				fout << id << "\n";	
+				fout << s << "\n";
+				fout << "+\n";
+				fout << quality << "\n";
+			}
+		else
+			for(uint32_t j = 0; j < numreads_bin; j++)
+			{
+				bitsettostring(reads_bin[index_array[j]],s);
+				fout << s << "\n";
+			}
 		delete[] index_array;
 		delete[] reads_bin;
 		f_order.close();
@@ -348,6 +397,25 @@ void restore_order(std::string outfile, std::string infile_order)
 	remove(outfile.c_str());
 	rename((outfile+".tmp").c_str(),outfile.c_str());
 	return;
+}
+
+void modify_id(std::string &id, uint8_t paired_id_code)
+{
+	if(paired_id_code == 2)
+		return;
+	else if(paired_id_code == 1)
+	{
+		id.back() = '2';
+		return;
+	}
+	else if(paired_id_code == 3)	
+	{
+		int i = 0;
+		while(id[i] != ' ')
+			i++;
+		id[i+1] = '2';
+		return;
+	}
 }
 
 void generate_order_from_paired(bool *flag_first)

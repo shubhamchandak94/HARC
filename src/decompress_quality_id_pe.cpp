@@ -15,6 +15,7 @@ std::string infilenumreads;
 
 int readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2;
+uint8_t paired_id_code;
 
 void decompress_id();
 void decompress_quality();
@@ -41,6 +42,7 @@ int main(int argc, char** argv)
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
+	f_numreads.read((char*)&paired_id_code,sizeof(uint8_t));
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 	
@@ -52,6 +54,8 @@ void decompress_id()
 {
 	for(int k = 0; k < 2; k++)
 	{
+		if(paired_id_code != 0 && k==1)
+			break;
 		struct compressor_info_t comp_info;
 		comp_info.numreads = numreads_by_2;
 		comp_info.mode = DECOMPRESSION;

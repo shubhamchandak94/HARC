@@ -36,7 +36,7 @@ compress()
 	harcdir=$(dirname $BASH_SOURCE)
 	pathname=$(dirname $filename)
 	tempdir=$(mktemp -d -p $pathname)
-	trap "rm -rf $tempdir" EXIT
+	#trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
 	echo $filename
 	readlen="$(head -2 $filename | tail -1 | wc -L)"
@@ -54,7 +54,7 @@ compress()
 			exit 1
 		fi
 		echo $filename_2
-		./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality $readlen 1
+		./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality $readlen
 	else
 		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
 	fi
@@ -100,23 +100,10 @@ compress()
 	if [[ $paired_end == "True" ]];then
 		./$harcdir/bin/pe_encode.out $tempdir $preserve_order	
 		if [[ $preserve_quality == "True" ]];then
-			if [[ $preserve_order == "True" ]];then
-				mv $tempdir/input_1.quality $pathname/$(basename "$filename" _1.fastq)_1.quality
-				mv $tempdir/input_2.quality $pathname/$(basename "$filename" _1.fastq)_2.quality
-				mv $tempdir/input_1.id $pathname/$(basename "$filename" _1.fastq)_1.id
-				mv $tempdir/input_2.id $pathname/$(basename "$filename" _1.fastq)_2.id
-			else
-				echo "Reordering quality values and ids"
-				./$harcdir/bin/reorder_quality_id_pe.out $tempdir $readlen
-				rm $tempdir/*.tmp
-				#mv $tempdir/output_1.quality $pathname/$(basename "$filename" _1.fastq)_1.quality
-				#mv $tempdir/output_2.quality $pathname/$(basename "$filename" _1.fastq)_2.quality
-				rm $tempdir/*.quality
-				#mv $tempdir/output_1.id $pathname/$(basename "$filename" _1.fastq)_1.id
-				#mv $tempdir/output_2.id $pathname/$(basename "$filename" _1.fastq)_2.id
-				rm $tempdir/*.id
-				echo "Done!"
-			fi
+			echo "Compressing ids and quality"
+			./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $readlen $preserve_order
+			rm $tempdir/*.tmp $tempdir/*.quality $tempdir/*.id
+			echo "Done!"
 		fi
 		7z a $tempdir/read_order_paired.bin.7z $tempdir/read_order_paired.bin -mmt=$num_thr
 		7z a $tempdir/read_paired_flag_first.bin.7z $tempdir/read_paired_flag_first.bin -mmt=$num_thr
@@ -175,6 +162,13 @@ decompress()
 			exit 1
 		fi
 	fi
+	if [[$preserve_quality == "True"]];then
+		if [ ! -f $tempdir/compressed_quality_1.bin.0 ];then
+			echo "Not compressed using -q flag."
+			usage
+			exit 1
+		fi
+	fi
 	./$harcdir/bin/bsc d $tempdir/read_pos.tar.bsc $tempdir/read_pos.tar -t$num_thr
 	./$harcdir/bin/bsc d $tempdir/read_noise.tar.bsc $tempdir/read_noise.tar -t$num_thr
 	7z e $tempdir/read_noisepos.tar.7z -o$tempdir/
@@ -197,15 +191,23 @@ decompress()
 	#calculate bitset size for decoder
 	bitset_size_decoder=$(((3*$readlen-1)/64*64+64))	
 	if [[ $paired_end == "True" ]];then
+		if [[$preserve_quality == "True"]];then
+			./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $readlen $num_thr $num_thr_e
+		fi	
 		if [[ $preserve_order == "True" ]];then
 			7z e $tempdir/read_order.bin.7z -o$tempdir/
 			./$harcdir/bin/unpack_order.out $tempdir/
 		fi		
 		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
-		./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $readlen $num_thr $num_thr_e $preserve_order
-		mv $tempdir/output_1.dna $pathname/$(basename "$filename" .harc)_1.dna.d
-		mv $tempdir/output_2.dna $pathname/$(basename "$filename" .harc)_2.dna.d
+		./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $readlen $num_thr $num_thr_e $preserve_order $preserve_quality
+		if [[$preserve_quality == "True"]];then
+			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.fastq
+			mv $tempdir/output_2.txt $pathname/$(basename "$filename" .harc)_2.fastq
+		else
+			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.dna.d
+			mv $tempdir/output_2.txt $pathname/$(basename "$filename" .harc)_2.dna.d
+		fi
 		echo "Done!"
 	elif [[ $preserve_order == "True" ]];then
 		7z e $tempdir/read_order.bin.7z -o$tempdir/

@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 
+
 std::string infile[2];
 std::string outfileclean;
 std::string outfileN;
@@ -25,6 +26,10 @@ void generate_quantization_table();
 int preprocess();
 
 int quantize(std::string &line);
+
+uint8_t find_id_pattern(std::string &id_1,std::string &id_2);
+
+bool check_id_pattern(std::string &id_1,std::string &id_2, uint8_t paired_id_code);
 
 int main(int argc, char** argv)
 {
@@ -52,25 +57,46 @@ int main(int argc, char** argv)
 
 int preprocess()
 {
-	std::string line;
+	std::string line, id_1;
 	std::ofstream f_clean(outfileclean);
 	std::ofstream f_N(outfileN);
 	std::ofstream f_order_N(outfileorderN,std::ios::binary);
 
 	uint64_t total_reads[2] = {0,0};
 	uint64_t readnum = 0, num_clean = 0;
-			
+	uint8_t paired_id_code = 0;		
+	bool paired_id_match = false;
+	//code 0: no pattern found
+	//code 1: */1 and */2 where * are same in both
+	//code 2: * and * where * are same in both
+	//code 3: * 1:# and * 2:# where * and # are common to both and * contains no space (used in new versions)
 	for(int j = 0; j < 2; j++)
 	{
 		std::ifstream myfile(infile[j], std::ifstream::in);
 
 		std::ofstream f_quality;
 		std::ofstream f_id;
-		
+		std::ifstream fin_id_1;
+
 		if(preserve_quality == "True")
 		{
 			f_quality.open(outfilequality[j]);
 			f_id.open(outfileid[j]);
+			if(j==1)
+			{
+				fin_id_1.open(outfileid[0]);
+				//check first ids to detect patterns
+				std::string id_2;
+				std::getline(fin_id_1, id_1);
+				std::getline(myfile, id_2);
+				paired_id_code = find_id_pattern(id_1,id_2);
+				if(paired_id_code != 0)
+					paired_id_match = true;
+				myfile.close();
+				myfile.open(infile[1]);
+				fin_id_1.close();
+				fin_id_1.open(outfileid[0]);	
+			}
 		}	
 		int i = 0;
 		bool flag_N = false;
@@ -79,7 +105,17 @@ int preprocess()
 			switch(i)
 			{
 				case 0:	if(preserve_quality == "True")
+					{
 						f_id << line << "\n";
+						if(j==1 && paired_id_match)
+						{
+							std::getline(fin_id_1,id_1);
+							if(fin_id_1.eof())
+								paired_id_match = false;
+							else	
+								paired_id_match = check_id_pattern(id_1,line,paired_id_code);
+						}
+					}
 					break;
 				case 1: //f << line << "\n";
 					if(line.length() != readlen)
@@ -140,12 +176,96 @@ int preprocess()
 		uint32_t readnum_32 = readnum;
 		f_numreads.write((char*)&num_clean_32, sizeof(uint32_t));
 		f_numreads.write((char*)&readnum_32, sizeof(uint32_t));
+		if(paired_id_match == true)
+			f_numreads.write((char*)&paired_id_code, sizeof(uint8_t));
+		else
+		{
+			paired_id_code = 0;
+			f_numreads.write((char*)&paired_id_code, sizeof(uint8_t));
+		}	
 		std::cout << "Read length: " << readlen << "\n";
 		std::cout << "Total number of reads: " << readnum <<"\n";
 		std::cout << "Total number of reads without N: " << num_clean <<"\n";
+		std::cout << "Paired id match code: " << (int)paired_id_code << "\n";
 		f_numreads.close();
 	}	
 	return 0;	
+}
+
+uint8_t find_id_pattern(std::string &id_1,std::string &id_2)
+{
+	if(id_1.length() != id_2.length())
+		return 0;
+	if(id_1 == id_2)
+		return 2;
+	int len = id_1.length();
+	if(id_1[len-1] == '1' && id_2[len-1] == '2')
+	{
+		//compare rest
+		int i;
+		for(i = 0; i < len-1; i++)
+			if(id_1[i] != id_2[i])
+				break;
+		if(i == len-1)
+			return 1;
+	}
+	int i = 0;
+	for(int i = 0; i < len; i++)
+	{
+		if(id_1[i] != id_2[i])
+			break;
+		if(id_1[i] == ' ')
+		{
+			if(i < len-1 && id_1[i] == '1' && id_2[i] == '2')
+				i++;
+			else
+				break;
+		}
+	}
+	if(i == len)
+		return 3;
+	return 0;
+}
+
+bool check_id_pattern(std::string &id_1,std::string &id_2, uint8_t paired_id_code)
+{
+	if(id_1.length() != id_2.length())
+		return false;
+	int len = id_1.length();
+	switch(paired_id_code)
+	{
+		case 1: if(id_1[len-1] == '1' && id_2[len-1] == '2')
+			{
+				//compare rest
+				int i;
+				for(i = 0; i < len-1; i++)
+					if(id_1[i] != id_2[i])
+						break;
+				if(i == len-1)
+					return true;
+			}
+			break;
+		case 2: if(id_1 == id_2)
+				return true;
+			break;
+		case 3:	int i = 0;
+			for(int i = 0; i < len; i++)
+			{
+				if(id_1[i] != id_2[i])
+					break;
+				if(id_1[i] == ' ')
+				{
+					if(i < len-1 && id_1[i] == '1' && id_2[i] == '2')
+						i++;
+					else
+						break;
+				}
+			}
+			if(i == len)
+				return true;	  
+			break;
+	}
+	return false;
 }
 
 int quantize(std::string &line)
