@@ -39,8 +39,6 @@ id_block alloc_id_block(){
 
 sam_block alloc_sam_models(Arithmetic_stream as, std::string *id_array, std::ifstream *f_order, uint32_t numreads, uint8_t mode){
     
-    uint32_t i = 0;
-    
     sam_block sb = (sam_block) calloc(1, sizeof(struct sam_block_t));
     
  //   sb->fs = fin;
@@ -65,7 +63,6 @@ uint32_t load_sam_line(sam_block sb){
     
     uint32_t order;
     
-    char *ptr;
     char *ID_line = *sb->IDs->IDs;
     // Read compulsory fields
     if(sb->current_read_number != sb->numreads) {

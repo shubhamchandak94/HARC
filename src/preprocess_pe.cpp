@@ -33,7 +33,7 @@ int main(int argc, char** argv)
 	infile[1] = std::string(argv[2]);
 	preserve_quality = std::string(argv[4]);
 	readlen = atoi(argv[5]);
-	quantization_level = atoi(argv[6]);
+//	quantization_level = atoi(argv[6]);
 	outfileclean = basedir + "/input_clean.dna";
 	outfileN = basedir + "/input_N.dna";
 	outfileorderN = basedir + "/read_order_N.bin";
@@ -59,7 +59,7 @@ int preprocess()
 
 	uint64_t total_reads[2] = {0,0};
 	uint64_t readnum = 0, num_clean = 0;
-		
+			
 	for(int j = 0; j < 2; j++)
 	{
 		std::ifstream myfile(infile[j], std::ifstream::in);
@@ -109,11 +109,11 @@ int preprocess()
 							std::cout << "Read length not fixed. Found two different quality lengths: "<< readlen << " and " << line.length() << "\n";
 							return -1;
 						}
-						if(quantize(line) == -1)
+				/*		if(quantize(line) == -1)
 						{
 							std::cout << "Invalid quality value found [outside 0 - 41].\n";
 						}	
-						f_quality << line << "\n";
+				*/		f_quality << line << "\n";
 					}
 					readnum++;
 					break;

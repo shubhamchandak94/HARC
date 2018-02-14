@@ -78,7 +78,6 @@ void* compress(void *thread_info){
 
 void* decompress(void *thread_info){
     
-    uint64_t n = 0;
     clock_t begin = clock();
     clock_t ticks;
     

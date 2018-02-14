@@ -107,10 +107,10 @@ compress()
 				mv $tempdir/input_2.id $pathname/$(basename "$filename" _1.fastq)_2.id
 			else
 				echo "Reordering quality values and ids"
-				./$harcdir/bin/reorder_quality_pe.out $tempdir $readlen
+				./$harcdir/bin/reorder_quality_id_pe.out $tempdir $readlen
 				rm $tempdir/*.tmp
-				mv $tempdir/output_1.quality $pathname/$(basename "$filename" _1.fastq)_1.quality
-				mv $tempdir/output_2.quality $pathname/$(basename "$filename" _1.fastq)_2.quality
+				#mv $tempdir/output_1.quality $pathname/$(basename "$filename" _1.fastq)_1.quality
+				#mv $tempdir/output_2.quality $pathname/$(basename "$filename" _1.fastq)_2.quality
 				rm $tempdir/*.quality
 				#mv $tempdir/output_1.id $pathname/$(basename "$filename" _1.fastq)_1.id
 				#mv $tempdir/output_2.id $pathname/$(basename "$filename" _1.fastq)_2.id

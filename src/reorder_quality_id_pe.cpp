@@ -7,9 +7,17 @@
 #include <string>
 #include <cstdio>
 #include "sam_block.h"
+#include "codebook.h"
+#include "qv_compressor.h"
+#include "cluster.h"
+
 
 uint32_t numreads, numreads_by_2;
-int readlen;
+int readlen, quantization_level;
+//quantization level:
+//0:lossless
+//1:Illumina 8 binning
+//2:Binary thresholding
 
 std::string outfile_quality_1;
 std::string outfile_quality_2;
@@ -28,6 +36,8 @@ void generate_order();
 
 void reorder_quality();
 void reorder_id();
+void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t numreads, char *quality_array, std::ifstream *f_order);
+
 
 int main(int argc, char** argv)
 {
@@ -45,6 +55,7 @@ int main(int argc, char** argv)
 	infilenumreads = basedir + "/numreads.bin";
 
 	readlen = atoi(argv[2]);
+//	quantization_level = atoi(argv[3]);
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
@@ -78,22 +89,28 @@ void reorder_quality()
 {
 	char *quality = new char [numreads_by_2*(readlen+1)];
 	std::string infile_quality[2] = {infile_quality_1,infile_quality_2};		
-	std::string outfile_quality[2] = {outfile_quality_1,outfile_quality_2};
+//	std::string outfile_quality[2] = {outfile_quality_1,outfile_quality_2};
 	for(int k = 0; k < 2; k++)
 	{
-		std::ofstream f(outfile_quality[k]);
 		std::ifstream f_in(infile_quality[k]);
 		std::ifstream f_order(outfile_order,std::ios::binary);
 		uint32_t order;
 		for (uint64_t i = 0; i < numreads_by_2; i++)
 			f_in.getline((quality+i*(readlen+1)),readlen+1);
-		for (uint64_t i = 0; i < numreads_by_2; i++)
-		{
-			f_order.read((char*)&order,sizeof(uint32_t));
-			f << (quality+uint64_t(order)*(readlen+1)) << "\n";	
-		}
 		f_in.close();
-		f.close();
+		
+		struct qv_options_t opts;
+		opts.verbose = 1;
+		opts.stats = 0;
+		opts.ratio = 8.0;
+		opts.clusters = 1;
+		opts.uncompressed = 0;
+		opts.distortion = DISTORTION_MSE;
+		opts.cluster_threshold = 4;
+		const char *output_name = (basedir+"/compressed_quality_"+std::to_string(k+1)+".bin.0").c_str();
+		FILE *fout = fopen(output_name, "wb");
+		opts.mode = MODE_FIXED;
+		encode(fout, &opts, readlen, numreads_by_2, quality, &f_order);	
 		f_order.close();
 	}
 	delete[] quality;
@@ -104,7 +121,7 @@ void reorder_id()
 {
 	std::string *id = new std::string [numreads_by_2];
 	std::string infile_id[2] = {infile_id_1,infile_id_2};		
-	std::string outfile_id[2] = {outfile_id_1,outfile_id_2};
+//	std::string outfile_id[2] = {outfile_id_1,outfile_id_2};
 	for(int k = 0; k < 2; k++)
 	{
 		std::ifstream f_in(infile_id[k]);
