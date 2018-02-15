@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <cstring>
+#include <chrono> //for timing
 #include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
@@ -48,8 +49,16 @@ int main(int argc, char** argv)
 	numreads_by_2 = numreads/2;
 	
 	omp_set_num_threads(num_thr);
+	auto start_quality = std::chrono::steady_clock::now();
 	decompress_quality();
+	auto end_quality = std::chrono::steady_clock::now();
+	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
+	std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
+	auto start_id = std::chrono::steady_clock::now();
 	decompress_id();
+	auto end_id = std::chrono::steady_clock::now();
+	auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
+	std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
 }
 
 void decompress_id()
@@ -58,7 +67,7 @@ void decompress_id()
 	{
 		if(paired_id_code != 0 && k==1)
 			break;
-
+/*
 		struct compressor_info_t comp_info;
 		comp_info.numreads = numreads_by_2;
 		comp_info.mode = DECOMPRESSION;
@@ -67,10 +76,10 @@ void decompress_id()
 		decompress((void *)&comp_info);
 		fclose(comp_info.fcomp);
 		fclose(comp_info.f_id);
-
+*/
 
 //facing issues with parallel id
-/*
+
 		#pragma omp parallel
 		{
 		int tid = omp_get_thread_num();
@@ -84,13 +93,12 @@ void decompress_id()
 			comp_info.mode = DECOMPRESSION;
 			comp_info.fcomp = fopen((infile_id[k]+"."+std::to_string(tid_e)).c_str(),"r");
 			comp_info.f_id = fopen((outfile_id[k]+"."+std::to_string(tid_e)).c_str(),"w");
-			if(tid == 0)
 			decompress((void *)&comp_info);
 			fclose(comp_info.fcomp);
 			fclose(comp_info.f_id);
 		}
 		}	
-*/
+
 	}
 	return;
 }

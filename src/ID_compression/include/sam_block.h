@@ -144,9 +144,8 @@ uint32_t load_sam_block(sam_block sb);
 
 id_models alloc_id_models_t();
 
-int compress_id(Arithmetic_stream as, id_models models, char *id);
-int decompress_id(Arithmetic_stream as, id_models model, char *id);
-
+int compress_id(Arithmetic_stream as, id_models models, char *id, char *prev_ID, uint32_t *prev_tokens_ptr);
+int decompress_id(Arithmetic_stream as, id_models model, char *id, char *prev_ID, uint32_t *prev_tokens_ptr, uint32_t *prev_tokens_len);
 
 int compress_line(Arithmetic_stream as, sam_block samBlock);
 int decompress_line(Arithmetic_stream as, sam_block samBlock, FILE *f_id);

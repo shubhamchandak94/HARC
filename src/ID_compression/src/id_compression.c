@@ -62,10 +62,8 @@ int compress_uint8t(Arithmetic_stream as, stream_model model, uint8_t c){
 }
 
 
-int compress_id(Arithmetic_stream as, id_models models, char *id){
+int compress_id(Arithmetic_stream as, id_models models, char *id, char *prev_ID, uint32_t *prev_tokens_ptr){
     
-    static char prev_ID[1024] = {0};
-    static uint32_t prev_tokens_ptr[1024] = {0};
     uint8_t token_len = 0, match_len = 0;
     uint32_t i = 0, k = 0, tmp = 0, token_ctr = 0, digit_value = 0, digit_model = 0, prev_digit = 0;
     int delta = 0;
@@ -204,12 +202,8 @@ int compress_id(Arithmetic_stream as, id_models models, char *id){
 }
 
 
-int decompress_id(Arithmetic_stream as, id_models model, char *id){
+int decompress_id(Arithmetic_stream as, id_models model, char *id, char *prev_ID, uint32_t *prev_tokens_ptr, uint32_t *prev_tokens_len){
     
-    static char prev_ID[1024] = {0};
-    static uint32_t prev_tokens_ptr[1024] = {0};
-    static uint32_t prev_tokens_len[1024] = {0};
-    //char id[1024] = {0};
     uint8_t token_len = 0;
     uint32_t i = 0, k = 0, token_ctr = 0, digit_value = 0;
     uint32_t delta = 0;

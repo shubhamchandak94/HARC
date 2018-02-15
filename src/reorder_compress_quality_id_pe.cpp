@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 #include <cstdio>
+#include <chrono> //for timing	
 #include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
@@ -69,8 +70,16 @@ int main(int argc, char** argv)
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 	generate_order();
+	auto start_quality = std::chrono::steady_clock::now();
 	reorder_quality();
+	auto end_quality = std::chrono::steady_clock::now();
+	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
+	std::cout << "\nQuality compression total time: " << diff_quality.count() << " s\n";
+	auto start_id = std::chrono::steady_clock::now();
 	reorder_id();
+	auto end_id = std::chrono::steady_clock::now();
+	auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
+	std::cout << "\nID compression total time: " << diff_id.count() << " s\n";
 	return 0;
 }
 
@@ -158,7 +167,7 @@ void reorder_id()
 		for (uint64_t i = 0; i < numreads_by_2; i++)
 			std::getline(f_in,id[i]);
 		f_in.close();
-		std::ifstream f_order(outfile_order,std::ios::binary);
+/*		std::ifstream f_order(outfile_order,std::ios::binary);
 		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin.0").c_str();
 		struct compressor_info_t comp_info;
 		comp_info.id_array = id;
@@ -169,20 +178,16 @@ void reorder_id()
 		compress((void *)&comp_info);
 		fclose(comp_info.fcomp);
 		f_order.close();	
-		
+*/		
 //facing issues with parallel id compression/decompression
-/*		
+		
 		#pragma omp parallel
 		{
 		int tid = omp_get_thread_num();
-		uint64_t start = uint64_t(tid)*numreads_by_2/omp_get_num_threads();
+		uint64_t start = uint64_t(tid)*(numreads_by_2/omp_get_num_threads());
 		uint32_t numreads_thr = numreads_by_2/omp_get_num_threads();
 		if(tid == omp_get_num_threads()-1)
 			numreads_thr = numreads_by_2-numreads_thr*(omp_get_num_threads()-1);	
-		uint64_t start = uint64_t(tid)*numreads_by_2/num_thr;
-		uint32_t numreads_thr = numreads_by_2/num_thr;
-		if(tid == num_thr-1)
-			numreads_thr = numreads_by_2-numreads_thr*(num_thr-1);	
 		std::ifstream f_order(outfile_order,std::ios::binary);
 		f_order.seekg(start*sizeof(uint32_t));
 		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin."+std::to_string(tid)).c_str();
@@ -196,7 +201,7 @@ void reorder_id()
 		fclose(comp_info.fcomp);
 		f_order.close();	
 		}	
-*/
+
 	}
 	delete[] id;
 	return;
