@@ -13,7 +13,7 @@
 #include "sam_block.h"
 
 int print_line(struct sam_line_t *sline, FILE *fs){
-    fprintf(fs, "%s", sline->ID);
+    fprintf(fs, "%s\n", sline->ID);
     return 0;
 }
 

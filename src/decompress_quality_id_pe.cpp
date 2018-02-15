@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <cstring>
+#include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
 #include "qv_compressor.h"
@@ -46,6 +47,7 @@ int main(int argc, char** argv)
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 	
+	omp_set_num_threads(num_thr);
 	decompress_quality();
 	decompress_id();
 }
@@ -56,14 +58,39 @@ void decompress_id()
 	{
 		if(paired_id_code != 0 && k==1)
 			break;
+
 		struct compressor_info_t comp_info;
 		comp_info.numreads = numreads_by_2;
 		comp_info.mode = DECOMPRESSION;
-		comp_info.fcomp = fopen((infile_id[k]+".0").c_str(), "r");
+		comp_info.fcomp = fopen((infile_id[k]+".0").c_str(),"r");
 		comp_info.f_id = fopen((outfile_id[k]+".0").c_str(),"w");
 		decompress((void *)&comp_info);
 		fclose(comp_info.fcomp);
 		fclose(comp_info.f_id);
+
+
+//facing issues with parallel id
+/*
+		#pragma omp parallel
+		{
+		int tid = omp_get_thread_num();
+		for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
+		{
+			uint32_t numreads_thr = numreads_by_2/num_thr_e;
+			if(tid_e == num_thr_e - 1)
+				numreads_thr = numreads_by_2-numreads_thr*(num_thr_e-1); 
+			struct compressor_info_t comp_info;
+			comp_info.numreads = numreads_thr;
+			comp_info.mode = DECOMPRESSION;
+			comp_info.fcomp = fopen((infile_id[k]+"."+std::to_string(tid_e)).c_str(),"r");
+			comp_info.f_id = fopen((outfile_id[k]+"."+std::to_string(tid_e)).c_str(),"w");
+			if(tid == 0)
+			decompress((void *)&comp_info);
+			fclose(comp_info.fcomp);
+			fclose(comp_info.f_id);
+		}
+		}	
+*/
 	}
 	return;
 }
@@ -71,16 +98,23 @@ void decompress_id()
 void decompress_quality()
 {
 	for(int k = 0; k < 2; k++)
-	{
-		struct qv_options_t opts;
-		opts.verbose = 1;
-		std::string input_file_string = (infile_quality[k]+".0");
-		char *input_file = new char [input_file_string.length()+1];
-		strcpy(input_file,input_file_string.c_str());
-		std::string output_file_string = (outfile_quality[k]+".0");
-		char *output_file = new char [output_file_string.length()+1];
-		strcpy(output_file,output_file_string.c_str());
-		decode(input_file,output_file,&opts);
+	{	
+		#pragma omp parallel
+		{
+		int tid = omp_get_thread_num();
+		for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
+		{		
+			struct qv_options_t opts;
+			opts.verbose = 1;
+			std::string input_file_string = (infile_quality[k]+"."+std::to_string(tid_e));
+			char *input_file = new char [input_file_string.length()+1];
+			strcpy(input_file,input_file_string.c_str());
+			std::string output_file_string = (outfile_quality[k]+"."+std::to_string(tid_e));
+			char *output_file = new char [output_file_string.length()+1];
+			strcpy(output_file,output_file_string.c_str());
+			decode(input_file,output_file,&opts);
+		}
+		}
 	}
 	return;
 }

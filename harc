@@ -36,7 +36,7 @@ compress()
 	harcdir=$(dirname $BASH_SOURCE)
 	pathname=$(dirname $filename)
 	tempdir=$(mktemp -d -p $pathname)
-	#trap "rm -rf $tempdir" EXIT
+	trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
 	echo $filename
 	readlen="$(head -2 $filename | tail -1 | wc -L)"
@@ -101,7 +101,7 @@ compress()
 		./$harcdir/bin/pe_encode.out $tempdir $preserve_order	
 		if [[ $preserve_quality == "True" ]];then
 			echo "Compressing ids and quality"
-			./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $readlen $preserve_order
+			./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $readlen $num_thr $preserve_order
 			rm $tempdir/*.tmp $tempdir/*.quality $tempdir/*.id
 			echo "Done!"
 		fi
@@ -162,7 +162,7 @@ decompress()
 			exit 1
 		fi
 	fi
-	if [[$preserve_quality == "True"]];then
+	if [[ $preserve_quality == "True" ]];then
 		if [ ! -f $tempdir/compressed_quality_1.bin.0 ];then
 			echo "Not compressed using -q flag."
 			usage
@@ -191,7 +191,7 @@ decompress()
 	#calculate bitset size for decoder
 	bitset_size_decoder=$(((3*$readlen-1)/64*64+64))	
 	if [[ $paired_end == "True" ]];then
-		if [[$preserve_quality == "True"]];then
+		if [[ $preserve_quality == "True" ]];then
 			./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $readlen $num_thr $num_thr_e
 		fi	
 		if [[ $preserve_order == "True" ]];then
@@ -201,9 +201,9 @@ decompress()
 		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
 		./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $readlen $num_thr $num_thr_e $preserve_order $preserve_quality
-		if [[$preserve_quality == "True"]];then
-			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.fastq
-			mv $tempdir/output_2.txt $pathname/$(basename "$filename" .harc)_2.fastq
+		if [[ $preserve_quality == "True" ]];then
+			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.fastq.d
+			mv $tempdir/output_2.txt $pathname/$(basename "$filename" .harc)_2.fastq.d
 		else
 			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.dna.d
 			mv $tempdir/output_2.txt $pathname/$(basename "$filename" .harc)_2.dna.d

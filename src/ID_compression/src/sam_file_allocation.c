@@ -64,6 +64,7 @@ uint32_t load_sam_line(sam_block sb){
     uint32_t order;
     
     char *ID_line = *sb->IDs->IDs;
+
     // Read compulsory fields
     if(sb->current_read_number != sb->numreads) {
 	sb->f_order->read((char*)&order,sizeof(uint32_t));

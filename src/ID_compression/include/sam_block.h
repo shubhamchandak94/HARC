@@ -40,7 +40,7 @@
 #define MAX_NUMBER_TOKENS_ID 128
 
 // This limits us to chunks that aren't too big to fit into a modest amount of memory at a time
-#define MAX_LINES_PER_BLOCK			1
+//#define MAX_LINES_PER_BLOCK			1
 #define MAX_READS_PER_LINE			1022
 #define READ_LINEBUF_LENGTH			(MAX_READS_PER_LINE+2)
 

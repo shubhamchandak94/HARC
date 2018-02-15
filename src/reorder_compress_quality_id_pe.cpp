@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 #include <cstdio>
+#include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
 #include "qv_compressor.h"
@@ -14,7 +15,7 @@
 uint8_t paired_id_code;
 std::string preserve_order;
 uint32_t numreads, numreads_by_2;
-int readlen, quantization_level;
+int readlen, num_thr, quantization_level;
 //quantization level:
 //0:lossless
 //1:Illumina 8 binning
@@ -56,8 +57,11 @@ int main(int argc, char** argv)
 	infilenumreads = basedir + "/numreads.bin";
 
 	readlen = atoi(argv[2]);
-	preserve_order = std::string(argv[3]);	
+	num_thr = atoi(argv[3]);
+	preserve_order = std::string(argv[4]);	
 //	quantization_level = atoi(argv[3]);
+
+	omp_set_num_threads(num_thr);
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
@@ -104,16 +108,24 @@ void reorder_quality()
 {
 	char *quality = new char [numreads_by_2*(readlen+1)];
 	std::string infile_quality[2] = {infile_quality_1,infile_quality_2};		
-//	std::string outfile_quality[2] = {outfile_quality_1,outfile_quality_2};
 	for(int k = 0; k < 2; k++)
 	{
 		std::ifstream f_in(infile_quality[k]);
-		std::ifstream f_order(outfile_order,std::ios::binary);
+
 		uint32_t order;
 		for (uint64_t i = 0; i < numreads_by_2; i++)
 			f_in.getline((quality+i*(readlen+1)),readlen+1);
 		f_in.close();
-		
+	
+		#pragma omp parallel	
+		{
+		int tid = omp_get_thread_num();
+		uint64_t start = uint64_t(tid)*(numreads_by_2/omp_get_num_threads());
+		uint32_t numreads_thr = numreads_by_2/omp_get_num_threads();
+		if(tid == omp_get_num_threads()-1)
+			numreads_thr = numreads_by_2-numreads_thr*(omp_get_num_threads()-1);
+		std::ifstream f_order(outfile_order,std::ios::binary);
+		f_order.seekg(start*sizeof(uint32_t));
 		struct qv_options_t opts;
 		opts.verbose = 1;
 		opts.stats = 0;
@@ -122,11 +134,12 @@ void reorder_quality()
 		opts.uncompressed = 0;
 		opts.distortion = DISTORTION_MSE;
 		opts.cluster_threshold = 4;
-		const char *output_name = (basedir+"/compressed_quality_"+std::to_string(k+1)+".bin.0").c_str();
+		const char *output_name = (basedir+"/compressed_quality_"+std::to_string(k+1)+".bin."+std::to_string(tid)).c_str();
 		FILE *fout = fopen(output_name, "wb");
 		opts.mode = MODE_FIXED;
-		encode(fout, &opts, readlen, numreads_by_2, quality, &f_order);	
+		encode(fout, &opts, readlen, numreads_thr, quality, &f_order);	
 		f_order.close();
+		}
 	}
 	delete[] quality;
 	return;
@@ -136,18 +149,16 @@ void reorder_id()
 {
 	std::string *id = new std::string [numreads_by_2];
 	std::string infile_id[2] = {infile_id_1,infile_id_2};		
-//	std::string outfile_id[2] = {outfile_id_1,outfile_id_2};
 	for(int k = 0; k < 2; k++)
 	{
 		if(paired_id_code !=0 && k == 1)
 			break;	
 		std::ifstream f_in(infile_id[k]);
-		std::ifstream f_order(outfile_order,std::ios::binary);
-		uint32_t order;
+
 		for (uint64_t i = 0; i < numreads_by_2; i++)
 			std::getline(f_in,id[i]);
 		f_in.close();
-	
+		std::ifstream f_order(outfile_order,std::ios::binary);
 		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin.0").c_str();
 		struct compressor_info_t comp_info;
 		comp_info.id_array = id;
@@ -157,7 +168,35 @@ void reorder_id()
 		comp_info.fcomp = fopen(outfile_compressed_id, "w");
 		compress((void *)&comp_info);
 		fclose(comp_info.fcomp);
-		f_order.close();		
+		f_order.close();	
+		
+//facing issues with parallel id compression/decompression
+/*		
+		#pragma omp parallel
+		{
+		int tid = omp_get_thread_num();
+		uint64_t start = uint64_t(tid)*numreads_by_2/omp_get_num_threads();
+		uint32_t numreads_thr = numreads_by_2/omp_get_num_threads();
+		if(tid == omp_get_num_threads()-1)
+			numreads_thr = numreads_by_2-numreads_thr*(omp_get_num_threads()-1);	
+		uint64_t start = uint64_t(tid)*numreads_by_2/num_thr;
+		uint32_t numreads_thr = numreads_by_2/num_thr;
+		if(tid == num_thr-1)
+			numreads_thr = numreads_by_2-numreads_thr*(num_thr-1);	
+		std::ifstream f_order(outfile_order,std::ios::binary);
+		f_order.seekg(start*sizeof(uint32_t));
+		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin."+std::to_string(tid)).c_str();
+		struct compressor_info_t comp_info;
+		comp_info.id_array = id;
+		comp_info.f_order = &f_order;
+		comp_info.numreads = numreads_thr;
+		comp_info.mode = COMPRESSION;
+		comp_info.fcomp = fopen(outfile_compressed_id, "w");
+		compress((void *)&comp_info);
+		fclose(comp_info.fcomp);
+		f_order.close();	
+		}	
+*/
 	}
 	delete[] id;
 	return;
