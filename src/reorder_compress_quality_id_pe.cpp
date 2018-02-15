@@ -115,7 +115,7 @@ void generate_order()
 
 void reorder_quality()
 {
-	char *quality = new char [numreads_by_2*(readlen+1)];
+	char *quality = new char [(uint64_t)numreads_by_2*(readlen+1)];
 	std::string infile_quality[2] = {infile_quality_1,infile_quality_2};		
 	for(int k = 0; k < 2; k++)
 	{
