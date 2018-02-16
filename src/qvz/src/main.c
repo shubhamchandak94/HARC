@@ -103,7 +103,8 @@ void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t nu
 	stop_timer(&total);
 
 	fclose(fout);
-    
+   	free_blocks(&qv_info); 
+	free_cluster_list(qv_info.clusters);
 	// Verbose stats
 	if (opts->verbose) {
 		// @todo add cluster info here

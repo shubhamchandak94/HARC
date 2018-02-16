@@ -52,6 +52,7 @@ void free_cluster_list(struct cluster_list_t *clusters) {
 		free(clusters->clusters[j].mean);
 		free(clusters->clusters[j].accumulator);
 		free_conditional_pmf_list(clusters->clusters[j].training_stats);
+		free_cond_quantizer_list(clusters->clusters[j].qlist);
 	}
 	free(clusters->distances);
 	free(clusters->clusters);
