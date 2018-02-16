@@ -67,17 +67,6 @@ void decompress_id()
 	{
 		if(paired_id_code != 0 && k==1)
 			break;
-/*
-		struct compressor_info_t comp_info;
-		comp_info.numreads = numreads_by_2;
-		comp_info.mode = DECOMPRESSION;
-		comp_info.fcomp = fopen((infile_id[k]+".0").c_str(),"r");
-		comp_info.f_id = fopen((outfile_id[k]+".0").c_str(),"w");
-		decompress((void *)&comp_info);
-		fclose(comp_info.fcomp);
-		fclose(comp_info.f_id);
-*/
-
 //facing issues with parallel id
 
 		#pragma omp parallel

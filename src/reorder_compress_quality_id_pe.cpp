@@ -121,11 +121,9 @@ void reorder_quality()
 	{
 		std::ifstream f_in(infile_quality[k]);
 
-		uint32_t order;
 		for (uint64_t i = 0; i < numreads_by_2; i++)
 			f_in.getline((quality+i*(readlen+1)),readlen+1);
 		f_in.close();
-	
 		#pragma omp parallel	
 		{
 		int tid = omp_get_thread_num();
@@ -143,8 +141,10 @@ void reorder_quality()
 		opts.uncompressed = 0;
 		opts.distortion = DISTORTION_MSE;
 		opts.cluster_threshold = 4;
-		const char *output_name = (basedir+"/compressed_quality_"+std::to_string(k+1)+".bin."+std::to_string(tid)).c_str();
-		FILE *fout = fopen(output_name, "wb");
+		std::string output_name_str = (basedir+"/compressed_quality_"+std::to_string(k+1)+".bin."+std::to_string(tid));
+		const char *output_name = output_name_str.c_str();
+		FILE *fout;
+		fout = fopen(output_name, "wb");
 		opts.mode = MODE_FIXED;
 		encode(fout, &opts, readlen, numreads_thr, quality, &f_order);	
 		f_order.close();
@@ -167,20 +167,7 @@ void reorder_id()
 		for (uint64_t i = 0; i < numreads_by_2; i++)
 			std::getline(f_in,id[i]);
 		f_in.close();
-/*		std::ifstream f_order(outfile_order,std::ios::binary);
-		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin.0").c_str();
-		struct compressor_info_t comp_info;
-		comp_info.id_array = id;
-		comp_info.f_order = &f_order;
-		comp_info.numreads = numreads_by_2;
-		comp_info.mode = COMPRESSION;
-		comp_info.fcomp = fopen(outfile_compressed_id, "w");
-		compress((void *)&comp_info);
-		fclose(comp_info.fcomp);
-		f_order.close();	
-*/		
-//facing issues with parallel id compression/decompression
-		
+		//facing issues with parallel id compression/decompression
 		#pragma omp parallel
 		{
 		int tid = omp_get_thread_num();
@@ -190,7 +177,8 @@ void reorder_id()
 			numreads_thr = numreads_by_2-numreads_thr*(omp_get_num_threads()-1);	
 		std::ifstream f_order(outfile_order,std::ios::binary);
 		f_order.seekg(start*sizeof(uint32_t));
-		const char *outfile_compressed_id = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin."+std::to_string(tid)).c_str();
+		std::string outfile_compressed_id_str = (basedir+"/compressed_id_"+std::to_string(k+1)+".bin."+std::to_string(tid));
+		const char *outfile_compressed_id = outfile_compressed_id_str.c_str();
 		struct compressor_info_t comp_info;
 		comp_info.id_array = id;
 		comp_info.f_order = &f_order;
