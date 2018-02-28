@@ -210,13 +210,13 @@ uint8_t find_id_pattern(std::string &id_1,std::string &id_2)
 			return 1;
 	}
 	int i = 0;
-	for(int i = 0; i < len; i++)
+	for(i = 0; i < len; i++)
 	{
 		if(id_1[i] != id_2[i])
 			break;
 		if(id_1[i] == ' ')
 		{
-			if(i < len-1 && id_1[i] == '1' && id_2[i] == '2')
+			if(i < len-1 && id_1[i+1] == '1' && id_2[i+1] == '2')
 				i++;
 			else
 				break;
@@ -249,13 +249,13 @@ bool check_id_pattern(std::string &id_1,std::string &id_2, uint8_t paired_id_cod
 				return true;
 			break;
 		case 3:	int i = 0;
-			for(int i = 0; i < len; i++)
+			for(i = 0; i < len; i++)
 			{
 				if(id_1[i] != id_2[i])
 					break;
 				if(id_1[i] == ' ')
 				{
-					if(i < len-1 && id_1[i] == '1' && id_2[i] == '2')
+					if(i < len-1 && id_1[i+1] == '1' && id_2[i+1] == '2')
 						i++;
 					else
 						break;
