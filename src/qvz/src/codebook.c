@@ -193,7 +193,8 @@ void calculate_statistics(struct quality_file_t *info) {
 	for (block = 0; block < info->block_count; ++block) {
 		for (line_idx = 0; line_idx < info->blocks[block].count; ++line_idx) {
 			line = &info->blocks[block].lines[line_idx];
-			cluster = &info->clusters->clusters[line->cluster];
+			cluster = &info->clusters->clusters[0];
+		//	cluster = &info->clusters->clusters[line->cluster];
 			pmf_list = cluster->training_stats;
 
 			// First, find conditional PMFs

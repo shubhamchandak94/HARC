@@ -22,7 +22,7 @@ void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t nu
 	struct distortion_t *dist;
 	struct alphabet_t *alphabet = alloc_alphabet(ALPHABET_SIZE);
 	uint32_t status;
-	struct hrtimer_t cluster_time, stats, encoding, total;
+	struct hrtimer_t stats, encoding, total;
 //	FILE *fout, *funcompressed = NULL;
 	FILE *funcompressed = NULL;
 	uint64_t bytes_used;
@@ -58,13 +58,6 @@ void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t nu
 	qv_info.clusters = alloc_cluster_list(&qv_info);
 	qv_info.opts = opts;
 
-	// Do k-means clustering
-	start_timer(&cluster_time);
-	do_kmeans_clustering(&qv_info);
-	stop_timer(&cluster_time);
-	if (opts->verbose) {
-		printf("Clustering took %.4f seconds\n", get_timer_interval(&cluster_time));
-	}
     
 	// Then find stats and generate codebooks for each cluster
 	start_timer(&stats);

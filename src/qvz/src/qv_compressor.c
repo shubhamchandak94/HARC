@@ -81,7 +81,8 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
         }
 
 		// Write clustering information and pull the correct codebook
-		cluster_id = line->cluster;
+//		cluster_id = line->cluster;
+		cluster_id = 0;
 		qlist = info->clusters->clusters[cluster_id].qlist;
 		qv_write_cluster(qvc->Quals, cluster_id);
         

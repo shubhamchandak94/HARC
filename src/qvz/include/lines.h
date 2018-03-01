@@ -23,7 +23,7 @@
  * Points to a single line, which may be a pointer to a file in memory
  */
 struct line_t {
-	uint8_t cluster;		// Assigned cluster ID
+//	uint8_t cluster;		// Assigned cluster ID
 	const symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
 //	symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
 };
