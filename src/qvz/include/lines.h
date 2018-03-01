@@ -3,7 +3,7 @@
 
 
 #include <stdint.h>
-
+#include <string>
 #include "pmf.h"
 #include "distortion.h"
 #include "well.h"
@@ -22,18 +22,21 @@
 /**
  * Points to a single line, which may be a pointer to a file in memory
  */
-struct line_t {
+//struct line_t {
 //	uint8_t cluster;		// Assigned cluster ID
-	const symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
+//	const symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
 //	symbol_t *m_data;	// Pointer to part of mmap'd region, has no offsets applied, do not modify!
-};
+//};
 
 /**
  * Points to a block of lines for incremental processing
  */
 struct line_block_t {
 	uint32_t count;
-	struct line_t *lines;
+//	struct line_t *lines;
+	char *quality_array;
+	std::string *infile_order;
+	uint64_t startpos;
 };
 
 /**

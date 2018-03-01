@@ -39,7 +39,7 @@ void generate_order();
 
 void reorder_quality();
 void reorder_id();
-void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t numreads, char *quality_array, std::ifstream *f_order);
+void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t numreads, char *quality_array, std::string &infile_order, uint64_t startpos);
 
 
 int main(int argc, char** argv)
@@ -131,8 +131,8 @@ void reorder_quality()
 		uint32_t numreads_thr = numreads_by_2/omp_get_num_threads();
 		if(tid == omp_get_num_threads()-1)
 			numreads_thr = numreads_by_2-numreads_thr*(omp_get_num_threads()-1);
-		std::ifstream f_order(outfile_order,std::ios::binary);
-		f_order.seekg(start*sizeof(uint32_t));
+//		std::ifstream f_order(outfile_order,std::ios::binary);
+//		f_order.seekg(start*sizeof(uint32_t));
 		struct qv_options_t opts;
 		opts.verbose = 1;
 		opts.stats = 0;
@@ -146,8 +146,8 @@ void reorder_quality()
 		FILE *fout;
 		fout = fopen(output_name, "wb");
 		opts.mode = MODE_FIXED;
-		encode(fout, &opts, readlen, numreads_thr, quality, &f_order);	
-		f_order.close();
+		encode(fout, &opts, readlen, numreads_thr, quality, outfile_order,start*sizeof(uint32_t));	
+//		f_order.close();
 		}
 	}
 	delete[] quality;

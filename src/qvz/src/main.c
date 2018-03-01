@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <fstream>
 #include <iostream>
+#include <string>
 
 #include "codebook.h"
 #include "qv_compressor.h"
@@ -17,7 +18,7 @@
 /**
  *
  */
-void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t numreads, char *quality_array, std::ifstream *f_order) {
+void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t numreads, char *quality_array, std::string &infile_order ,uint64_t startpos) {
 	struct quality_file_t qv_info;
 	struct distortion_t *dist;
 	struct alphabet_t *alphabet = alloc_alphabet(ALPHABET_SIZE);
@@ -46,13 +47,17 @@ void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t nu
 	qv_info.block_count = 1;
 	qv_info.blocks = (struct line_block_t *) calloc(qv_info.block_count, sizeof(struct line_block_t));
 	qv_info.blocks[0].count = qv_info.lines;
-	qv_info.blocks[0].lines = (struct line_t *) calloc(qv_info.blocks[0].count, sizeof(struct line_t));
-	uint32_t order;
-	for(uint32_t i = 0; i < qv_info.lines; i++)
-	{
-		f_order->read((char*)&order, sizeof(uint32_t));
-		qv_info.blocks[0].lines[i].m_data = quality_array + (uint64_t)(order)*(readlen+1);
-	}
+	qv_info.blocks[0].quality_array = quality_array;
+	qv_info.blocks[0].infile_order = new std::string;
+	*(qv_info.blocks[0].infile_order) = infile_order;
+	qv_info.blocks[0].startpos = startpos;
+//	qv_info.blocks[0].lines = (struct line_t *) calloc(qv_info.blocks[0].count, sizeof(struct line_t));
+//	uint32_t order;
+//	for(uint32_t i = 0; i < qv_info.lines; i++)
+//	{
+//		f_order->read((char*)&order, sizeof(uint32_t));
+//		qv_info.blocks[0].lines[i].m_data = quality_array + (uint64_t)(order)*(readlen+1);
+//	}
 		
 	// Set up clustering data structures
 	qv_info.clusters = alloc_cluster_list(&qv_info);
@@ -96,6 +101,7 @@ void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t nu
 	stop_timer(&total);
 
 	fclose(fout);
+	delete qv_info.blocks[0].infile_order;
    	free_blocks(&qv_info); 
 	free_cluster_list(qv_info.clusters);
 	// Verbose stats

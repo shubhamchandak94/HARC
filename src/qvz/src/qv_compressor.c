@@ -1,6 +1,6 @@
 #include <assert.h>
 #include "qv_compressor.h"
-
+#include <fstream>
 /**
  * Compress a quality value and send it into the arithmetic encoder output stream,
  * with appropriate context information
@@ -61,7 +61,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 	uint32_t block_idx, line_idx;
 	uint8_t cluster_id;
 
-	struct line_t *line;
+	char *line;
 	symbol_t data;
         
     
@@ -72,9 +72,13 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 	distortion = 0.0;
 	block_idx = 0;
 	line_idx = 0;
-
+	std::ifstream f_order(*(info->blocks[block_idx].infile_order),std::ios::binary);
+	f_order.seekg(info->blocks[block_idx].startpos);
+	uint32_t order;
 	do {
-		line = &info->blocks[block_idx].lines[line_idx];
+		f_order.read((char*)&order,sizeof(uint32_t));
+		line = info->blocks[block_idx].quality_array+(uint64_t)(order)*(info->columns+1);
+//		line = &info->blocks[block_idx].lines[line_idx];
 		
         if (info->opts->verbose && line_idx == 0) {
             printf("Line: %dM\n", block_idx);
@@ -90,7 +94,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 		q = choose_quantizer(qlist, &info->well, 0, 0, &idx);
         
 		// Quantize, compress and calculate error simultaneously
-		data = line->m_data[0] - 33;
+		data = line[0] - 33;
 		qv = q->q[data];
         
         q_state = get_symbol_index(q->output_alphabet, qv);
@@ -106,7 +110,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
         
 		for (s = 1; s < columns; ++s) {
 			q = choose_quantizer(qlist, &info->well, s, prev_qv, &idx);
-			data = line->m_data[s] - 33;
+			data = line[s] - 33;
 			qv = q->q[data];
             q_state = get_symbol_index(q->output_alphabet, qv);
             
@@ -132,6 +136,12 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 		if (line_idx == info->blocks[block_idx].count) {
 			line_idx = 0;
 			block_idx += 1;
+			f_order.close();
+			if(block_idx < info->block_count)
+			{
+				f_order.open(*(info->blocks[block_idx].infile_order),std::ios::binary);
+				f_order.seekg(info->blocks[block_idx].startpos);
+			}
 		}
 	} while (block_idx < info->block_count);
     

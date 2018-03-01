@@ -86,45 +86,45 @@ uint32_t load_file(const char *path, struct quality_file_t *info, uint64_t max_l
  * Allocate an array of line block pointers and the memory within each block, so that we can
  * use it to store the results of reading the file
  */
-uint32_t alloc_blocks(struct quality_file_t *info) {
-	uint64_t lines_left = info->lines;
-	struct line_block_t *cblock;
-
-	// Figure out how many blocks we'll need to store this file
-	info->block_count = (uint32_t) (info->lines / (uint64_t)MAX_LINES_PER_BLOCK);
-	if (info->block_count * MAX_LINES_PER_BLOCK != info->lines) {
-		info->block_count += 1;
-	}
-
-	info->blocks = (struct line_block_t *) calloc(info->block_count, sizeof(struct line_block_t));
-	if (!info->blocks) {
-		return LF_ERROR_NO_MEMORY;
-	}
-	cblock = info->blocks;
-
-	while (lines_left > 0) {
-		// Figure out how many lines we'll have in this block
-		if (lines_left > MAX_LINES_PER_BLOCK) {
-			lines_left -= MAX_LINES_PER_BLOCK;
-			cblock->count = MAX_LINES_PER_BLOCK;
-		}
-		else {
-			cblock->count = (uint32_t) lines_left;
-			lines_left = 0;
-		}
-
-		// Allocate array of line info structs for the block
-		cblock->lines = (struct line_t *) calloc(cblock->count, sizeof(struct line_t));
-		if (!cblock->lines) {
-			return LF_ERROR_NO_MEMORY;
-		}
-
-		// Advance to the next line block
-		cblock += 1;
-	}
-
-	return LF_ERROR_NONE;
-}
+//uint32_t alloc_blocks(struct quality_file_t *info) {
+//	uint64_t lines_left = info->lines;
+//	struct line_block_t *cblock;
+//
+//	// Figure out how many blocks we'll need to store this file
+//	info->block_count = (uint32_t) (info->lines / (uint64_t)MAX_LINES_PER_BLOCK);
+//	if (info->block_count * MAX_LINES_PER_BLOCK != info->lines) {
+//		info->block_count += 1;
+//	}
+//
+//	info->blocks = (struct line_block_t *) calloc(info->block_count, sizeof(struct line_block_t));
+//	if (!info->blocks) {
+//		return LF_ERROR_NO_MEMORY;
+//	}
+//	cblock = info->blocks;
+//
+//	while (lines_left > 0) {
+//		// Figure out how many lines we'll have in this block
+//		if (lines_left > MAX_LINES_PER_BLOCK) {
+//			lines_left -= MAX_LINES_PER_BLOCK;
+//			cblock->count = MAX_LINES_PER_BLOCK;
+//		}
+//		else {
+//			cblock->count = (uint32_t) lines_left;
+//			lines_left = 0;
+//		}
+//
+//		// Allocate array of line info structs for the block
+//		cblock->lines = (struct line_t *) calloc(cblock->count, sizeof(struct line_t));
+//		if (!cblock->lines) {
+//			return LF_ERROR_NO_MEMORY;
+//		}
+//
+//		// Advance to the next line block
+//		cblock += 1;
+//	}
+//
+//	return LF_ERROR_NONE;
+//}
 
 /**
  * Deallocates the memory used to store file information in blocks
@@ -132,10 +132,10 @@ uint32_t alloc_blocks(struct quality_file_t *info) {
 void free_blocks(struct quality_file_t *info) {
 	// Array of block pointers is a single allocation
 	// For each block, array of lines is a single allocations
-	uint32_t i;
+//	uint32_t i;
 
-	for (i = 0; i < info->block_count; ++i) {
-		free(info->blocks[i].lines);
-	}
+//	for (i = 0; i < info->block_count; ++i) {
+//		free(info->blocks[i].lines);
+//	}
 	free(info->blocks);
 }

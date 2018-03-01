@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <fstream>
+#include <string>
 
 #if defined(LINUX) || defined(__APPLE__)
 	#include <arpa/inet.h>
@@ -186,23 +188,29 @@ void calculate_statistics(struct quality_file_t *info) {
 	uint32_t block, line_idx, column;
 	uint32_t j;
 	uint8_t c;
-	struct line_t *line;
+	char *line;
 	struct cluster_t *cluster;
 	struct cond_pmf_list_t *pmf_list;
 
 	for (block = 0; block < info->block_count; ++block) {
+		std::ifstream f_order(*(info->blocks[block].infile_order),std::ios::binary);
+		f_order.seekg(info->blocks[block].startpos);
+		uint32_t order;
 		for (line_idx = 0; line_idx < info->blocks[block].count; ++line_idx) {
-			line = &info->blocks[block].lines[line_idx];
+			f_order.read((char*)&order,sizeof(uint32_t));
+			line = info->blocks[block].quality_array+(uint64_t)(order)*(info->columns+1);
+//			line = &info->blocks[block].lines[line_idx];
 			cluster = &info->clusters->clusters[0];
 		//	cluster = &info->clusters->clusters[line->cluster];
 			pmf_list = cluster->training_stats;
 
 			// First, find conditional PMFs
-			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line->m_data[0] - 33);
+			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line[0] - 33);
 			for (column = 1; column < info->columns; ++column) {
-				pmf_increment(get_cond_pmf(pmf_list, column, line->m_data[column-1] - 33), line->m_data[column] - 33);
+				pmf_increment(get_cond_pmf(pmf_list, column, line[column-1] - 33), line[column] - 33);
 			}
 		}
+		f_order.close();
 	}
 
 	// Then find unconditional PMFs for each cluster once the full conditional ones are ready
