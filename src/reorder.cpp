@@ -13,7 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-uint32_t num_locks = 0x1000000; //limits on number of locks (power of 2  for fast mod)
+uint32_t num_locks = 0x1000000; //limits on number of locks (power of 2 for fast mod)
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
@@ -24,7 +24,7 @@ class bbhashdict
 	public:
 	boophf_t * bphf;
 	uint32_t numkeys;
-	uint32_t dict_numreads;//number of reads in this dict 
+	uint32_t dict_numreads;//number of reads in this dict (for variable length) 
 	uint32_t *startpos;
 	uint32_t *read_id;
 	bool *empty_bin;
@@ -74,7 +74,7 @@ bitset mask64;//bitset with 64 bits set to 1 (used in bitsettostring for convers
 
 void stringtobitset(std::string &s, uint8_t readlen, bitset &b);
 
-void bitsettostring(bitset &b,char *s, uint8_t readlen);
+void bitsettostring(bitset b,char *s, uint8_t readlen);
 
 void readDnaFile(bitset *read, uint8_t *read_lengths);
 
@@ -276,7 +276,7 @@ void constructdictionary(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 		dict[j].dict_numreads = 0;
 		for(uint32_t i = 0; i < numreads; i++)
 		{
-			if(read_lengths[i] >= dict_end[j])
+			if(read_lengths[i] > dict_end[j])
 			{
 				ull[dict[j].dict_numreads] = ull[i];
 				dict[j].dict_numreads++;
@@ -372,7 +372,7 @@ void constructdictionary(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 			finhash.read((char*)&currenthash,sizeof(uint64_t));
 			while(!finhash.eof())
 			{
-				while(read_lengths[i] < dict_end[j])
+				while(read_lengths[i] <= dict_end[j])
 					i++;
 				dict[j].read_id[dict[j].startpos[currenthash]++] = i;
 				i++;
@@ -414,8 +414,10 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 		return; //need to keep one read to check during matching
 	}
 	uint32_t pos = std::lower_bound(read_id+dictidx[0],read_id+dictidx[1],current)-(read_id+dictidx[0]);
-	
-	std::move(read_id+dictidx[0]+pos+1,read_id+dictidx[1],read_id+dictidx[0]+pos);
+
+	for(uint32_t i = dictidx[0]+pos; i < dictidx[1]-1; i++)
+		read_id[i] = read_id[i+1];	
+//	std::move(read_id+dictidx[0]+pos+1,read_id+dictidx[1],read_id+dictidx[0]+pos);
 	auto endidx = startpos[startposidx+1];
 	if(dictidx[1] == endidx)//this is first read to be deleted
 		read_id[endidx-1] = dict_numreads;
@@ -497,7 +499,7 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 		{
 			for(int l = 0; l < numdict; l++)
 			{
-				if(read_lengths[current] < dict_end[l])
+				if(read_lengths[current] <= dict_end[l])
 					continue;
 				b = read[current]&mask1[l];
 				ull = (b>>2*dict_start[l]).to_ullong();
@@ -828,7 +830,7 @@ void writetofile(bitset *read, uint8_t *read_lengths)
 	return;
 }
 
-void bitsettostring(bitset &b, char *s, uint8_t readlen)
+void bitsettostring(bitset b, char *s, uint8_t readlen)
 {
 	unsigned long long ull;
 	for(int i = 0; i < 2*readlen/64+1; i++)
@@ -962,9 +964,10 @@ void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_RE
 			}
 		}	
 		//find max of each position to get ref
-		int max = 0,indmax = 0;
+
 		for(int i = 0; i < ref_len; i++)
 		{
+			int max = 0,indmax = 0;
 			for(int j = 0; j < 4; j++)
 				if(count[j][i]>max)
 				{
