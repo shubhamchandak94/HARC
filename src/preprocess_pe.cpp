@@ -189,7 +189,8 @@ int preprocess()
 		std::cout << "Max Read length: " << max_readlen << "\n";
 		std::cout << "Total number of reads: " << readnum <<"\n";
 		std::cout << "Total number of reads without N: " << num_clean <<"\n";
-		std::cout << "Paired id match code: " << (int)paired_id_code << "\n";
+		if(preserve_quality == "True")
+			std::cout << "Paired id match code: " << (int)paired_id_code << "\n";
 		f_numreads.close();
 		std::ofstream f_meta(outfile_meta);
 		f_meta << max_readlen << "\n";
