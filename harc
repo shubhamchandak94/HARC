@@ -39,28 +39,23 @@ compress()
 	trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
 	echo $filename
-	readlen="$(head -2 $filename | tail -1 | wc -L)"
-	if (($readlen > 256));then
-		echo "Maximum read length exceeded" 
-		exit 1
-	fi
-	#calculate bitset sizes for reorder and encoder
-	bitset_size_reorder=$(((2*$readlen-1)/64*64+64))	
-	bitset_size_encoder=$(((3*$readlen-1)/64*64+64))	
-	
 	if [[ $paired_end == "True" ]];then
 		if [[ $filename_2 == '' ]];then
 			echo "Second file needed in PE mode"
 			exit 1
 		fi
 		echo $filename_2
-		/usr/bin/time -v ./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality $readlen
+		/usr/bin/time -v ./$harcdir/bin/preprocess_pe.out $filename $filename_2 $tempdir $preserve_quality
 	else
 		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
 	fi
-	/usr/bin/time -v ./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $readlen $num_thr
+	max_readlen=$( cat $tempdir/read_meta.txt )
+	#calculate bitset sizes for reorder and encoder
+	bitset_size_reorder=$(((2*$max_readlen-1)/64*64+64))	
+	bitset_size_encoder=$(((3*$max_readlen-1)/64*64+64))	
+	/usr/bin/time -v ./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $max_readlen $num_thr
 	rm $tempdir/input_clean.dna
-	/usr/bin/time -v ./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $readlen $num_thr
+	/usr/bin/time -v ./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $max_readlen $num_thr
 	rm $tempdir/input_N.dna
 	
 	#tar files produced by the threads
@@ -101,7 +96,7 @@ compress()
 		/usr/bin/time -v ./$harcdir/bin/pe_encode.out $tempdir $preserve_order	
 		if [[ $preserve_quality == "True" ]];then
 			echo "Compressing ids and quality"
-			/usr/bin/time -v ./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $readlen $num_thr $preserve_order
+			/usr/bin/time -v ./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $max_readlen $num_thr $preserve_order
 			rm $tempdir/*.tmp $tempdir/*.quality $tempdir/*.id
 			echo "Done!"
 		fi

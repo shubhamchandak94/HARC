@@ -3,7 +3,7 @@
 # Create dirs
 mkdir -p data
 
-#libbsc for read_seq compression
+libbsc for read_seq compression
 rm -rf src/libbsc
 git clone https://github.com/shubhamchandak94/libbsc.git src/libbsc
 (cd src/libbsc && make)

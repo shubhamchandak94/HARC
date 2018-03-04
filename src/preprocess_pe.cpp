@@ -10,10 +10,10 @@ std::string outfileorderN;
 std::string outfilequality[2];
 std::string outfileid[2];
 std::string outfilenumreads;
-
+std::string outfile_meta;
 std::string preserve_quality;
 
-int readlen, quantization_level;
+int max_readlen=-1, quantization_level;
 //quantization level:
 //0:lossless
 //1:Illumina 8 binning
@@ -25,7 +25,7 @@ void generate_quantization_table();
 
 int preprocess();
 
-int quantize(std::string &line);
+int quantize(std::string &line, int &readlen);
 
 uint8_t find_id_pattern(std::string &id_1,std::string &id_2);
 
@@ -37,7 +37,6 @@ int main(int argc, char** argv)
 	infile[0] = std::string(argv[1]);
 	infile[1] = std::string(argv[2]);
 	preserve_quality = std::string(argv[4]);
-	readlen = atoi(argv[5]);
 //	quantization_level = atoi(argv[6]);
 	outfileclean = basedir + "/input_clean.dna";
 	outfileN = basedir + "/input_N.dna";
@@ -47,6 +46,7 @@ int main(int argc, char** argv)
 	outfileid[0] = basedir + "/input_1.id";
 	outfileid[1] = basedir + "/input_2.id";
 	outfilenumreads = basedir + "/numreads.bin";
+	outfile_meta = basedir + "/read_meta.txt";
 	generate_quantization_table();
 	int status = preprocess();
 	if(status != 0)
@@ -66,6 +66,7 @@ int preprocess()
 	uint64_t readnum = 0, num_clean = 0;
 	uint8_t paired_id_code = 0;		
 	bool paired_id_match = false;
+	int current_readlen;
 	//code 0: no pattern found
 	//code 1: */1 and */2 where * are same in both
 	//code 2: * and * where * are same in both
@@ -118,12 +119,14 @@ int preprocess()
 					}
 					break;
 				case 1: //f << line << "\n";
-					if(line.length() != readlen)
-					{	
-						std::cout << "Read length not fixed. Found two different read lengths: "<< 
-							  readlen << " and " << line.length() << "\n";
+					current_readlen = line.length();
+					if(current_readlen >= 256)
+					{
+						std::cout << "Read length cannot exceed 255. Read with length "<<current_readlen << " found\n";
 						return -1;
 					}
+					if(current_readlen > max_readlen)
+						max_readlen = current_readlen;
 					if(line.find('N')!=std::string::npos)
 					{
 						flag_N = true;
@@ -140,12 +143,12 @@ int preprocess()
 				case 2: break;
 				case 3: if(preserve_quality == "True")
 					{
-						if(line.length() != readlen)
+						if(line.length() != current_readlen)
 						{
-							std::cout << "Read length not fixed. Found two different quality lengths: "<< readlen << " and " << line.length() << "\n";
+							std::cout << "Quality length does not match read length: "<< current_readlen << " and " << line.length() << " found.\n";
 							return -1;
 						}
-				/*		if(quantize(line) == -1)
+				/*		if(quantize(line,current_readlen) == -1)
 						{
 							std::cout << "Invalid quality value found [outside 0 - 41].\n";
 						}	
@@ -183,11 +186,14 @@ int preprocess()
 			paired_id_code = 0;
 			f_numreads.write((char*)&paired_id_code, sizeof(uint8_t));
 		}	
-		std::cout << "Read length: " << readlen << "\n";
+		std::cout << "Max Read length: " << max_readlen << "\n";
 		std::cout << "Total number of reads: " << readnum <<"\n";
 		std::cout << "Total number of reads without N: " << num_clean <<"\n";
 		std::cout << "Paired id match code: " << (int)paired_id_code << "\n";
 		f_numreads.close();
+		std::ofstream f_meta(outfile_meta);
+		f_meta << max_readlen << "\n";
+		f_meta.close();
 	}	
 	return 0;	
 }
@@ -268,7 +274,7 @@ bool check_id_pattern(std::string &id_1,std::string &id_2, uint8_t paired_id_cod
 	return false;
 }
 
-int quantize(std::string &line)
+int quantize(std::string &line, int &readlen)
 {
 	if(quantization_level == 0)
 	{

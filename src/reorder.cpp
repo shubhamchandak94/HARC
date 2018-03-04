@@ -24,6 +24,7 @@ class bbhashdict
 	public:
 	boophf_t * bphf;
 	uint32_t numkeys;
+	uint32_t dict_numreads;//number of reads in this dict 
 	uint32_t *startpos;
 	uint32_t *read_id;
 	bool *empty_bin;
@@ -45,7 +46,7 @@ class bbhashdict
 
 uint32_t numreads = 0;
 
-int maxmatch, thresh = 4, numdict = 2, maxsearch = 1000, num_thr, readlen;
+int maxshift, thresh = 4, numdict = 2, maxsearch = 1000, num_thr, max_readlen;
 int dict_start[2];
 int dict_end[2]; 
 
@@ -57,6 +58,7 @@ std::string outfileRC;
 std::string outfileflag;
 std::string outfilepos;
 std::string outfileorder;
+std::string outfilereadlength;
 
 //Some global arrays (some initialized in setglobalarrays())
 char revinttochar[4] = {'A','G','C','T'};//used in bitsettostring
@@ -70,31 +72,31 @@ bitset positionmask[MAX_READ_LEN];//bitset for each position (1 at two bits and 
 //used in bitsettostring
 bitset mask64;//bitset with 64 bits set to 1 (used in bitsettostring for conversion to ullong)
 
-bitset stringtobitset(std::string s);
+void stringtobitset(std::string &s, uint8_t readlen, bitset &b);
 
-void bitsettostring(bitset b,char *s);
+void bitsettostring(bitset &b,char *s, uint8_t readlen);
 
-void readDnaFile(bitset *read);
+void readDnaFile(bitset *read, uint8_t *read_lengths);
 
-int getDataParams();
-
-void constructdictionary(bitset *read, bbhashdict *dict);
+void constructdictionary(bitset *read, bbhashdict *dict, uint8_t *read_lengths);
 
 //void constructdictionary(bitset *read, spp::sparse_hash_map<uint64_t,uint32_t*> *dict);
 
-void generatemasks(bitset *mask,bitset *revmask);
+void generatemasks(bitset mask[MAX_READ_LEN][MAX_READ_LEN]);
 //mask for zeroing the end bits (needed while reordering to compute Hamming distance between shifted reads)
 
-void reorder(bitset *read, bbhashdict *dict);
+void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths);
 
-void writetofile(bitset *read);
+bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t *read_lock, bitset mask[MAX_READ_LEN][MAX_READ_LEN], uint8_t *read_lengths, bool *remainingreads, bitset *read, bbhashdict *dict, uint32_t &k, bool left_search, bool rev, int shift, int &ref_len);
 
-void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift);
+void writetofile(bitset *read, uint8_t *read_lengths);
+
+void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift, uint8_t cur_readlen, int &ref_len, bool left_search);
 //update the clean reference and count matrix
 
-void reverse_complement(char *s, char *s1);
+void reverse_complement(char *s, char *s1, uint8_t readlen);
 
-bitset chartobitset(char &s);
+void chartobitset(char *s, uint8_t readlen, bitset &b);
 
 void setglobalarrays();
 //setting arrays like chartoint etc.
@@ -108,31 +110,34 @@ int main(int argc, char** argv)
 	outfileflag = basedir + "/tempflag.txt";
 	outfilepos = basedir + "/temppos.txt";
 	outfileorder = basedir + "/read_order.bin";
+	outfilereadlength = basedir + "/read_lengths.bin";
 	infilenumreads = basedir + "/numreads.bin";
 	
-	readlen = atoi(argv[2]);
+	max_readlen = atoi(argv[2]);
 	num_thr = atoi(argv[3]);
-	maxmatch = readlen/2;
-	dict_start[0] =  readlen > 100 ? readlen/2-32 : readlen/2-readlen*32/100;
-	dict_end[0] = readlen/2-1;
-	dict_start[1] = readlen/2;
-	dict_end[1] = readlen > 100 ? readlen/2-1+32 : readlen/2-1+readlen*32/100;
+	maxshift = max_readlen/2;
+	dict_start[0] =  max_readlen > 100 ? max_readlen/2-32 : max_readlen/2-max_readlen*32/100;
+	dict_end[0] = max_readlen/2-1;
+	dict_start[1] = max_readlen/2;
+	dict_end[1] = max_readlen > 100 ? max_readlen/2-1+32 : max_readlen/2-1+max_readlen*32/100;
 	
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));	
 	omp_set_num_threads(num_thr);	
 	setglobalarrays();
 	bitset *read = new bitset [numreads];
+	uint8_t *read_lengths = new uint8_t[numreads];
 	std::cout << "Reading file: " << infile << std::endl;
-	readDnaFile(read);
-	bbhashdict dict[numdict];
+	readDnaFile(read,read_lengths);
+	bbhashdict *dict = new bbhashdict [numdict];
 	std::cout << "Constructing dictionaries\n";
-	constructdictionary(read,dict);
+	constructdictionary(read,dict,read_lengths);
 	std::cout << "Reordering reads\n";
-	reorder(read,dict);
+	reorder(read,dict,read_lengths);
 	std::cout << "Writing to file\n";
-	writetofile(read);	
+	writetofile(read,read_lengths);	
 	delete[] read;
+	delete[] dict;
 	std::cout << "Done!\n";
 	return 0;
 }
@@ -150,7 +155,7 @@ void setglobalarrays()
 
 	for(int i = 0; i < 64; i++)
 		mask64[i] = 1;
-	for(int i = 0; i < readlen; i++)
+	for(int i = 0; i < max_readlen; i++)
 	{
 		basemask[i]['A'][2*i] = 0;
 		basemask[i]['A'][2*i+1] = 0;
@@ -167,43 +172,44 @@ void setglobalarrays()
 }
 	
 
-bitset stringtobitset(std::string s)
+void stringtobitset(std::string &s, uint8_t readlen, bitset &b)
 {
-	bitset b;
 	for(int i = 0; i < readlen; i++)
 		b |= basemask[i][s[i]];
-	return b;
+	return;
 }
 
-int getDataParams()
+
+
+//TODO: Check parallelization of this function
+void readDnaFile(bitset *read, uint8_t *read_lengths)
 {
-	uint32_t number_of_lines = 0;
-	std::string line;
-	std::ifstream myfile(infile, std::ifstream::in);
-
-	std::getline(myfile, line);
-	int read_length = line.length();
-	myfile.close();
-	myfile.open(infile);
-
-	while (std::getline(myfile, line))
+	#pragma omp parallel
 	{
-	++number_of_lines;
-	int _len = line.length(); 
-	if( _len != read_length) 
-	{
-		std::cout << "Read lengths are not the same!: " << read_length << " , " << _len << std::endl;
-		return -1;
+	int tid = omp_get_thread_num();
+	std::ifstream f(infile, std::ifstream::in);
+	std::string s;
+	uint32_t i = 0;
+	while(std::getline(f,s))
+	{	
+		if(i%num_thr == tid)
+		{
+			read_lengths[i] = s.length();
+			stringtobitset(s,read_lengths[i],read[i]);			
+			i++;
+		}	
+		else
+		{
+			i++;
+			continue;
+		}
+	}	
+	f.close();
 	}
-	}
-	//readlen = read_length;
-	numreads = number_of_lines;
-	std::cout << "Read length: " << read_length << std::endl;
-	std::cout << "Number of reads: " << number_of_lines << std::endl;
-	myfile.close();
-	return 0;
+	return;
 }
 
+/*
 void readDnaFile(bitset *read)
 {
 	#pragma omp parallel
@@ -228,6 +234,7 @@ void readDnaFile(bitset *read)
 	}
 	return;
 }
+*/
 	
 void generateindexmasks(bitset *mask1)
 //masks for dictionary positions
@@ -241,7 +248,7 @@ void generateindexmasks(bitset *mask1)
 }
 
 
-void constructdictionary(bitset *read, bbhashdict *dict)
+void constructdictionary(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 {
 	bitset mask[numdict];
 	generateindexmasks(mask);
@@ -252,26 +259,49 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 		{
 		bitset b;
 		int tid = omp_get_thread_num();
-		std::ofstream foutkey(basedir+std::string("/keys.bin.")+std::to_string(tid),std::ios::binary);
 		uint32_t i, stop;
 		i = uint64_t(tid)*numreads/omp_get_num_threads();
 		stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
 		if(tid == omp_get_num_threads()-1)
 			stop = numreads;
-		//compute keys and write to file and store in ull
+		//compute keys and and store in ull
 		for(; i < stop; i++)
 		{
 			b = read[i]&mask[j];
 			ull[i] = (b>>2*dict_start[j]).to_ullong();
-			foutkey.write((char*)&ull[i], sizeof(uint64_t));
 		}
-		foutkey.close();
 		}//parallel end
 		
+		//remove keys corresponding to reads shorter than dict_end[j]
+		dict[j].dict_numreads = 0;
+		for(uint32_t i = 0; i < numreads; i++)
+		{
+			if(read_lengths[i] >= dict_end[j])
+			{
+				ull[dict[j].dict_numreads] = ull[i];
+				dict[j].dict_numreads++;
+			}
+		}
+		
+		//write ull to file
+		#pragma omp parallel
+		{
+		int tid = omp_get_thread_num();
+		std::ofstream foutkey(basedir+std::string("/keys.bin.")+std::to_string(tid),std::ios::binary);
+		uint32_t i, stop;
+		i = uint64_t(tid)*dict[j].dict_numreads/omp_get_num_threads();
+		stop = uint64_t(tid+1)*dict[j].dict_numreads/omp_get_num_threads();
+		if(tid == omp_get_num_threads()-1)
+			stop = dict[j].dict_numreads;
+		for(; i < stop; i++)
+			foutkey.write((char*)&ull[i], sizeof(uint64_t));
+		foutkey.close();
+		}//parallel end
+
 		//deduplicating ull
-		std::sort(ull,ull+numreads);
+		std::sort(ull,ull+dict[j].dict_numreads);
 		uint32_t k = 0;
-		for (uint32_t i = 1; i < numreads; i++) 
+		for (uint32_t i = 1; i < dict[j].dict_numreads; i++) 
 		        if (ull[i] != ull[k])         
 				ull[++k] = ull[i];
 		dict[j].numkeys = k+1;
@@ -290,10 +320,10 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 		std::ofstream fouthash(basedir+std::string("/hash.bin.")+std::to_string(tid)+'.'+std::to_string(j),std::ios::binary);
 		uint64_t currentkey,currenthash;
 		uint32_t i, stop;
-		i = uint64_t(tid)*numreads/omp_get_num_threads();
-		stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
+		i = uint64_t(tid)*dict[j].dict_numreads/omp_get_num_threads();
+		stop = uint64_t(tid+1)*dict[j].dict_numreads/omp_get_num_threads();
 		if(tid == omp_get_num_threads()-1)
-			stop = numreads;
+			stop = dict[j].dict_numreads;
 		for(; i < stop; i++)
 		{
 			finkey.read((char*)&currentkey, sizeof(uint64_t));
@@ -334,7 +364,7 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 			dict[j].startpos[i] =  dict[j].startpos[i] +  dict[j].startpos[i-1];
 
 		//insert elements in the dict array
-		dict[j].read_id = new uint32_t[numreads];
+		dict[j].read_id = new uint32_t[dict[j].dict_numreads];
 		uint32_t i = 0;
 		for(int tid = 0; tid < num_thr; tid++)
 		{
@@ -342,6 +372,8 @@ void constructdictionary(bitset *read, bbhashdict *dict)
 			finhash.read((char*)&currenthash,sizeof(uint64_t));
 			while(!finhash.eof())
 			{
+				while(read_lengths[i] < dict_end[j])
+					i++;
 				dict[j].read_id[dict[j].startpos[currenthash]++] = i;
 				i++;
 				finhash.read((char*)&currenthash,sizeof(uint64_t));
@@ -364,9 +396,9 @@ void bbhashdict::findpos(int64_t *dictidx, uint32_t &startposidx)
 {
 	dictidx[0] = startpos[startposidx];
 	auto endidx = startpos[startposidx+1];
-	if(read_id[endidx-1] == numreads)//means exactly one read has been removed
+	if(read_id[endidx-1] == dict_numreads)//means exactly one read has been removed
 		dictidx[1] = endidx-1;
-	else if(read_id[endidx-1] == numreads+1)//means two or more reads have been removed (in this case second last entry stores the number of reads left)
+	else if(read_id[endidx-1] == dict_numreads+1)//means two or more reads have been removed (in this case second last entry stores the number of reads left)
 		dictidx[1] = dictidx[0] + read_id[endidx-2];
 	else
 		dictidx[1] = endidx;//no read deleted
@@ -386,10 +418,10 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 	std::move(read_id+dictidx[0]+pos+1,read_id+dictidx[1],read_id+dictidx[0]+pos);
 	auto endidx = startpos[startposidx+1];
 	if(dictidx[1] == endidx)//this is first read to be deleted
-		read_id[endidx-1] = numreads;
-	else if(read_id[endidx-1] == numreads)//exactly one read has been deleted till now
+		read_id[endidx-1] = dict_numreads;
+	else if(read_id[endidx-1] == dict_numreads)//exactly one read has been deleted till now
 	{
-		read_id[endidx-1] = numreads + 1;
+		read_id[endidx-1] = dict_numreads + 1;
 		read_id[endidx-2] = size - 1;//number of reads left in bin
 	}
 	else//more than two reads have been deleted
@@ -398,7 +430,7 @@ void bbhashdict::remove(int64_t *dictidx, uint32_t &startposidx, uint32_t curren
 	return;	
 }
 
-void reorder(bitset *read, bbhashdict *dict)
+void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 {
 	omp_lock_t *dict_lock = new omp_lock_t [num_locks];
 	omp_lock_t *read_lock = new omp_lock_t [num_locks];
@@ -407,10 +439,8 @@ void reorder(bitset *read, bbhashdict *dict)
 		omp_init_lock(&dict_lock[j]);
 		omp_init_lock(&read_lock[j]);
 	}
-	uint8_t _readlen = readlen;//used for writing to binary file
-	bitset mask[maxmatch];
-	bitset revmask[maxmatch];
-	generatemasks(mask,revmask);
+	bitset mask[MAX_READ_LEN][MAX_READ_LEN];
+	generatemasks(mask);
 	bitset mask1[numdict];
 	generateindexmasks(mask1);
 	bool *remainingreads = new bool [numreads];
@@ -428,10 +458,14 @@ void reorder(bitset *read, bbhashdict *dict)
 	std::ofstream foutpos(outfilepos + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder(outfileorder + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder_s(outfileorder + ".singleton." + tid_str,std::ofstream::out|std::ios::binary);
-	
+	std::ofstream foutlength(outfilereadlength+'.'+tid_str,std::ofstream::out|std::ios::binary);
+	std::ofstream foutlength_s(outfilereadlength+".singleton."+tid_str,std::ofstream::out|std::ios::binary);
+		
 	unmatched[tid] = 0;
-	bitset ref,revref,b,first_read;
-	//first_read represents first read of contig, used for left searching
+	bitset ref,revref, b;
+
+	uint32_t first_rid;
+	//first_rid represents first read of contig, used for left searching
 	int count[4][MAX_READ_LEN];
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
@@ -440,6 +474,7 @@ void reorder(bitset *read, bbhashdict *dict)
 	//left_search - true during left search - needed so that we know when to pick arbitrary read
 	uint32_t current, prev;
 	uint64_t ull;
+	int ref_len;
 	//flag to check if match was found or not
 	
 	int64_t remainingpos = numreads-1;//used for searching next unmatched read when no match is found
@@ -451,20 +486,20 @@ void reorder(bitset *read, bbhashdict *dict)
 		unmatched[tid]++;
 	}
 	#pragma omp barrier
-	updaterefcount(read[current],ref,revref,count,true,false,0);
+	updaterefcount(read[current],ref,revref,count,true,false,0,read_lengths[current],ref_len,left_search);
+	first_rid = current;
 	prev_unmatched = true;	
 	prev = current;
-	uint32_t numdone= 0;
 	while(!done)
 	{
-//		numdone++;
-//		if(numdone%1000000==0)
-//			std::cout<<tid<<":"<<numdone<<"\n";
 		//delete the read from the corresponding dictionary bins (unless we are starting left search)
 		if(!left_search_start)
 		{
 			for(int l = 0; l < numdict; l++)
-			{	b = read[current]&mask1[l];
+			{
+				if(read_lengths[current] < dict_end[l])
+					continue;
+				b = read[current]&mask1[l];
 				ull = (b>>2*dict_start[l]).to_ullong();
 				startposidx = dict[l].bphf->lookup(ull);
 				//check if any other thread is modifying same dictpos
@@ -480,142 +515,58 @@ void reorder(bitset *read, bbhashdict *dict)
 		}
 		flag = 0;
 		uint32_t k;
-		for(int j = 0; j < maxmatch; j++)
+		for(int shift = 0; shift < maxshift; shift++)
 		{
 			//find forward match
-			for(int l = 0; l < numdict; l++)
+			flag = search_match(ref,mask1,dict_lock,read_lock,mask,read_lengths,remainingreads,read,dict,k,left_search,false, shift,ref_len);
+			if(flag == 1)
 			{
-				if(dict_end[l]+j >= readlen)
-					continue;
-				b = ref&mask1[l];
-				ull = (b>>2*dict_start[l]).to_ullong();
-				startposidx = dict[l].bphf->lookup(ull);
-				if(startposidx >= dict[l].numkeys)//not found
-					continue;
-				//check if any other thread is modifying same dictpos
-				omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
-				dict[l].findpos(dictidx,startposidx);
-				if(dict[l].empty_bin[startposidx])//bin is empty
+				current = k;
+				updaterefcount(read[current],ref,revref,count,false,false,shift,read_lengths[current],ref_len,left_search);
+				if(prev_unmatched == true)//prev read not singleton, write it now
 				{
-					omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
-					continue;
-				}
-				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
-				if(ull == ull1)//checking if ull is actually the key for this bin
-				{	
-					for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
-					{
-						auto rid = dict[l].read_id[i];
-						if((ref^(read[rid]&mask[j])).count()<=thresh)
-						{	
-							omp_set_lock(&read_lock[rid & 0xFFFFFF]);
-							if(remainingreads[rid])
-							{
-								remainingreads[rid]=0;
-								k = rid;
-								flag = 1;
-							}
-							omp_unset_lock(&read_lock[rid & 0xFFFFFF]);
-							if(flag == 1)
-								break;
-						}
-					}
-				}
-				omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
+					foutRC << 'd';
+					foutorder.write((char*)&prev,sizeof(uint32_t));
+					foutflag << 0;//for unmatched
+					foutpos.write((char*)&max_readlen,sizeof(uint8_t));
+					foutlength.write((char*)&read_lengths[prev],sizeof(uint8_t));
+				}	
+				foutRC << (left_search?'r':'d');
+				foutorder.write((char*)&current,sizeof(uint32_t));
+				foutflag << (left_search?2:1);//for matched
+				foutpos.write((char*)&shift,sizeof(uint8_t));
+				foutlength.write((char*)&read_lengths[current],sizeof(uint8_t));
 				
-				if(flag == 1)
-				{
-					current = k;
-					updaterefcount(read[current],ref,revref,count,false,false,j);
-					if(prev_unmatched == true)//prev read not singleton, write it now
-					{
-						foutRC << 'd';
-						foutorder.write((char*)&prev,sizeof(uint32_t));
-						foutflag << 0;//for unmatched
-						foutpos.write((char*)&_readlen,sizeof(uint8_t));
-					}	
-					foutRC << (left_search?'r':'d');
-					foutorder.write((char*)&current,sizeof(uint32_t));
-					foutflag << (left_search?2:1);//for matched
-					foutpos.write((char*)&j,sizeof(uint8_t));
-					
-					prev_unmatched = false;
-					break;
-				}
-				
+				prev_unmatched = false;
+				break;
 			}
-			if(flag==1)
-				break;	
 
 			//find reverse match
-			for(int l = 0; l < numdict; l++)
+			flag = search_match(revref,mask1,dict_lock,read_lock,mask,read_lengths,remainingreads,read,dict,k,left_search,true, shift,ref_len);
+			if(flag == 1)
 			{
-				if(dict_start[l] <= j)
-					continue;
-				b = revref&mask1[l];
-				ull = (b>>2*dict_start[l]).to_ullong();
-				startposidx = dict[l].bphf->lookup(ull);
-				if(startposidx >= dict[l].numkeys)//not found
-					continue;
-				//check if any other thread is modifying same dictpos
-				omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
-				dict[l].findpos(dictidx,startposidx);
-				if(dict[l].empty_bin[startposidx])//bin is empty
-				{	
-					omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
-					continue;
-				}
-				uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
-				if(ull == ull1)//checking if ull is actually the key for this bin
+				current = k;
+				updaterefcount(read[current],ref,revref,count,false,true,shift,read_lengths[current],ref_len,left_search);
+				if(prev_unmatched == true)//prev read not singleton, write it now
 				{
-					for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
-					{
-						auto rid = dict[l].read_id[i];
-						if((revref^(read[rid]&revmask[j])).count()<=thresh)
-						{	
-							omp_set_lock(&read_lock[rid & 0xFFFFFF]);
-							if(remainingreads[rid])
-							{
-								remainingreads[rid]=0;
-								k = rid;
-								flag = 1;
-							}
-							omp_unset_lock(&read_lock[rid & 0xFFFFFF]);
-							if(flag == 1)
-								break;
-						}
-					}
+					foutRC << 'd';
+					foutorder.write((char*)&prev,sizeof(uint32_t));
+					foutflag << 0;//for unmatched
+					foutpos.write((char*)&max_readlen,sizeof(uint8_t));
+					foutlength.write((char*)&read_lengths[prev],sizeof(uint8_t));
 				}
-				omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
-				if(flag == 1)
-				{
-					current = k;
-					updaterefcount(read[current],ref,revref,count,false,true,j);
-					if(prev_unmatched == true)//prev read not singleton, write it now
-					{
-						foutRC << 'd';
-						foutorder.write((char*)&prev,sizeof(uint32_t));
-						foutflag << 0;//for unmatched
-						foutpos.write((char*)&_readlen,sizeof(uint8_t));
-					}
-					foutRC << (left_search?'d':'r');
-					foutorder.write((char*)&current,sizeof(uint32_t));
-					foutflag << (left_search?2:1);//for matched
-					foutpos.write((char*)&j,sizeof(uint8_t));
-					
-					prev_unmatched = false;
-					break;
-				}
-			}	
-			if(flag==1)
+				foutRC << (left_search?'d':'r');
+				foutorder.write((char*)&current,sizeof(uint32_t));
+				foutflag << (left_search?2:1);//for matched
+				foutpos.write((char*)&shift,sizeof(uint8_t));
+				foutlength.write((char*)&read_lengths[current],sizeof(uint8_t));
+
+				prev_unmatched = false;
 				break;
+			}
 		
 			revref<<=2;
 			ref>>=2;
-			//since actual size of bitset can be larger than 2*readlen, need to mask
-			//so that count works as expected
-			ref = ref&mask[0];
-			revref = revref&mask[0];
 		}
 		if(flag == 0)//no match found
 		{
@@ -624,7 +575,7 @@ void reorder(bitset *read, bbhashdict *dict)
 				left_search = true;
 				left_search_start = true;
 				//update ref and count with RC of first_read
-				updaterefcount(first_read,ref,revref,count,true,true,0);
+				updaterefcount(read[first_rid],ref,revref,count,true,true,0,read_lengths[first_rid],ref_len,left_search);
 			}
 			else //left search done, now pick arbitrary read and start new contig 
 			{
@@ -657,13 +608,15 @@ void reorder(bitset *read, bbhashdict *dict)
 				}
 				else
 				{
-					updaterefcount(read[current],ref,revref,count,true,false,0);
+					updaterefcount(read[current],ref,revref,count,true,false,0,read_lengths[current],ref_len,left_search);
+					revref <<= (2*max_readlen-2*ref_len);
 					if(prev_unmatched == true)//prev read singleton, write it now
 					{
 						foutorder_s.write((char*)&prev,sizeof(uint32_t));
+						foutlength_s.write((char*)&read_lengths[prev],sizeof(uint8_t));
 					}
 					prev_unmatched = true;
-					first_read = read[current];
+					first_rid = current;
 					prev = current;
 				}
 			}
@@ -676,6 +629,8 @@ void reorder(bitset *read, bbhashdict *dict)
 	foutflag.close();
 	foutpos.close();
 	foutorder_s.close();
+	foutlength.close();
+	foutlength_s.close();
 //	std::cout << tid << ":Done"<<"\n";
 	}//parallel end
 		
@@ -686,23 +641,114 @@ void reorder(bitset *read, bbhashdict *dict)
 }
 
 
-void generatemasks(bitset *mask,bitset *revmask)
+void generatemasks(bitset mask[MAX_READ_LEN][MAX_READ_LEN])
 {
-	for(int i = 0; i < maxmatch; i++)
-	{	
-		mask[i].reset();
-		revmask[i].reset();
-		for(int j = 0; j < 2*readlen - 2*i; j++)
-			mask[i][j] = 1;
-		for(int j = 2*i; j < 2*readlen; j++)
-			revmask[i][j] = 1; 	
+	for(int i = 0; i < max_readlen; i++)
+	{
+		for(int j = 0; j < max_readlen; j++)	
+		{
+			mask[i][j].reset();
+			for(int k = 2*i; k < 2*max_readlen-2*j; k++)
+				mask[i][j][k] = 1;
+		}
 	}
 	return;
 }
 
 
+bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t *read_lock, bitset mask[MAX_READ_LEN][MAX_READ_LEN], uint8_t *read_lengths, bool *remainingreads, bitset *read, bbhashdict *dict, uint32_t &k, bool left_search, bool rev, int shift, int &ref_len)
+//right_aligned means that ref is right aligned. In this case reads need to be shifted before hamming.
+//right_alignment is useful for rev and for left search to make sure that the starting positions of reads is monotone
+{
+	bitset b;
+	uint64_t ull;
+	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
+	uint32_t startposidx;//index in startpos
+	bool flag = 0;
+	for(int l = 0; l < numdict; l++)
+	{
+		//check if dictionary index is within bound
+		if(!left_search)
+		{
+			if(!rev)
+			{
+				if(dict_end[l]+shift >= ref_len)
+					continue;
+			}
+			else
+			{
+				if(dict_start[l] <= max_readlen-ref_len+shift)
+					continue;
+			}
+		}
+		else
+		{
+			if(!rev)
+			{
+				if(dict_end[l]+shift >= max_readlen || dict_start[l] <= max_readlen-ref_len-shift)
+					continue;
+			}
+			else
+			{
+				if(dict_end[l] >= ref_len+shift || dict_start[l] <= shift)
+					continue;
+			}
+		}
+		b = ref&mask1[l];
+		ull = (b>>2*dict_start[l]).to_ullong();
+		startposidx = dict[l].bphf->lookup(ull);
+		if(startposidx >= dict[l].numkeys)//not found
+			continue;
+		//check if any other thread is modifying same dictpos
+		omp_set_lock(&dict_lock[startposidx & 0xFFFFFF]);
+		dict[l].findpos(dictidx,startposidx);
+		if(dict[l].empty_bin[startposidx])//bin is empty
+		{
+			omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
+			continue;
+		}
+		uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>2*dict_start[l]).to_ullong();
+		if(ull == ull1)//checking if ull is actually the key for this bin
+		{	
+			for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
+			{
+				auto rid = dict[l].read_id[i];
+				int hamming;
+				if(!left_search)
+				{
+					if(!rev)
+						hamming = ((ref^read[rid])&mask[0][max_readlen-std::min<int>(ref_len-shift,read_lengths[rid])]).count();
+					else
+						hamming = ((ref^(read[rid]<<(2*max_readlen-2*read_lengths[rid])))&mask[max_readlen-std::min<int>(ref_len-shift,read_lengths[rid])][0]).count();
+				}
+				else
+				{
+					if(!rev)
+						hamming = ((ref^(read[rid]<<(2*max_readlen-2*read_lengths[rid])))&mask[max_readlen-std::min<int>(ref_len+shift,read_lengths[rid])][shift]).count();
+					else
+						hamming = ((ref^read[rid])&mask[shift][max_readlen-std::min<int>(ref_len+shift,read_lengths[rid])]).count();	
+				}
+				if(hamming<=thresh)
+				{	
+					omp_set_lock(&read_lock[rid & 0xFFFFFF]);
+					if(remainingreads[rid])
+					{
+						remainingreads[rid]=0;
+						k = rid;
+						flag = 1;
+					}
+					omp_unset_lock(&read_lock[rid & 0xFFFFFF]);
+					if(flag == 1)
+						break;
+				}
+			}
+		}
+		omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
+	}
+	return flag;
+}
 
-void writetofile(bitset *read)
+void writetofile(bitset *read, uint8_t *read_lengths)
 {
 
 	//convert bitset to string for all num_thr files in parallel
@@ -721,21 +767,21 @@ void writetofile(bitset *read)
 	while(finRC >> std::noskipws >> c)//read character by character
 	{
 		finorder.read((char*)&current, sizeof (uint32_t));
-		bitsettostring(read[current],s);
+		bitsettostring(read[current],s,read_lengths[current]);
 		if(c == 'd')
 		{
 			fout<<s<<"\n";
 		}
 		else
 		{
-			reverse_complement(s,s1);
+			reverse_complement(s,s1,read_lengths[current]);
 			fout<<s1<<"\n";
 		}
 	}
 	finorder_s.read((char*)&current,sizeof(uint32_t));
 	while(!finorder_s.eof())
 	{
-		bitsettostring(read[current],s);
+		bitsettostring(read[current],s,read_lengths[current]);
 		fout_s << s << "\n";
 		finorder_s.read((char*)&current,sizeof(uint32_t));
 	}
@@ -748,36 +794,43 @@ void writetofile(bitset *read)
 
 	}
 
-	//Now combine the num_thr files
+	//Now combine the num_thr order files
 	std::ofstream fout_s(outfile+".singleton",std::ofstream::out);
 	std::ofstream foutorder_s(outfileorder+".singleton",std::ofstream::out|std::ios::binary);
+	std::ofstream foutlength_s(outfilereadlength+".singleton",std::ofstream::out|std::ios::binary);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
 		std::string tid_str = std::to_string(tid);
 		std::ifstream fin_s(outfile + ".singleton." + tid_str,std::ifstream::in);
 		std::ifstream finorder_s(outfileorder + ".singleton." + tid_str,std::ifstream::in|std::ios::binary);
-		
+		std::ifstream finlength_s(outfilereadlength+".singleton." + tid_str,std::ofstream::in|std::ios::binary);	
+			
 		fout_s << fin_s.rdbuf();//write entire file
 		foutorder_s << finorder_s.rdbuf();
+		foutlength_s << finlength_s.rdbuf();
 
 		//clear error flags which occur on rdbuffing empty file
 		fout_s.clear();
 		foutorder_s.clear();
-			
+		foutlength_s.clear();			
+
 		fin_s.close();
 		finorder_s.close();
+		finlength_s.close();	
 	
 		remove((outfile + ".singleton." + tid_str).c_str());
 		remove((outfileorder + ".singleton." + tid_str).c_str());
+		remove((outfilereadlength + ".singleton." + tid_str).c_str());
 	}
 	fout_s.close();
 	foutorder_s.close();
+	foutlength_s.close();
 	return;
 }
 
-void bitsettostring(bitset b,char *s)
+void bitsettostring(bitset &b, char *s, uint8_t readlen)
 {
-	unsigned long long ull,rem;
+	unsigned long long ull;
 	for(int i = 0; i < 2*readlen/64+1; i++)
 	{	
 		ull = (b&mask64).to_ullong();
@@ -792,15 +845,9 @@ void bitsettostring(bitset b,char *s)
 	return;
 }
 
-bitset chartobitset(char *s)
-{
-	bitset b;
-	for(int i = 0; i < readlen; i++)
-		b |= basemask[i][s[i]];
-	return b;
-}
 
-void reverse_complement(char* s, char* s1)
+
+void reverse_complement(char* s, char* s1, uint8_t readlen)
 {
 	for(int j = 0; j < readlen; j++)
 		s1[j] = chartorevchar[s[readlen-j-1]];
@@ -808,37 +855,116 @@ void reverse_complement(char* s, char* s1)
 	return;
 }
 
-void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift)
+void chartobitset(char *s, uint8_t readlen, bitset &b)
+{
+	b.reset();
+	for(int i = 0; i < readlen; i++)
+		b |= basemask[i][s[i]];
+	return;
+}
+
+void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift, uint8_t cur_readlen, int &ref_len, bool left_search)
+//for var length, shift represents shift of start positions, if read length is small, may not need to shift actually
 {
 	char s[MAX_READ_LEN+1],s1[MAX_READ_LEN+1],*current;
-	bitsettostring(cur,s);
+	bitsettostring(cur,s,cur_readlen);
 	if(rev == false)
 		current = s;
 	else
 	{
-		reverse_complement(s,s1);
+		reverse_complement(s,s1,cur_readlen);
 		current = s1;
 	}
 
 	if(resetcount == true)//resetcount - unmatched read so start over
 	{
 		std::memset(count, 0, sizeof(count[0][0]) * 4 * MAX_READ_LEN);	
-		for(int i = 0; i < readlen; i++)
+		for(int i = 0; i < cur_readlen; i++)
 		{	
 			count[chartoint[current[i]]][i] = 1;
 		}
-
+		ref_len = cur_readlen;
 	}
 	else
 	{
-		//shift count and find current by max
-		for(int i = 0; i < readlen-shift; i++)
-		{	
-			for(int j = 0; j < 4; j++)
-				count[j][i] = count[j][i+shift];
-			count[chartoint[current[i]]][i] += 1;
+		if(!left_search)
+		{
+			//shift count
+			for(int i = 0; i < ref_len-shift; i++)
+			{	
+				for(int j = 0; j < 4; j++)
+					count[j][i] = count[j][i+shift];
+				if(i < cur_readlen)
+					count[chartoint[current[i]]][i] += 1;
+			}
 			
-			int max = 0,indmax = 0;
+			//for the new positions set count to 1
+			for(int i = ref_len-shift; i < cur_readlen; i++)
+			{	
+				for(int j = 0; j < 4; j++)
+					count[j][i] = 0;
+				count[chartoint[current[i]]][i] = 1;
+			}
+			ref_len = std::max<int>(ref_len-shift,cur_readlen);
+		}
+		else//left search case is quite complicated in the variable length case
+		{
+			if(cur_readlen-shift >= ref_len)
+			{
+				for(int i = cur_readlen-shift-ref_len; i < cur_readlen-shift; i++)
+				{
+					for(int j = 0; j < 4; j++)
+						count[j][i] = count[j][i-(cur_readlen-shift-ref_len)];
+					count[chartoint[current[i]]][i] += 1;
+				}
+				for(int i = 0; i < cur_readlen-shift-ref_len; i++)
+				{	
+					for(int j = 0; j < 4; j++)
+						count[j][i] = 0;
+					count[chartoint[current[i]]][i] = 1;
+				}
+				for(int i = cur_readlen-shift; i < cur_readlen; i++)
+				{	
+					for(int j = 0; j < 4; j++)
+						count[j][i] = 0;
+					count[chartoint[current[i]]][i] = 1;
+				}
+				ref_len = cur_readlen;
+			}
+			else if(ref_len + shift <= max_readlen)
+			{
+				for(int i = ref_len-cur_readlen+shift; i < ref_len; i++)		
+					count[chartoint[current[i-(ref_len-cur_readlen+shift)]]][i] += 1;
+				for(int i = ref_len; i < ref_len+shift; i++)
+				{
+					for(int j = 0; j < 4; j++)
+						count[j][i] = 0;
+					count[chartoint[current[i-(ref_len-cur_readlen+shift)]]][i] = 1;
+				}
+				ref_len = ref_len+shift;
+			}
+			else
+			{
+				for(int i = 0; i < max_readlen - shift; i++)
+				{
+					for(int j = 0; j < 4; j++)
+						count[j][i] = count[j][i+(ref_len+shift-max_readlen)];
+				}
+				for(int i = max_readlen - cur_readlen; i < max_readlen - shift; i++)
+					count[chartoint[current[i-(max_readlen-cur_readlen)]]][i] += 1;
+				for(int i = max_readlen - shift; i < max_readlen; i++)
+				{
+					for(int j = 0; j < 4; j++)
+						count[j][i] = 0;
+					count[chartoint[current[i-(max_readlen-cur_readlen)]]][i] = 1;
+				}
+				ref_len = max_readlen;	
+			}
+		}	
+		//find max of each position to get ref
+		int max = 0,indmax = 0;
+		for(int i = 0; i < ref_len; i++)
+		{
 			for(int j = 0; j < 4; j++)
 				if(count[j][i]>max)
 				{
@@ -847,17 +973,15 @@ void updaterefcount(bitset cur, bitset &ref, bitset &revref, int count[][MAX_REA
 				}
 			current[i] = inttochar[indmax];
 		}
-		//for the new positions make current same as the current read and count to 1
-		for(int i = readlen-shift; i < readlen; i++)
-		{	
-			for(int j = 0; j < 4; j++)
-				count[j][i] = 0;
-			count[chartoint[current[i]]][i] = 1;
-		}
 	}
-	ref = chartobitset(current);
-	char revcurrent[readlen];
-	reverse_complement(current,revcurrent);
-	revref = chartobitset(revcurrent);
+	chartobitset(current,ref_len,ref);
+	char revcurrent[MAX_READ_LEN];
+	reverse_complement(current,revcurrent,ref_len);
+	chartobitset(revcurrent,ref_len,revref);
+	
+	if(left_search)
+		ref <<=	(2*max_readlen-2*ref_len);
+	else
+		revref <<= (2*max_readlen-2*ref_len);
 	return;
 }
