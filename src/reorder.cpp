@@ -87,11 +87,11 @@ void generatemasks(bitset mask[MAX_READ_LEN][MAX_READ_LEN]);
 
 void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths);
 
-bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t *read_lock, bitset mask[MAX_READ_LEN][MAX_READ_LEN], uint8_t *read_lengths, bool *remainingreads, bitset *read, bbhashdict *dict, uint32_t &k, bool left_search, bool rev, int shift, int &ref_len);
+bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t *read_lock, bitset mask[MAX_READ_LEN][MAX_READ_LEN], uint8_t *read_lengths, bool *remainingreads, bitset *read, bbhashdict *dict, uint32_t &k, bool rev, int shift, int &ref_len);
 
 void writetofile(bitset *read, uint8_t *read_lengths);
 
-void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift, uint8_t cur_readlen, int &ref_len, bool left_search);
+void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift, uint8_t cur_readlen, int &ref_len);
 //update the clean reference and count matrix
 
 void reverse_complement(char *s, char *s1, uint8_t readlen);
@@ -461,7 +461,6 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 	std::ofstream foutorder(outfileorder + '.' + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutorder_s(outfileorder + ".singleton." + tid_str,std::ofstream::out|std::ios::binary);
 	std::ofstream foutlength(outfilereadlength+'.'+tid_str,std::ofstream::out|std::ios::binary);
-	std::ofstream foutlength_s(outfilereadlength+".singleton."+tid_str,std::ofstream::out|std::ios::binary);
 		
 	unmatched[tid] = 0;
 	bitset ref,revref, b;
@@ -477,6 +476,10 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 	uint32_t current, prev;
 	uint64_t ull;
 	int ref_len;
+	int64_t ref_pos, cur_read_pos;
+	//starting positions of the ref and the current read in the contig, can be negative during left search or due to RC
+	//useful for sorting according to starting position in the encoding stage.
+	
 	//flag to check if match was found or not
 	
 	int64_t remainingpos = numreads-1;//used for searching next unmatched read when no match is found
@@ -488,7 +491,9 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 		unmatched[tid]++;
 	}
 	#pragma omp barrier
-	updaterefcount(read[current],ref,revref,count,true,false,0,read_lengths[current],ref_len,left_search);
+	updaterefcount(read[current],ref,revref,count,true,false,0,read_lengths[current],ref_len);
+	cur_read_pos = 0;
+	ref_pos = 0;
 	first_rid = current;
 	prev_unmatched = true;	
 	prev = current;
@@ -520,23 +525,36 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 		for(int shift = 0; shift < maxshift; shift++)
 		{
 			//find forward match
-			flag = search_match(ref,mask1,dict_lock,read_lock,mask,read_lengths,remainingreads,read,dict,k,left_search,false, shift,ref_len);
+			flag = search_match(ref,mask1,dict_lock,read_lock,mask,read_lengths,remainingreads,read,dict,k,false, shift,ref_len);
 			if(flag == 1)
 			{
 				current = k;
-				updaterefcount(read[current],ref,revref,count,false,false,shift,read_lengths[current],ref_len,left_search);
+				int ref_len_old = ref_len;
+				updaterefcount(read[current],ref,revref,count,false,false,shift,read_lengths[current],ref_len);
+				if(!left_search)
+				{
+					cur_read_pos = ref_pos + shift;
+					ref_pos = cur_read_pos;
+				}	
+				else
+				{
+					cur_read_pos = ref_pos + ref_len_old - shift - read_lengths[current];
+					ref_pos = ref_pos + ref_len_old - shift - ref_len;
+					
+				}
 				if(prev_unmatched == true)//prev read not singleton, write it now
 				{
 					foutRC << 'd';
 					foutorder.write((char*)&prev,sizeof(uint32_t));
 					foutflag << 0;//for unmatched
-					foutpos.write((char*)&max_readlen,sizeof(uint8_t));
+					int64_t zero = 0;
+					foutpos.write((char*)&zero,sizeof(int64_t));
 					foutlength.write((char*)&read_lengths[prev],sizeof(uint8_t));
 				}	
 				foutRC << (left_search?'r':'d');
 				foutorder.write((char*)&current,sizeof(uint32_t));
-				foutflag << (left_search?2:1);//for matched
-				foutpos.write((char*)&shift,sizeof(uint8_t));
+				foutflag << 1;//for matched
+				foutpos.write((char*)&cur_read_pos,sizeof(int64_t));
 				foutlength.write((char*)&read_lengths[current],sizeof(uint8_t));
 				
 				prev_unmatched = false;
@@ -544,23 +562,35 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 			}
 
 			//find reverse match
-			flag = search_match(revref,mask1,dict_lock,read_lock,mask,read_lengths,remainingreads,read,dict,k,left_search,true, shift,ref_len);
+			flag = search_match(revref,mask1,dict_lock,read_lock,mask,read_lengths,remainingreads,read,dict,k,true,shift,ref_len);
 			if(flag == 1)
 			{
 				current = k;
-				updaterefcount(read[current],ref,revref,count,false,true,shift,read_lengths[current],ref_len,left_search);
+				int ref_len_old = ref_len;
+				updaterefcount(read[current],ref,revref,count,false,true,shift,read_lengths[current],ref_len);
+				if(!left_search)
+				{
+					cur_read_pos = ref_pos + ref_len_old + shift - read_lengths[current];
+					ref_pos = ref_pos + ref_len_old + shift - ref_len;
+				}
+				else
+				{
+					cur_read_pos = ref_pos - shift;
+					ref_pos = cur_read_pos;
+				}
 				if(prev_unmatched == true)//prev read not singleton, write it now
 				{
 					foutRC << 'd';
 					foutorder.write((char*)&prev,sizeof(uint32_t));
 					foutflag << 0;//for unmatched
-					foutpos.write((char*)&max_readlen,sizeof(uint8_t));
+					int64_t zero = 0;
+					foutpos.write((char*)&zero,sizeof(int64_t));
 					foutlength.write((char*)&read_lengths[prev],sizeof(uint8_t));
 				}
 				foutRC << (left_search?'d':'r');
 				foutorder.write((char*)&current,sizeof(uint32_t));
-				foutflag << (left_search?2:1);//for matched
-				foutpos.write((char*)&shift,sizeof(uint8_t));
+				foutflag << 1;//for matched
+				foutpos.write((char*)&cur_read_pos,sizeof(int64_t));
 				foutlength.write((char*)&read_lengths[current],sizeof(uint8_t));
 
 				prev_unmatched = false;
@@ -577,7 +607,9 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 				left_search = true;
 				left_search_start = true;
 				//update ref and count with RC of first_read
-				updaterefcount(read[first_rid],ref,revref,count,true,true,0,read_lengths[first_rid],ref_len,left_search);
+				updaterefcount(read[first_rid],ref,revref,count,true,true,0,read_lengths[first_rid],ref_len);
+				ref_pos = 0;
+				cur_read_pos = 0;
 			}
 			else //left search done, now pick arbitrary read and start new contig 
 			{
@@ -610,12 +642,12 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 				}
 				else
 				{
-					updaterefcount(read[current],ref,revref,count,true,false,0,read_lengths[current],ref_len,left_search);
-					revref <<= (2*max_readlen-2*ref_len);
+					updaterefcount(read[current],ref,revref,count,true,false,0,read_lengths[current],ref_len);
+					ref_pos = 0;
+					cur_read_pos = 0;
 					if(prev_unmatched == true)//prev read singleton, write it now
 					{
 						foutorder_s.write((char*)&prev,sizeof(uint32_t));
-						foutlength_s.write((char*)&read_lengths[prev],sizeof(uint8_t));
 					}
 					prev_unmatched = true;
 					first_rid = current;
@@ -632,7 +664,6 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 	foutpos.close();
 	foutorder_s.close();
 	foutlength.close();
-	foutlength_s.close();
 //	std::cout << tid << ":Done"<<"\n";
 	}//parallel end
 		
@@ -658,7 +689,7 @@ void generatemasks(bitset mask[MAX_READ_LEN][MAX_READ_LEN])
 }
 
 
-bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t *read_lock, bitset mask[MAX_READ_LEN][MAX_READ_LEN], uint8_t *read_lengths, bool *remainingreads, bitset *read, bbhashdict *dict, uint32_t &k, bool left_search, bool rev, int shift, int &ref_len)
+bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t *read_lock, bitset mask[MAX_READ_LEN][MAX_READ_LEN], uint8_t *read_lengths, bool *remainingreads, bitset *read, bbhashdict *dict, uint32_t &k, bool rev, int shift, int &ref_len)
 //right_aligned means that ref is right aligned. In this case reads need to be shifted before hamming.
 //right_alignment is useful for rev and for left search to make sure that the starting positions of reads is monotone
 {
@@ -670,31 +701,15 @@ bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t 
 	for(int l = 0; l < numdict; l++)
 	{
 		//check if dictionary index is within bound
-		if(!left_search)
+		if(!rev)
 		{
-			if(!rev)
-			{
-				if(dict_end[l]+shift >= ref_len)
-					continue;
-			}
-			else
-			{
-				if(dict_start[l] <= max_readlen-ref_len+shift)
-					continue;
-			}
+			if(dict_end[l]+shift >= ref_len)
+				continue;
 		}
 		else
 		{
-			if(!rev)
-			{
-				if(dict_end[l]+shift >= max_readlen || dict_start[l] <= max_readlen-ref_len-shift)
-					continue;
-			}
-			else
-			{
-				if(dict_end[l] >= ref_len+shift || dict_start[l] <= shift)
-					continue;
-			}
+			if(dict_end[l] >= ref_len+shift || dict_start[l] <= shift)
+				continue;
 		}
 		b = ref&mask1[l];
 		ull = (b>>2*dict_start[l]).to_ullong();
@@ -716,20 +731,10 @@ bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t 
 			{
 				auto rid = dict[l].read_id[i];
 				int hamming;
-				if(!left_search)
-				{
-					if(!rev)
-						hamming = ((ref^read[rid])&mask[0][max_readlen-std::min<int>(ref_len-shift,read_lengths[rid])]).count();
-					else
-						hamming = ((ref^(read[rid]<<(2*max_readlen-2*read_lengths[rid])))&mask[max_readlen-std::min<int>(ref_len-shift,read_lengths[rid])][0]).count();
-				}
+				if(!rev)
+					hamming = ((ref^read[rid])&mask[0][max_readlen-std::min<int>(ref_len-shift,read_lengths[rid])]).count();
 				else
-				{
-					if(!rev)
-						hamming = ((ref^(read[rid]<<(2*max_readlen-2*read_lengths[rid])))&mask[max_readlen-std::min<int>(ref_len+shift,read_lengths[rid])][shift]).count();
-					else
-						hamming = ((ref^read[rid])&mask[shift][max_readlen-std::min<int>(ref_len+shift,read_lengths[rid])]).count();	
-				}
+					hamming = ((ref^read[rid])&mask[shift][max_readlen-std::min<int>(ref_len+shift,read_lengths[rid])]).count();	
 				if(hamming<=thresh)
 				{	
 					omp_set_lock(&read_lock[rid & 0xFFFFFF]);
@@ -799,34 +804,27 @@ void writetofile(bitset *read, uint8_t *read_lengths)
 	//Now combine the num_thr order files
 	std::ofstream fout_s(outfile+".singleton",std::ofstream::out);
 	std::ofstream foutorder_s(outfileorder+".singleton",std::ofstream::out|std::ios::binary);
-	std::ofstream foutlength_s(outfilereadlength+".singleton",std::ofstream::out|std::ios::binary);
 	for(int tid = 0; tid < num_thr; tid++)
 	{
 		std::string tid_str = std::to_string(tid);
 		std::ifstream fin_s(outfile + ".singleton." + tid_str,std::ifstream::in);
 		std::ifstream finorder_s(outfileorder + ".singleton." + tid_str,std::ifstream::in|std::ios::binary);
-		std::ifstream finlength_s(outfilereadlength+".singleton." + tid_str,std::ofstream::in|std::ios::binary);	
 			
 		fout_s << fin_s.rdbuf();//write entire file
 		foutorder_s << finorder_s.rdbuf();
-		foutlength_s << finlength_s.rdbuf();
 
 		//clear error flags which occur on rdbuffing empty file
 		fout_s.clear();
 		foutorder_s.clear();
-		foutlength_s.clear();			
 
 		fin_s.close();
 		finorder_s.close();
-		finlength_s.close();	
 	
 		remove((outfile + ".singleton." + tid_str).c_str());
 		remove((outfileorder + ".singleton." + tid_str).c_str());
-		remove((outfilereadlength + ".singleton." + tid_str).c_str());
 	}
 	fout_s.close();
 	foutorder_s.close();
-	foutlength_s.close();
 	return;
 }
 
@@ -865,7 +863,7 @@ void chartobitset(char *s, uint8_t readlen, bitset &b)
 	return;
 }
 
-void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift, uint8_t cur_readlen, int &ref_len, bool left_search)
+void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_READ_LEN], bool resetcount, bool rev, int shift, uint8_t cur_readlen, int &ref_len)
 //for var length, shift represents shift of start positions, if read length is small, may not need to shift actually
 {
 	char s[MAX_READ_LEN+1],s1[MAX_READ_LEN+1],*current;
@@ -889,7 +887,7 @@ void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_RE
 	}
 	else
 	{
-		if(!left_search)
+		if(!rev)
 		{
 			//shift count
 			for(int i = 0; i < ref_len-shift; i++)
@@ -909,7 +907,7 @@ void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_RE
 			}
 			ref_len = std::max<int>(ref_len-shift,cur_readlen);
 		}
-		else//left search case is quite complicated in the variable length case
+		else//reverse case is quite complicated in the variable length case
 		{
 			if(cur_readlen-shift >= ref_len)
 			{
@@ -982,9 +980,5 @@ void updaterefcount(bitset &cur, bitset &ref, bitset &revref, int count[][MAX_RE
 	reverse_complement(current,revcurrent,ref_len);
 	chartobitset(revcurrent,ref_len,revref);
 	
-	if(left_search)
-		ref <<=	(2*max_readlen-2*ref_len);
-	else
-		revref <<= (2*max_readlen-2*ref_len);
 	return;
 }
