@@ -261,10 +261,9 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 				reverse_bitset.reset();
 				if(ref.size() >= max_readlen)
 				{
-					stringtobitset(ref.substr(0,max_readlen),max_readlen,forward_bitset);
-					stringtobitset(reverse_complement(ref.substr(0,max_readlen),max_readlen),max_readlen,reverse_bitset);
-				}
-				for(uint32_t j = 0; j < ref.size()-max_readlen+1; j++)
+				stringtobitset(ref.substr(0,max_readlen),max_readlen,forward_bitset);
+				stringtobitset(reverse_complement(ref.substr(0,max_readlen),max_readlen),max_readlen,reverse_bitset);
+				for(long j = 0; j < ref.size()-max_readlen+1; j++)
 				{
 					//search for singleton reads
 					for(int rev = 0; rev < 2; rev++)
@@ -316,7 +315,7 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 										char rc = rev?'r':'d';
 										long pos = rev?(j+max_readlen-read_lengths_s[rid]):j;
 										std::string read_string = rev?reverse_complement(bitsettostring(read[rid],read_lengths_s[rid]),read_lengths_s[rid]):bitsettostring(read[rid],read_lengths_s[rid]);
-										current_contig.push_back({read_string,j,rc,order_s[rid],read_lengths_s[rid]});								
+										current_contig.push_back({read_string,pos,rc,order_s[rid],read_lengths_s[rid]});								
 										for(int l1 = 0;l1 < numdict_s; l1++)
 											deleted_rids[l1].push_back(rid);
 									}
@@ -354,7 +353,8 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 						reverse_bitset |= basemask[0][chartorevchar[ref[j+max_readlen]]];
 					}	
 							
-				}
+				}//end for
+				}//end if
 				//sort contig according to pos
 				current_contig.sort([](const contig_reads &a, const contig_reads &b) 
 					{ 

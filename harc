@@ -90,7 +90,8 @@ compress()
 	7z a $tempdir/read_meta.txt.7z $tempdir/read_meta.txt -mmt=$num_thr
 	7z a $tempdir/read_rev.tar.7z $tempdir/read_rev.tar -mmt=$num_thr
 	./$harcdir/bin/bsc e $tempdir/read_seq.tar $tempdir/read_seq.tar.bsc -b64p -t$num_thr 
-	./$harcdir/bin/bsc e $tempdir/unaligned_singleton.txt $tempdir/unaligned_singleton.txt.bsc -b64p -t$num_thr 
+	./$harcdir/bin/bsc e $tempdir/unaligned_singleton.txt $tempdir/unaligned_singleton.txt.bsc -b64p -t$num_thr
+	7z a $tempdir/read_lengths.bin.7z $tempdir/read_lengths.bin -mmt=$num_thr 
 	rm $tempdir/*.txt $tempdir/*.tar 
 	if [[ $paired_end == "True" ]];then
 		/usr/bin/time -v ./$harcdir/bin/pe_encode.out $tempdir $preserve_order	
@@ -125,6 +126,7 @@ compress()
 		fi	
 	fi
 	7z a $tempdir/numreads.bin.7z $tempdir/numreads.bin
+	
 	rm $tempdir/*.bin
 	rm $tempdir/*.singleton
 	if [[ $paired_end == "True" ]];then
