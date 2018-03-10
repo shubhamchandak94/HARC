@@ -53,9 +53,9 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 	uint32_t s = 0, idx = 0, q_state = 0;
 	double distortion = 0.0;
 	double error = 0.0;
-    uint8_t qv = 0, prev_qv = 0;
-    uint32_t columns = info->columns;
-    struct quantizer_t *q;
+	uint8_t qv = 0, prev_qv = 0;
+	uint8_t cur_readlen;
+	struct quantizer_t *q;
 	struct cond_quantizer_list_t *qlist;
 
 	uint32_t block_idx, line_idx;
@@ -78,6 +78,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
 	do {
 		f_order.read((char*)&order,sizeof(uint32_t));
 		line = info->blocks[block_idx].quality_array+(uint64_t)(order)*(info->columns+1);
+		cur_readlen = info->blocks[block_idx].read_lengths[order]; 
 //		line = &info->blocks[block_idx].lines[line_idx];
 		
         if (info->opts->verbose && line_idx == 0) {
@@ -108,7 +109,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
         
         prev_qv = qv;
         
-		for (s = 1; s < columns; ++s) {
+		for (s = 1; s < cur_readlen; ++s) {
 			q = choose_quantizer(qlist, &info->well, s, prev_qv, &idx);
 			data = line[s] - 33;
 			qv = q->q[data];
@@ -129,7 +130,7 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
             fputc('\n', funcompressed);
         }
         
-        distortion += error / ((double) columns);
+        distortion += error / ((double) cur_readlen);
 
 		// Set up next set of pointers
 		line_idx += 1;
@@ -153,10 +154,11 @@ uint32_t start_qv_compression(struct quality_file_t *info, FILE *fout, double *d
     return osSize;
 }
 
-void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) {
+void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info, uint8_t *read_lengths) {
     qv_compressor qvc;
     
 	uint32_t s = 0, idx = 0, lineCtr = 0, q_state = 0;
+	uint8_t cur_readlen;
     uint8_t prev_qv = 0, cluster_id;
     
     uint32_t columns = info->columns;
@@ -165,8 +167,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
     struct quantizer_t *q;
 
 	char *line = (char *) _alloca(columns+2);
-    line[columns] = '\n';
-	line[columns+1] = '\0';
+
     
     // Initialize the compressor
     qvc = initialize_qv_compressor(fin, DECOMPRESSION, info);
@@ -177,6 +178,8 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
             printf("Line: %dM\n", lineCtr/1000000);
         }
         lineCtr++;
+	cur_readlen = *read_lengths;
+	read_lengths++;
 
 		cluster_id = qv_read_cluster(qvc->Quals);
 		assert(cluster_id < info->cluster_count);
@@ -191,7 +194,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
         line[0] = q->output_alphabet->symbols[q_state] + 33;
         prev_qv = line[0] - 33;
         
-		for (s = 1; s < columns; ++s) {
+		for (s = 1; s < cur_readlen; ++s) {
 			// Quantize and compute error for MSE
 			q = choose_quantizer(qlist, &info->well, s, prev_qv, &idx);
             q_state = decompress_qv(qvc->Quals, cluster_id, s, idx);
@@ -200,7 +203,9 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
 		}
         
         // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
-		fwrite(line, columns+1, sizeof(uint8_t), fout);
+	        line[cur_readlen] = '\n';
+		line[cur_readlen+1] = '\0';
+		fwrite(line, cur_readlen+1, sizeof(uint8_t), fout);
 	}
     
     // Last Line
@@ -208,6 +213,8 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
         printf("Line: %dM\n", lineCtr/1000000);
     }
     lineCtr++;
+    cur_readlen = *read_lengths;
+    read_lengths++;
     
 	cluster_id = qv_read_cluster(qvc->Quals);
 		assert(cluster_id < info->cluster_count);
@@ -222,7 +229,7 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
     line[0] = q->output_alphabet->symbols[q_state] + 33;
     prev_qv = line[0] - 33;
     
-    for (s = 1; s < columns - 1; ++s) {
+    for (s = 1; s < cur_readlen - 1; ++s) {
         // Quantize and compute error for MSE
         q = choose_quantizer(qlist, &info->well, s, prev_qv, &idx);
         q_state = decompress_qv(qvc->Quals, cluster_id, s, idx);
@@ -236,7 +243,9 @@ void start_qv_decompression(FILE *fout, FILE *fin, struct quality_file_t *info) 
     line[s] = q->output_alphabet->symbols[q_state] + 33;
     
     // Write this line to the output file, note '\n' at the end of the line buffer to get the right length
-    fwrite(line, columns+1, sizeof(uint8_t), fout);
+    line[cur_readlen] = '\n';
+    line[cur_readlen+1] = '\0';
+    fwrite(line, cur_readlen+1, sizeof(uint8_t), fout);
 
 	info->lines = lineCtr;
 }

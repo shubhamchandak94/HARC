@@ -13,16 +13,23 @@ std::string infile_id[2];
 std::string outfile_id[2];
 std::string infile_quality[2];
 std::string outfile_quality[2];
+std::string infile_readlength;
+std::string infile_order_1;
+std::string infile_order_2;
+std::string infile_paired_flag_first;
+
 std::string infilenumreads;
 
 int readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2;
 uint8_t paired_id_code;
+std::string preserve_order;
 
 void decompress_id();
-void decompress_quality();
+void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2);
+void load_readlengths(uint8_t *readlengths_1, uint8_t *readlengths_2);
 
-void decode(char *input_file, char *output_file, struct qv_options_t *opts);
+void decode(char *input_file, char *output_file, struct qv_options_t *opts, uint8_t *read_lengths);
 
 int main(int argc, char** argv)
 {
@@ -35,11 +42,16 @@ int main(int argc, char** argv)
 	infile_quality[1] = basedir + "/compressed_quality_2.bin";
 	outfile_quality[0] = basedir + "/quality_1.txt";
 	outfile_quality[1] = basedir + "/quality_2.txt";
+	infile_readlength = basedir + "/read_lengths.bin";
+	infile_order_1 = basedir + "/read_order.bin";
+	infile_order_2 = basedir + "/read_order_2.bin";
+	infile_paired_flag_first = basedir + "/read_paired_flag_first.bin";
 
 	infilenumreads = basedir + "/numreads.bin";
 	readlen = atoi(argv[2]);
 	num_thr = atoi(argv[3]);
 	num_thr_e = atoi(argv[4]);
+	preserve_order = std::string(argv[5]);
 
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
@@ -48,9 +60,13 @@ int main(int argc, char** argv)
 	f_numreads.close();
 	numreads_by_2 = numreads/2;
 	
+	uint8_t *readlengths_1 = new uint8_t[numreads_by_2];
+	uint8_t *readlengths_2 = new uint8_t[numreads_by_2];
+	load_readlengths(readlengths_1, readlengths_2);
+	
 	omp_set_num_threads(num_thr);
 	auto start_quality = std::chrono::steady_clock::now();
-	decompress_quality();
+	decompress_quality(readlengths_1, readlengths_2);
 	auto end_quality = std::chrono::steady_clock::now();
 	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
 	std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
@@ -92,7 +108,7 @@ void decompress_id()
 	return;
 }
 
-void decompress_quality()
+void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2)
 {
 	for(int k = 0; k < 2; k++)
 	{	
@@ -100,7 +116,13 @@ void decompress_quality()
 		{
 		int tid = omp_get_thread_num();
 		for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
-		{		
+		{
+			uint64_t start = uint64_t(tid_e)*(numreads_by_2/num_thr_e);
+			uint8_t* read_lengths;
+			if(k == 0)
+				read_lengths = readlengths_1 + start;
+			else
+				read_lengths = readlengths_2 + start;
 			struct qv_options_t opts;
 			opts.verbose = 1;
 			std::string input_file_string = (infile_quality[k]+"."+std::to_string(tid_e));
@@ -109,9 +131,71 @@ void decompress_quality()
 			std::string output_file_string = (outfile_quality[k]+"."+std::to_string(tid_e));
 			char *output_file = new char [output_file_string.length()+1];
 			strcpy(output_file,output_file_string.c_str());
-			decode(input_file,output_file,&opts);
+			decode(input_file,output_file,&opts,read_lengths);
 		}
 		}
+	}
+	return;
+}
+
+void load_readlengths(uint8_t *readlengths_1, uint8_t *readlengths_2)
+{
+	if(preserve_order == "True")
+	{
+		std::ifstream in_readlength(infile_readlength,std::ios::binary);
+		std::ifstream in_flag_first(infile_paired_flag_first);
+		std::ifstream in_order_1(infile_order_1,std::ios::binary);
+		std::ifstream in_order_2(infile_order_2,std::ios::binary);
+		uint8_t cur_readlen;
+		char flag_first;
+		uint32_t order;
+		for(uint32_t i = 0; i < numreads; i++)
+		{
+			in_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
+			in_flag_first >> flag_first;
+			if(flag_first == '1')
+			{
+				in_order_1.read((char*)&order,sizeof(uint32_t));
+				readlengths_1[order] = cur_readlen;
+			}
+			else
+			{
+				in_order_2.read((char*)&order,sizeof(uint32_t));
+				readlengths_2[order] = cur_readlen;
+			}
+		}
+		in_readlength.close();
+		in_flag_first.close();
+		in_order_1.close();
+		in_order_2.close();
+	}
+	else
+	{
+		std::ifstream in_readlength(infile_readlength,std::ios::binary);
+		std::ifstream in_flag_first(infile_paired_flag_first);
+		std::ifstream in_order_2(infile_order_2,std::ios::binary);
+		uint8_t cur_readlen;
+		char flag_first;
+		uint32_t j = 0;
+		uint32_t order;
+		for(uint32_t i = 0; i < numreads; i++)
+		{
+			in_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
+			in_flag_first >> flag_first;
+			if(flag_first == '1')
+			{
+				readlengths_1[j] = cur_readlen;
+				j++;
+			}
+			else
+			{
+				in_order_2.read((char*)&order,sizeof(uint32_t));
+				readlengths_2[order] = cur_readlen;
+			}
+		}
+		in_readlength.close();
+		in_flag_first.close();
+		in_order_2.close();
 	}
 	return;
 }

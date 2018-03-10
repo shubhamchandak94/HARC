@@ -188,6 +188,7 @@ void calculate_statistics(struct quality_file_t *info) {
 	uint32_t block, line_idx, column;
 	uint32_t j;
 	uint8_t c;
+	uint8_t cur_readlen;
 	char *line;
 	struct cluster_t *cluster;
 	struct cond_pmf_list_t *pmf_list;
@@ -199,6 +200,7 @@ void calculate_statistics(struct quality_file_t *info) {
 		for (line_idx = 0; line_idx < info->blocks[block].count; ++line_idx) {
 			f_order.read((char*)&order,sizeof(uint32_t));
 			line = info->blocks[block].quality_array+(uint64_t)(order)*(info->columns+1);
+			cur_readlen = info->blocks[block].read_lengths[order];
 //			line = &info->blocks[block].lines[line_idx];
 			cluster = &info->clusters->clusters[0];
 		//	cluster = &info->clusters->clusters[line->cluster];
@@ -206,7 +208,7 @@ void calculate_statistics(struct quality_file_t *info) {
 
 			// First, find conditional PMFs
 			pmf_increment(get_cond_pmf(pmf_list, 0, 0), line[0] - 33);
-			for (column = 1; column < info->columns; ++column) {
+			for (column = 1; column < cur_readlen; ++column) {
 				pmf_increment(get_cond_pmf(pmf_list, column, line[column-1] - 33), line[column] - 33);
 			}
 		}

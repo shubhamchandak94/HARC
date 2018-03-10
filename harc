@@ -188,15 +188,16 @@ decompress()
 	#calculate bitset size for decoder
 	bitset_size_decoder=$(((3*$max_readlen-1)/64*64+64))	
 	if [[ $paired_end == "True" ]];then
-		if [[ $preserve_quality == "True" ]];then
-			/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $max_readlen $num_thr $num_thr_e
-		fi	
 		if [[ $preserve_order == "True" ]];then
 			7z e $tempdir/read_order.bin.7z -o$tempdir/
 			/usr/bin/time -v ./$harcdir/bin/unpack_order.out $tempdir/
 		fi		
 		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
+		/usr/bin/time -v ./$harcdir/bin/pe_decode.out $tempdir/ $preserve_order
+		if [[ $preserve_quality == "True" ]];then
+			/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $max_readlen $num_thr $num_thr_e $preserve_order
+		fi	
 		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality
 		if [[ $preserve_quality == "True" ]];then
 			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.fastq.d

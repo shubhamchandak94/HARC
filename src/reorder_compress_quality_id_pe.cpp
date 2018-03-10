@@ -16,7 +16,7 @@
 uint8_t paired_id_code;
 std::string preserve_order;
 uint32_t numreads, numreads_by_2;
-int readlen, num_thr, quantization_level;
+int max_readlen, num_thr, quantization_level;
 //quantization level:
 //0:lossless
 //1:Illumina 8 binning
@@ -39,7 +39,7 @@ void generate_order();
 
 void reorder_quality();
 void reorder_id();
-void encode(FILE *fout, struct qv_options_t *opts, uint32_t readlen, uint32_t numreads, char *quality_array, std::string &infile_order, uint64_t startpos);
+void encode(FILE *fout, struct qv_options_t *opts, uint32_t max_readlen, uint32_t numreads, char *quality_array, uint8_t *read_lengths, std::string &infile_order, uint64_t startpos);
 
 
 int main(int argc, char** argv)
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
 	outfile_order = basedir + "/read_order.bin.tmp";
 	infilenumreads = basedir + "/numreads.bin";
 
-	readlen = atoi(argv[2]);
+	max_readlen = atoi(argv[2]);
 	num_thr = atoi(argv[3]);
 	preserve_order = std::string(argv[4]);	
 //	quantization_level = atoi(argv[3]);
@@ -115,14 +115,18 @@ void generate_order()
 
 void reorder_quality()
 {
-	char *quality = new char [(uint64_t)numreads_by_2*(readlen+1)];
+	char *quality = new char [(uint64_t)numreads_by_2*(max_readlen+1)];
+	uint8_t *read_lengths =  new uint8_t [numreads_by_2];
 	std::string infile_quality[2] = {infile_quality_1,infile_quality_2};		
 	for(int k = 0; k < 2; k++)
 	{
 		std::ifstream f_in(infile_quality[k]);
 
 		for (uint64_t i = 0; i < numreads_by_2; i++)
-			f_in.getline((quality+i*(readlen+1)),readlen+1);
+		{
+			f_in.getline((quality+i*(max_readlen+1)),max_readlen+1);
+			read_lengths[i] = f_in.gcount() - 1;
+		}
 		f_in.close();
 		#pragma omp parallel	
 		{
@@ -146,7 +150,7 @@ void reorder_quality()
 		FILE *fout;
 		fout = fopen(output_name, "wb");
 		opts.mode = MODE_FIXED;
-		encode(fout, &opts, readlen, numreads_thr, quality, outfile_order,start*sizeof(uint32_t));	
+		encode(fout, &opts, max_readlen, numreads_thr, quality, read_lengths, outfile_order,start*sizeof(uint32_t));	
 //		f_order.close();
 		}
 	}
