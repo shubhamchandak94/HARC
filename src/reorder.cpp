@@ -666,9 +666,8 @@ void reorder(bitset *read, bbhashdict *dict, uint8_t *read_lengths)
 	foutlength.close();
 //	std::cout << tid << ":Done"<<"\n";
 	}//parallel end
-		
+	
 	delete[] remainingreads;
-		
 	std::cout << "Reordering done, "<< std::accumulate(unmatched,unmatched+num_thr,0) <<" were unmatched\n";
 	return;
 }
@@ -751,6 +750,8 @@ bool search_match(bitset &ref, bitset *mask1, omp_lock_t *dict_lock, omp_lock_t 
 			}
 		}
 		omp_unset_lock(&dict_lock[startposidx & 0xFFFFFF]);
+		if(flag == 1)
+			break;
 	}
 	return flag;
 }

@@ -317,7 +317,9 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 										std::string read_string = rev?reverse_complement(bitsettostring(read[rid],read_lengths_s[rid]),read_lengths_s[rid]):bitsettostring(read[rid],read_lengths_s[rid]);
 										current_contig.push_back({read_string,pos,rc,order_s[rid],read_lengths_s[rid]});								
 										for(int l1 = 0;l1 < numdict_s; l1++)
-											deleted_rids[l1].push_back(rid);
+										{	if(read_lengths_s[rid] > dict_end[l1])
+												deleted_rids[l1].push_back(rid);
+										}
 									}
 								}
 							}
@@ -326,8 +328,6 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 							for(int l1= 0; l1 < numdict_s; l1++)
 								for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
 								{
-									if(read_lengths_s[*it] <= dict_end[l1])
-										continue;
 									b = read[*it]&mask1[l1];
 									ull = (b>>3*dict_start[l1]).to_ullong();
 									startposidx = dict[l1].bphf->lookup(ull);
@@ -424,7 +424,7 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 		{
 			matched_s--;
 			f_order.write((char*)&order_s[i],sizeof(uint32_t));
-			f_readlength.write((char*)&read_lengths_s[i],sizeof(uint32_t));
+			f_readlength.write((char*)&read_lengths_s[i],sizeof(uint8_t));
 			f_singleton << bitsettostring(read[i],read_lengths_s[i]);
 		}
 	uint32_t matched_N = numreads_N;
@@ -434,7 +434,7 @@ void encode(bitset *read, bbhashdict *dict, uint32_t *order_s, uint8_t *read_len
 			matched_N--;
 			f_N << bitsettostring(read[i],read_lengths_s[i]);
 			f_order.write((char*)&order_s[i],sizeof(uint32_t));
-			f_readlength.write((char*)&read_lengths_s[i],sizeof(uint32_t));
+			f_readlength.write((char*)&read_lengths_s[i],sizeof(uint8_t));
 		}
 	f_order.close();
 	f_readlength.close();

@@ -49,15 +49,14 @@ compress()
 	else
 		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
 	fi
-	max_readlen=$( cat $tempdir/read_meta.txt )
-	#calculate bitset sizes for reorder and encoder
-	bitset_size_reorder=$(((2*$max_readlen-1)/64*64+64))	
-	bitset_size_encoder=$(((3*$max_readlen-1)/64*64+64))	
+       max_readlen=$( cat $tempdir/read_meta.txt )
+       #calculate bitset sizes for reorder and encoder
+       bitset_size_reorder=$(((2*$max_readlen-1)/64*64+64))	
+       bitset_size_encoder=$(((3*$max_readlen-1)/64*64+64))	
 	/usr/bin/time -v ./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $max_readlen $num_thr
 	rm $tempdir/input_clean.dna
 	/usr/bin/time -v ./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $max_readlen $num_thr
 	rm $tempdir/input_N.dna
-	
 	#tar files produced by the threads
 	mkdir -p $tempdir/read_noise
 	mv $tempdir/read_noise.txt* $tempdir/read_noise
@@ -175,6 +174,7 @@ decompress()
 	7z e $tempdir/numreads.bin.7z -o$tempdir/
 	./$harcdir/bin/bsc d $tempdir/read_seq.tar.bsc $tempdir/read_seq.tar -t$num_thr
 	./$harcdir/bin/bsc d $tempdir/unaligned_singleton.txt.bsc $tempdir/unaligned_singleton.txt -t$num_thr
+	7z e $tempdir/read_lengths.bin.7z -o$tempdir/
 	
 	
 	tar -xf $tempdir/read_pos.tar -C $tempdir/
@@ -184,12 +184,12 @@ decompress()
 	tar -xf $tempdir/read_seq.tar -C $tempdir/
 	
 	num_thr_e=$(ls $tempdir/read_pos.txt* | wc -l) #number of encoding threads
-	readlen=$( cat $tempdir/read_meta.txt )
+	max_readlen=$( cat $tempdir/read_meta.txt )
 	#calculate bitset size for decoder
-	bitset_size_decoder=$(((3*$readlen-1)/64*64+64))	
+	bitset_size_decoder=$(((3*$max_readlen-1)/64*64+64))	
 	if [[ $paired_end == "True" ]];then
 		if [[ $preserve_quality == "True" ]];then
-			/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $readlen $num_thr $num_thr_e
+			/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $max_readlen $num_thr $num_thr_e
 		fi	
 		if [[ $preserve_order == "True" ]];then
 			7z e $tempdir/read_order.bin.7z -o$tempdir/
@@ -197,7 +197,7 @@ decompress()
 		fi		
 		7z e $tempdir/read_order_paired.bin.7z -o$tempdir/
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
-		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $readlen $num_thr $num_thr_e $preserve_order $preserve_quality
+		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality
 		if [[ $preserve_quality == "True" ]];then
 			mv $tempdir/output_1.txt $pathname/$(basename "$filename" .harc)_1.fastq.d
 			mv $tempdir/output_2.txt $pathname/$(basename "$filename" .harc)_2.fastq.d
