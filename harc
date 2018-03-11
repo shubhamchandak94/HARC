@@ -49,10 +49,10 @@ compress()
 	else
 		./$harcdir/bin/preprocess.out $filename $tempdir $preserve_quality $readlen
 	fi
-       max_readlen=$( cat $tempdir/read_meta.txt )
-       #calculate bitset sizes for reorder and encoder
-       bitset_size_reorder=$(((2*$max_readlen-1)/64*64+64))	
-       bitset_size_encoder=$(((3*$max_readlen-1)/64*64+64))	
+	max_readlen=$( cat $tempdir/read_meta.txt )
+	#calculate bitset sizes for reorder and encoder
+	bitset_size_reorder=$(((2*$max_readlen-1)/64*64+64))	
+	bitset_size_encoder=$(((3*$max_readlen-1)/64*64+64))
 	/usr/bin/time -v ./$harcdir/bin/reorder/reorder_$bitset_size_reorder".out" $tempdir $max_readlen $num_thr
 	rm $tempdir/input_clean.dna
 	/usr/bin/time -v ./$harcdir/bin/encoder/encoder_$bitset_size_encoder".out" $tempdir $max_readlen $num_thr
