@@ -207,36 +207,10 @@ void readDnaFile(bitset *read, uint8_t *read_lengths)
 	}	
 	f.close();
 	}
+	remove(infile.c_str());
 	return;
 }
 
-/*
-void readDnaFile(bitset *read)
-{
-	#pragma omp parallel
-	{
-	int tid = omp_get_thread_num();
-	uint32_t i, stop;	
-	//doing initial setup and first read
-	i = uint64_t(tid)*numreads/omp_get_num_threads();//spread out first read equally
-	stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
-	if(tid == omp_get_num_threads()-1)
-		stop = numreads;
-	std::ifstream f(infile, std::ifstream::in);
-	f.seekg(uint64_t(i)*(readlen+1), f.beg);
-	std::string s;
-	while(i < stop)
-	{
-		std::getline(f,s);
-		read[i] = stringtobitset(s);
-		i++;
-	}
-	f.close();
-	}
-	return;
-}
-*/
-	
 void generateindexmasks(bitset *mask1)
 //masks for dictionary positions
 {

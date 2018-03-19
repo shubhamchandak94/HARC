@@ -9,6 +9,7 @@
 #include "qv_compressor.h"
 #include "cluster.h"
 
+std::string basedir;
 std::string infile_id[2];
 std::string outfile_id[2];
 std::string infile_quality[2];
@@ -20,20 +21,21 @@ std::string infile_paired_flag_first;
 
 std::string infilenumreads;
 
-int readlen, num_thr, num_thr_e;
+int max_readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2;
 uint8_t paired_id_code;
-std::string preserve_order;
+std::string preserve_order, quality_mode;
 
 void decompress_id();
 void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2);
+void decompress_quality_bsc(uint8_t *readlengths_1, uint8_t *readlengths_2);
 void load_readlengths(uint8_t *readlengths_1, uint8_t *readlengths_2);
 
 void decode(char *input_file, char *output_file, struct qv_options_t *opts, uint8_t *read_lengths);
 
 int main(int argc, char** argv)
 {
-	std::string basedir = std::string(argv[1]);
+	basedir = std::string(argv[1]);
 	infile_id[0] = basedir + "/compressed_id_1.bin";
 	infile_id[1] = basedir + "/compressed_id_2.bin";
 	outfile_id[0] = basedir + "/id_1.txt";
@@ -48,10 +50,11 @@ int main(int argc, char** argv)
 	infile_paired_flag_first = basedir + "/read_paired_flag_first.bin";
 
 	infilenumreads = basedir + "/numreads.bin";
-	readlen = atoi(argv[2]);
+	max_readlen = atoi(argv[2]);
 	num_thr = atoi(argv[3]);
 	num_thr_e = atoi(argv[4]);
 	preserve_order = std::string(argv[5]);
+	quality_mode = std::string(argv[6]);
 
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
@@ -66,15 +69,18 @@ int main(int argc, char** argv)
 	
 	omp_set_num_threads(num_thr);
 	auto start_quality = std::chrono::steady_clock::now();
-	decompress_quality(readlengths_1, readlengths_2);
+	if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
+		decompress_quality_bsc(readlengths_1, readlengths_2);
+	else
+		decompress_quality(readlengths_1, readlengths_2);
 	auto end_quality = std::chrono::steady_clock::now();
 	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
-	std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
+//	std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
 	auto start_id = std::chrono::steady_clock::now();
 	decompress_id();
 	auto end_id = std::chrono::steady_clock::now();
 	auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
-	std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
+//	std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
 }
 
 void decompress_id()
@@ -83,8 +89,6 @@ void decompress_id()
 	{
 		if(paired_id_code != 0 && k==1)
 			break;
-//facing issues with parallel id
-
 		#pragma omp parallel
 		{
 		int tid = omp_get_thread_num();
@@ -124,7 +128,7 @@ void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2)
 			else
 				read_lengths = readlengths_2 + start;
 			struct qv_options_t opts;
-			opts.verbose = 1;
+			opts.verbose = 0;
 			std::string input_file_string = (infile_quality[k]+"."+std::to_string(tid_e));
 			char *input_file = new char [input_file_string.length()+1];
 			strcpy(input_file,input_file_string.c_str());
@@ -138,6 +142,30 @@ void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2)
 	return;
 }
 
+void decompress_quality_bsc(uint8_t *readlengths_1, uint8_t *readlengths_2)
+{
+	for(int k = 0; k < 2; k++)
+	{
+		uint8_t *read_lengths;
+		if(k == 0)
+			read_lengths = readlengths_1;
+		else
+			read_lengths = readlengths_2;
+		std::ifstream f_in(outfile_quality[k]);
+		std::ofstream f_out(outfile_quality[k]+".0");
+		char quality[max_readlen];
+		for(uint32_t i = 0; i < numreads_by_2; i++)
+		{
+			f_in.read(quality,read_lengths[i]);
+			quality[read_lengths[i]] = '\0';
+			f_out << quality << "\n";
+		}
+		f_in.close();
+		f_out.close();
+		remove(outfile_quality[k].c_str());
+	}
+	return;
+}
 void load_readlengths(uint8_t *readlengths_1, uint8_t *readlengths_2)
 {
 	if(preserve_order == "True")

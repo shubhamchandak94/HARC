@@ -25,7 +25,6 @@ void* compress(void *thread_info){
     
     unsigned long long lineCtr = 0;
     
-    printf("Compressing...\n");
     begin = clock();
     
     struct compressor_info_t info = *((struct compressor_info_t *)thread_info);
@@ -35,26 +34,17 @@ void* compress(void *thread_info){
     
     // Allocs the different blocks and all the models for the Arithmetic
     sam_block samBlock = alloc_sam_models(as, info.id_array, info.f_order, info.numreads, info.mode);
-    
-    printf("start line compression\n");
     char prev_ID[1024] = {0};//these were static before. That didn't play well with parallelization
     uint32_t prev_tokens_ptr[1024] = {0};		 
     while (!load_sam_line(samBlock)) {
 	compress_id(as, samBlock->IDs->models, *samBlock->IDs->IDs, prev_ID, prev_tokens_ptr);
         ++lineCtr;
-        if (lineCtr % 1000000 == 0) {
-          printf("[cbc] compressed %zu lines\n", lineCtr);
-        }
     }
     
     //end the compression
     compress_file_size = encoder_last_step(as);
     
-    printf("Final Size: %lld\n", compress_file_size);
-    
     ticks = clock() - begin;
-    
-//    printf("Compression (mapped reads only) took %f\n", ((float)ticks)/CLOCKS_PER_SEC);
     
     return NULL;
 }
@@ -83,6 +73,5 @@ void* decompress(void *thread_info){
     }
     
     ticks = clock() - begin;
-//    printf("Decompression (mapped reads only) took %f\n", ((float)ticks)/CLOCKS_PER_SEC);
     return NULL;
 }
