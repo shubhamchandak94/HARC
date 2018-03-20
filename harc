@@ -9,21 +9,23 @@ Compression tool for Fastq files. Works on reads of length less than 256. Maximu
 
 Usage: 
 Compression - compresses FASTQ files.
-./harc -c -1 Fastq_file_1 [-P -2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] -o outputfile
+./harc -c -1 Fastq_file_1 [-P -2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] [-i] -o outputfile
 -P paired end files, need to specify second file if this flag used
 -p Preserve order of reads
 -t num_threads - Default 8
--q Compress quality files. Possible modes:
+-q Retain quality values. Possible modes:
 	qvz - qvz specify bits/quality ratio using -r flag (default 8.0 lossless)
 	bsc - use bsc compressor. 
 	illumina_binning_bsc - bin into 8 levels and use bsc
 	illumina_binning_qvz - bin into 8 levels and use qvz lossless
 -r bits/quality ratio if -q qvz used [default 8.0 lossless]
+-i Retain read IDs, if not specified fake ids will be generated during decompression
 -o Output file name
 
 Decompression - decompress compressed archive.
 ./harc -d compressed_file -o outputfile [-t num_threads]
--o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2
+-o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2. If quality is not retained, FASTA file is produced.
+
 -t num_threads - Default 8
 
 Help (this message)
@@ -43,7 +45,7 @@ compress()
 	tempdir=$(mktemp -d -p $pathname)
 	trap "rm -rf $tempdir" EXIT
 	echo "*** Preprocessing ***"
-	/usr/bin/time -v ./$harcdir/bin/preprocess.out $paired_end $preserve_quality $tempdir $filename_1 $filename_2
+	/usr/bin/time -v ./$harcdir/bin/preprocess.out $paired_end $preserve_id $preserve_quality $tempdir $filename_1 $filename_2
 	max_readlen=$( cat $tempdir/read_meta.txt )
 	#calculate bitset sizes for reorder and encoder
 	bitset_size_reorder=$(((2*$max_readlen-1)/64*64+64))	
@@ -94,19 +96,17 @@ compress()
 		7z a $tempdir/read_paired_flag_first.bin.7z $tempdir/read_paired_flag_first.bin -mmt=$num_thr
 		rm $tempdir/read_paired_flag_first.bin
 	fi
-	if [[ $preserve_quality == "True" ]];then
-		echo "Compressing ids and quality"
-		/usr/bin/time -v ./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $max_readlen $num_thr $preserve_order $paired_end $quality_mode $quality_ratio $filename_1 $filename_2 
+	/usr/bin/time -v ./$harcdir/bin/reorder_compress_quality_id_pe.out $tempdir $max_readlen $num_thr $preserve_order $paired_end $preserve_quality $preserve_id $quality_mode $quality_ratio $filename_1 $filename_2 
+	if [[ $preserve_id == "True" ]];then
 		rm $tempdir/*.id
-		if [[ $quality_mode == "bsc" || $quality_mode == "illumina_binning_bsc" ]];then
-			./$harcdir/bin/bsc e $tempdir/quality_1.txt $tempdir/quality_1.txt.bsc -b64p -e2 -t$num_thr
-			rm $tempdir/quality_1.txt
-			if [[ $paired_end == "True" ]];then
-				./$harcdir/bin/bsc e $tempdir/quality_2.txt $tempdir/quality_2.txt.bsc -b64p -e2 -t$num_thr
-				rm $tempdir/quality_2.txt
-			fi
+	fi
+	if [[ $quality_mode == "bsc" || $quality_mode == "illumina_binning_bsc" ]];then
+		./$harcdir/bin/bsc e $tempdir/quality_1.txt $tempdir/quality_1.txt.bsc -b64p -e2 -t$num_thr
+		rm $tempdir/quality_1.txt
+		if [[ $paired_end == "True" ]];then
+			./$harcdir/bin/bsc e $tempdir/quality_2.txt $tempdir/quality_2.txt.bsc -b64p -e2 -t$num_thr
+			rm $tempdir/quality_2.txt
 		fi
-		echo "Done!"
 	fi
 	if [[ $preserve_order == "True" ]];then
 		./$harcdir/bin/pack_order.out $tempdir $paired_end
@@ -117,9 +117,11 @@ compress()
 	echo $preserve_order >> $tempdir/preserve_order
 	echo $paired_end >> $tempdir/paired_end
 	echo $preserve_quality >> $tempdir/preserve_quality
+	echo $preserve_id >> $tempdir/preserve_id
 	echo $quality_mode >> $tempdir/quality_mode
 	tar -cf $outputfilename -C $tempdir .
 	rm -r $tempdir/
+	echo "Done."
 }
 
 decompress()
@@ -133,6 +135,7 @@ decompress()
 	paired_end=$( cat $tempdir/paired_end )
 	preserve_order=$( cat $tempdir/preserve_order )
 	preserve_quality=$( cat $tempdir/preserve_quality )
+	preserve_id=$( cat $tempdir/preserve_id )
 	quality_mode=$( cat $tempdir/quality_mode )
 	
 	./$harcdir/bin/bsc d $tempdir/read_pos.tar.bsc $tempdir/read_pos.tar -t$num_thr
@@ -165,23 +168,21 @@ decompress()
 		7z e $tempdir/read_paired_flag_first.bin.7z -o$tempdir/
 		./$harcdir/bin/pe_decode.out $tempdir/ $preserve_order
 	fi
-	if [[ $preserve_quality == "True" ]];then
-		if [[ $quality_mode == "bsc" || $quality_mode == "illumina_binning_bsc" ]];then
-			./$harcdir/bin/bsc d $tempdir/quality_1.txt.bsc $tempdir/quality_1.txt -t$num_thr
-			if [[ $paired_end == "True" ]];then
-				./$harcdir/bin/bsc d $tempdir/quality_2.txt.bsc $tempdir/quality_2.txt -t$num_thr
-			fi
-		fi
+	if [[ $quality_mode == "bsc" || $quality_mode == "illumina_binning_bsc" ]];then
+		./$harcdir/bin/bsc d $tempdir/quality_1.txt.bsc $tempdir/quality_1.txt -t$num_thr
 		if [[ $paired_end == "True" ]];then
-			/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $max_readlen $num_thr $num_thr_e $preserve_order $quality_mode
-		else
-			/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_se.out $tempdir/ $max_readlen $num_thr $num_thr_e $preserve_order $quality_mode	
+			./$harcdir/bin/bsc d $tempdir/quality_2.txt.bsc $tempdir/quality_2.txt -t$num_thr
 		fi
 	fi
-	if [[ $paired_end == "True" ]];then	
-		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality
+	if [[ $paired_end == "True" ]];then
+		/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_pe.out $tempdir/ $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id $quality_mode
 	else
-		/usr/bin/time -v ./$harcdir/bin/decoder_se/decoder_se_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality
+		/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_se.out $tempdir/ $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id $quality_mode
+	fi
+	if [[ $paired_end == "True" ]];then	
+		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id
+	else
+		/usr/bin/time -v ./$harcdir/bin/decoder_se/decoder_se_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id
 	fi
 	if [[ $paired_end == "True" ]];then	
 		mv $tempdir/output_1.txt $outputfilename".1"
@@ -209,11 +210,12 @@ compressedfilename=''
 preserve_order="False"
 paired_end="False"
 preserve_quality="False"
+preserve_id="False"
 quality_mode=''
 quality_ratio=''
 outputfilename=''
 
-while getopts ':c1:2:o:d:t:pq:r:Ph' opt; do
+while getopts ':c1:2:o:d:t:pq:r:iPh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c';;
     d) [[ -n "$mode" ]] && usage || mode='d' && compressedfilename=$OPTARG;;
@@ -225,6 +227,7 @@ while getopts ':c1:2:o:d:t:pq:r:Ph' opt; do
     P) paired_end="True";;	
     q) preserve_quality="True" && quality_mode=$OPTARG;;
     r) quality_ratio=$OPTARG;;	
+    i) preserve_id="True";;	
     h) usage ;;
     \?) usage ;;
     *) usage ;;
@@ -265,6 +268,8 @@ if [[ $mode == 'c' ]];then
 			usage
 			exit 1
 		fi
+	else
+		quality_ratio=''
 	fi			
 	compress
 elif [[ $mode == 'd' ]];then

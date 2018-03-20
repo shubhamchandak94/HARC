@@ -20,7 +20,7 @@ std::string infilenumreads;
 
 int max_readlen, num_thr, num_thr_e;
 uint32_t numreads;
-std::string preserve_order, quality_mode;
+std::string preserve_order, quality_mode, preserve_quality, preserve_id;
 
 void decompress_id();
 void decompress_quality(uint8_t *readlengths);
@@ -43,30 +43,43 @@ int main(int argc, char** argv)
 	num_thr = atoi(argv[3]);
 	num_thr_e = atoi(argv[4]);
 	preserve_order = std::string(argv[5]);
-	quality_mode = std::string(argv[6]);
+	preserve_quality = std::string(argv[6]);
+	preserve_id = std::string(argv[7]);
+	if(preserve_quality == "True")
+		quality_mode = std::string(argv[8]);
+	
+	if(preserve_quality == "False" && preserve_id == "False")
+		return 0;
 
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
 	f_numreads.close();
-	
-	uint8_t *readlengths = new uint8_t[numreads];
-	load_readlengths(readlengths);
-	
+ 	std::cout << "Decompressing Quality and/or IDs\n";	
 	omp_set_num_threads(num_thr);
-	auto start_quality = std::chrono::steady_clock::now();
-	if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
-		decompress_quality_bsc(readlengths);
-	else
-		decompress_quality(readlengths);
-	auto end_quality = std::chrono::steady_clock::now();
-	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
-//	std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
-	auto start_id = std::chrono::steady_clock::now();
-	decompress_id();
-	auto end_id = std::chrono::steady_clock::now();
-	auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
-//	std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
+
+	if(preserve_quality == "True")
+	{
+		uint8_t *readlengths = new uint8_t[numreads];
+		load_readlengths(readlengths);
+		
+		auto start_quality = std::chrono::steady_clock::now();
+		if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
+			decompress_quality_bsc(readlengths);
+		else
+			decompress_quality(readlengths);
+		auto end_quality = std::chrono::steady_clock::now();
+		auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
+		//std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
+	}
+	if(preserve_id == "True")
+	{
+		auto start_id = std::chrono::steady_clock::now();
+		decompress_id();
+		auto end_id = std::chrono::steady_clock::now();
+		auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
+		//std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
+	}
 }
 
 void decompress_id()

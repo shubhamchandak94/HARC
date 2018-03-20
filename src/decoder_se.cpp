@@ -27,7 +27,8 @@ std::string infile_readlength;
 
 int max_readlen, num_thr, num_thr_e;
 uint32_t numreads; 
-std::string preserve_order, preserve_quality;
+uint32_t global_counter;
+std::string preserve_order, preserve_quality, preserve_id;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -81,6 +82,7 @@ int main(int argc, char** argv)
 	num_thr_e = atoi(argv[4]);
 	preserve_order = std::string(argv[5]);
 	preserve_quality = std::string(argv[6]);
+	preserve_id = std::string(argv[7]);
 	
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
@@ -278,30 +280,26 @@ void decode()
 		std::string quality, id;
 		std::string quality_file_prefix, id_file_prefix;
 		int current_tid_quality = 0, current_tid_id = 0;
+		
+		quality_file_prefix = infile_quality;
+		id_file_prefix = infile_id;
 		if(preserve_quality == "True" )
-		{
-			quality_file_prefix = infile_quality;
-			id_file_prefix = infile_id;
 			fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
+		if(preserve_id == "True" )
 			fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
-		}	
+		global_counter = 1;
 		char currentread[MAX_READ_LEN+1];
 		std::ofstream f_1;	
 		f_1.open(outfile);
 		for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 		{
 			std::ifstream f_in_1(outfile+'.'+std::to_string(tid_e));
-			if(preserve_quality == "True")
+			f_in_1.getline(currentread,max_readlen+1);
+			while(!f_in_1.eof())
 			{
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
 				f_in_1.getline(currentread,max_readlen+1);
-				while(!f_in_1.eof())
-				{
-					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
-					f_in_1.getline(currentread,max_readlen+1);
-				}	
-			}
-			else
-				f_1 << f_in_1.rdbuf();
+			}	
 			f_1.clear();//clear error flags if f_in is empty	
 			f_in_1.close();
 		}
@@ -320,10 +318,7 @@ void decode()
 			while(!f_singleton.eof())
 			{	
 				currentread[cur_readlen] = '\0';			
-				if(preserve_quality == "True")
-					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
-				else	
-					f_1 << currentread << "\n";
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
 				
 				f_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
 				f_singleton.read(currentread,cur_readlen);
@@ -338,10 +333,7 @@ void decode()
 			while(!f_N.eof())
 			{
 				currentread[cur_readlen] = '\0';
-				if(preserve_quality == "True")
-					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
-				else	
-					f_1 << currentread << "\n";
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
 				f_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
 				f_N.read(currentread,cur_readlen);
 				pos_in_reorder_reads++;
@@ -370,13 +362,13 @@ void restore_order(std::string outfile, std::string infile_order)
 	std::ifstream fin_id;
 	std::string quality_file_prefix, id_file_prefix;
 	int current_tid_quality = 0, current_tid_id = 0;
+	quality_file_prefix = infile_quality;
+	id_file_prefix = infile_id;
 	if(preserve_quality == "True")
-	{
-		quality_file_prefix = infile_quality;
-		id_file_prefix = infile_id;
 		fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
+	if(preserve_id == "True")
 		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
-	}	
+	global_counter = 1;
 	uint32_t *index_array = new uint32_t [max_bin_size];
 	bitset *reads_bin = new bitset [max_bin_size];
 	uint8_t *read_lengths_bin = new uint8_t [max_bin_size];
@@ -401,19 +393,11 @@ void restore_order(std::string outfile, std::string infile_order)
 				pos++;
 			}
 		}
-		if(preserve_quality == "True")
-			for(uint32_t j = 0; j < numreads_bin; j++)
-			{
-				bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
-				write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout);
-			}
-		else
-			for(uint32_t j = 0; j < numreads_bin; j++)
-			{
-				bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
-				fout << s << "\n";
-			}
-		
+		for(uint32_t j = 0; j < numreads_bin; j++)
+		{
+			bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
+			write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout);
+		}
 
 		f_order.close();
 		f.close();
@@ -432,26 +416,33 @@ void restore_order(std::string outfile, std::string infile_order)
 void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout)
 {
 	std::string quality,id;
-	if(!std::getline(fin_quality,quality))
-	{
-		fin_quality.close();
-		remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
-		current_tid_quality++;
-		fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
-		std::getline(fin_quality,quality);
-	}
-	if(!std::getline(fin_id,id))
-	{
-		fin_id.close();
-		current_tid_id++;
-		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
-		std::getline(fin_id,id);
-	}
-	
-	fout << id << "\n";	
+	if(preserve_quality == "True")
+		if(!std::getline(fin_quality,quality))
+		{
+			fin_quality.close();
+			remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
+			current_tid_quality++;
+			fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
+			std::getline(fin_quality,quality);
+		}
+	if(preserve_id == "True")
+		if(!std::getline(fin_id,id))
+		{
+			fin_id.close();
+			current_tid_id++;
+			fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
+			std::getline(fin_id,id);
+		}
+	if(preserve_id == "False")	
+		fout << "@" << global_counter++ << "\n";	
+	else
+		fout << id << "\n";
 	fout << read << "\n";
-	fout << "+\n";
-	fout << quality << "\n";
+	if(preserve_quality == "True")
+	{
+		fout << "+\n";
+		fout << quality << "\n";
+	}
 }
 
 void unpackbits()

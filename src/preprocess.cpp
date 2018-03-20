@@ -10,7 +10,7 @@ std::string outfileorderN;
 std::string outfileid[2];
 std::string outfilenumreads;
 std::string outfile_meta;
-std::string preserve_quality, paired_end;
+std::string preserve_id, preserve_quality, paired_end;
 
 int max_readlen=-1;
 
@@ -23,11 +23,12 @@ bool check_id_pattern(std::string &id_1,std::string &id_2, uint8_t paired_id_cod
 int main(int argc, char** argv)
 {
 	paired_end = std::string(argv[1]);
-	preserve_quality = std::string(argv[2]);
-	std::string basedir = std::string(argv[3]);
-	infile[0] = std::string(argv[4]);
+	preserve_id = std::string(argv[2]);
+	preserve_quality = std::string(argv[3]);
+	std::string basedir = std::string(argv[4]);
+	infile[0] = std::string(argv[5]);
 	if(paired_end == "True")
-		infile[1] = std::string(argv[5]);
+		infile[1] = std::string(argv[6]);
 	outfileclean = basedir + "/input_clean.dna";
 	outfileN = basedir + "/input_N.dna";
 	outfileorderN = basedir + "/read_order_N.bin";
@@ -67,7 +68,7 @@ int preprocess()
 		std::ofstream f_id;
 		std::ifstream fin_id_1;
 
-		if(preserve_quality == "True")
+		if(preserve_id == "True")
 		{
 			f_id.open(outfileid[j]);
 			if(j==1)
@@ -92,7 +93,7 @@ int preprocess()
 		{
 			switch(i)
 			{
-				case 0:	if(preserve_quality == "True")
+				case 0:	if(preserve_id == "True")
 					{
 						f_id << line << "\n";
 						if(j==1 && paired_id_match)
@@ -170,7 +171,7 @@ int preprocess()
 		std::cout << "Max Read length: " << max_readlen << "\n";
 		std::cout << "Total number of reads: " << readnum <<"\n";
 		std::cout << "Total number of reads without N: " << num_clean <<"\n";
-		if(preserve_quality == "True" && paired_end == "True")
+		if(preserve_id == "True" && paired_end == "True")
 			std::cout << "Paired id match code: " << (int)paired_id_code << "\n";
 		f_numreads.close();
 		std::ofstream f_meta(outfile_meta);

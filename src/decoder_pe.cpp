@@ -31,8 +31,9 @@ std::string infile_readlength;
 
 int max_readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2; 
+uint32_t global_counter;
 uint8_t paired_id_code;
-std::string preserve_order, preserve_quality;
+std::string preserve_order, preserve_quality, preserve_id;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -54,7 +55,7 @@ void restore_order(std::string outfile, std::string infile_order, int filenum);
 
 void modify_id(std::string &id, uint8_t paired_id_code);
 
-void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match);
+void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match, int filenum);
 
 void unpackbits();
 
@@ -95,6 +96,7 @@ int main(int argc, char** argv)
 	num_thr_e = atoi(argv[4]);
 	preserve_order = std::string(argv[5]);
 	preserve_quality = std::string(argv[6]);
+	preserve_id = std::string(argv[7]);
 	
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
@@ -352,13 +354,13 @@ void decode()
 		std::string quality, id;
 		std::string quality_file_prefix, id_file_prefix;
 		int current_tid_quality = 0, current_tid_id = 0;
-		if(preserve_quality == "True" )
-		{
-			quality_file_prefix = infile_quality[0];
-			id_file_prefix = infile_id[0];
+		quality_file_prefix = infile_quality[0];
+		id_file_prefix = infile_id[0];
+		if(preserve_quality == "True")
 			fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
+		if(preserve_id == "True")
 			fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
-		}	
+		global_counter = 1;
 		char currentread[MAX_READ_LEN+1];
 		std::ofstream f_1;	
 		f_1.open(outfile_1);
@@ -367,17 +369,13 @@ void decode()
 		{
 			std::ifstream f_in_1(outfile_1+'.'+std::to_string(tid_e));
 			std::ifstream f_in_2(outfile_2+'.'+std::to_string(tid_e),std::ios::binary);
-			if(preserve_quality == "True")
+			f_in_1.getline(currentread,max_readlen+1);
+			while(!f_in_1.eof())
 			{
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1);
 				f_in_1.getline(currentread,max_readlen+1);
-				while(!f_in_1.eof())
-				{
-					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match);
-					f_in_1.getline(currentread,max_readlen+1);
-				}	
 			}
-			else
-				f_1 << f_in_1.rdbuf();
+	
 			f_2 << f_in_2.rdbuf();
 			f_1.clear();//clear error flags if f_in is empty	
 			f_2.clear();//clear error flags if f_in is empty	
@@ -405,11 +403,7 @@ void decode()
 				currentread[cur_readlen] = '\0';			
 				if(flag_first == '1')
 				{
-					if(preserve_quality == "True")
-						write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match);
-					else	
-						f_1 << currentread << "\n";
-				
+					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1);
 				}
 				else
 				{			
@@ -433,10 +427,7 @@ void decode()
 				currentread[cur_readlen] = '\0';
 				if(flag_first == '1')
 				{
-					if(preserve_quality == "True")
-						write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match);
-					else	
-						f_1 << currentread << "\n";
+					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1);
 				}
 				else
 				{			
@@ -476,27 +467,27 @@ void restore_order(std::string outfile, std::string infile_order, int filenum)
 	bool paired_id_match = false;
 	std::string quality_file_prefix, id_file_prefix;
 	int current_tid_quality = 0, current_tid_id = 0;
-	if(preserve_quality == "True")
+	if(filenum == 1)
 	{
-		if(filenum == 1)
-		{
-			quality_file_prefix = infile_quality[0];
-			id_file_prefix = infile_id[0];
-		}	
-		else
-		{
-			quality_file_prefix = infile_quality[1];
-			if(paired_id_code != 0)
-			{
-				id_file_prefix = infile_id[0];
-				paired_id_match = true;
-			}
-			else
-				id_file_prefix = infile_id[1];
-		}
-		fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
-		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
+		quality_file_prefix = infile_quality[0];
+		id_file_prefix = infile_id[0];
 	}	
+	else
+	{
+		quality_file_prefix = infile_quality[1];
+		if(paired_id_code != 0)
+		{
+			id_file_prefix = infile_id[0];
+			paired_id_match = true;
+		}
+		else
+			id_file_prefix = infile_id[1];
+	}
+	global_counter = 1;
+	if(preserve_quality == "True")
+		fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
+	if(preserve_id == "True")
+		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
 	uint32_t *index_array = new uint32_t [max_bin_size];
 	bitset *reads_bin = new bitset [max_bin_size];
 	uint8_t *read_lengths_bin = new uint8_t [max_bin_size];
@@ -521,19 +512,11 @@ void restore_order(std::string outfile, std::string infile_order, int filenum)
 				pos++;
 			}
 		}
-		if(preserve_quality == "True")
-			for(uint32_t j = 0; j < numreads_bin; j++)
-			{
-				bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
-				write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout,paired_id_match);
-			}
-		else
-			for(uint32_t j = 0; j < numreads_bin; j++)
-			{
-				bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
-				fout << s << "\n";
-			}
-		
+		for(uint32_t j = 0; j < numreads_bin; j++)
+		{
+			bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
+			write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout,paired_id_match, filenum);
+		}
 
 		f_order.close();
 		f.close();
@@ -549,31 +532,41 @@ void restore_order(std::string outfile, std::string infile_order, int filenum)
 	return;
 }
 
-void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match)
+void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match, int filenum)
 {
 	std::string quality,id;
-	if(!std::getline(fin_quality,quality))
+	if(preserve_quality == "True")
+		if(!std::getline(fin_quality,quality))
+		{
+			fin_quality.close();
+			remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
+			current_tid_quality++;
+			fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
+			std::getline(fin_quality,quality);
+		}
+	if(preserve_id == "True")
 	{
-		fin_quality.close();
-		remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
-		current_tid_quality++;
-		fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
-		std::getline(fin_quality,quality);
+		if(!std::getline(fin_id,id))
+		{
+			fin_id.close();
+			current_tid_id++;
+			fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
+			std::getline(fin_id,id);
+		}
+		
+		if(paired_id_match)
+			modify_id(id,paired_id_code);
 	}
-	if(!std::getline(fin_id,id))
-	{
-		fin_id.close();
-		current_tid_id++;
-		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
-		std::getline(fin_id,id);
-	}
-	
-	if(paired_id_match)
-		modify_id(id,paired_id_code);
-	fout << id << "\n";	
+	if(preserve_id == "False")
+		fout << "@" << global_counter++ << "/" << filenum << "\n";
+	else
+		fout << id << "\n";
 	fout << read << "\n";
-	fout << "+\n";
-	fout << quality << "\n";
+	if(preserve_quality == "True")
+	{
+		fout << "+\n";
+		fout << quality << "\n";
+	}
 }
 
 void modify_id(std::string &id, uint8_t paired_id_code)

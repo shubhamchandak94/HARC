@@ -14,7 +14,7 @@
 #include "cluster.h"
 
 uint8_t paired_id_code;
-std::string preserve_order, quality_mode, paired_end;
+std::string preserve_order, quality_mode, paired_end, preserve_quality, preserve_id;
 double quality_ratio;
 uint32_t numreads, numreads_by_2;
 int max_readlen, num_thr;
@@ -51,12 +51,24 @@ int main(int argc, char** argv)
 	num_thr = atoi(argv[3]);
 	preserve_order = std::string(argv[4]);	
 	paired_end = std::string(argv[5]);
-	quality_mode = std::string(argv[6]);
-	quality_ratio = atof(argv[7]);
-	infile_fastq_1 = std::string(argv[8]);
-	if(paired_end == "True")
-		infile_fastq_2 = std::string(argv[9]);
-	
+	preserve_quality = std::string(argv[6]);
+	preserve_id = std::string(argv[7]);
+	if(preserve_quality == "True")
+	{
+		quality_mode = std::string(argv[8]);
+		quality_ratio = atof(argv[9]);
+		infile_fastq_1 = std::string(argv[10]);
+		if(paired_end == "True")
+			infile_fastq_2 = std::string(argv[11]);
+	}
+	else
+	{
+		infile_fastq_1 = std::string(argv[8]);
+		if(paired_end == "True")
+			infile_fastq_2 = std::string(argv[9]);
+	}
+	if(preserve_quality == "False" && preserve_id == "False")
+		return 0;
 	//fill illumina binning table
 	generate_illumina_binning_table();
 
@@ -71,12 +83,15 @@ int main(int argc, char** argv)
 		numreads_by_2 = numreads;
 	generate_order();
 	auto start_quality = std::chrono::steady_clock::now();
-	reorder_quality();
+	std::cout << "Compressing qualities and/or ids\n";
+	if(preserve_quality == "True")
+		reorder_quality();
 	auto end_quality = std::chrono::steady_clock::now();
 	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
 //	std::cout << "\nQuality compression total time: " << diff_quality.count() << " s\n";
 	auto start_id = std::chrono::steady_clock::now();
-	reorder_id();
+	if(preserve_id == "True")
+		reorder_id();
 	auto end_id = std::chrono::steady_clock::now();
 	auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
 //	std::cout << "\nID compression total time: " << diff_id.count() << " s\n";

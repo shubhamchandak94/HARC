@@ -4,8 +4,6 @@
 mkdir -p data
 
 #libbsc for read_seq compression
-rm -rf src/libbsc
-git clone https://github.com/shubhamchandak94/libbsc.git src/libbsc
 (cd src/libbsc && make)
 cp src/libbsc/bsc bin/
 
@@ -13,7 +11,6 @@ cp src/libbsc/bsc bin/
 
 #Compilation of files
 g++ src/preprocess.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess.out
-g++ src/decoder.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/decoder.out
 g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pack_order.out
 g++ src/pe_encode.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pe_encode.out
 g++ src/unpack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/unpack_order.out
@@ -39,7 +36,7 @@ do
 	max_read_len=$(($bitset_size/3))
 	echo "#define MAX_READ_LEN $max_read_len" > src/config.h
 	g++ src/encoder.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/encoder/encoder_$bitset_size".out"
-	g++ src/decoder_pe.cpp -march=native -Wall -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_pe/decoder_pe_$bitset_size".out"
-	g++ src/decoder_se.cpp -march=native -Wall -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_se/decoder_se_$bitset_size".out"
+	g++ src/decoder_pe.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_pe/decoder_pe_$bitset_size".out"
+	g++ src/decoder_se.cpp -march=native -O3 -fopenmp -lpthread -std=c++11 -o bin/decoder_se/decoder_se_$bitset_size".out"
 done
 rm src/config.h
