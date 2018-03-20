@@ -45,7 +45,7 @@ For compressing file_1.fastq and file_2.fastq losslessly using default 8 threads
 ```
 Using BSC instead of QVZ, 16 threads.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -i -p -o outputname -t 16
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q bsc -i -p -o outputname -t 16
 ```
 Compressing with only paired end info preserved, ids not stored.
 ```bash
