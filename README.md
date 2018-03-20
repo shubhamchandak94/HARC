@@ -1,6 +1,6 @@
 # HARC
 
-HARC (HAsh-based Read Compressor) - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100 during compression. The algorithm requires C++11 and g++ compiler and works on Linux. p7zip should already be installed.
+Compression tool for Fastq files. For paired end reads, both files should have same number of reads. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. The algorithm requires C++11 and g++ compiler and works on Linux. p7zip should already be installed.
 
 ### Installation
 ```bash
@@ -10,29 +10,27 @@ cd HARC
 ```
 
 ### Usage
-##### Compression - compresses FASTQ reads. Output written to .harc file
+##### Compression - compresses FASTQ files.
 ```bash
-./harc -c FASTQ_file [-p] [-t num_threads] [-q]
-
--p = Preserve order of reads (compression ratio 2-4x worse if order preserved)
-
--t num_threads - default 8
-
--q = Write quality values and read IDs to .quality and .id files, respectively. 
-Quality values and read IDs are appropriately reordered if -p is not specified. 
+./harc -c -1 Fastq_file_1 [-P -2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] [-i] -o outputfile
+-P paired end files, need to specify second file if this flag used
+-p Preserve order of reads
+-t num_threads - Default 8
+-q Retain quality values. Possible modes:
+	qvz - qvz specify bits/quality ratio using -r flag (default 8.0 lossless)
+	bsc - use bsc compressor. 
+	illumina_binning_bsc - bin into 8 levels and use bsc
+	illumina_binning_qvz - bin into 8 levels and use qvz lossless
+-r bits/quality ratio if -q qvz used [default 8.0 lossless]
+-i Retain read IDs, if not specified fake ids will be generated during decompression
+-o Output file name
 ```
 
-##### Decompression - decompresses reads. Output written to .dna.d file
+##### Decompression - decompress compressed archive.
 ```bash
-./harc -d HARC_file [-p] [-t num_threads] [-m max_memory]
-
--p = Get reads in original order (slower). Only applicable if -p was used during compression.
-
--t num_threads - default 8
-
--m max_memory - Controls memory-time tradeoff for decompression with -p. 
-Specify max memory in GB (minimum 3 GB for 8 threads). e.g. -m 10 for 10 GB maximum memory. 
-Default: 7 GB (note: less than 3 GB memory required if -p not specified)
+./harc -d compressed_file -o outputfile [-t num_threads]
+-o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2
+-t num_threads - Default 8
 ```
 
 ##### Help (this message)
