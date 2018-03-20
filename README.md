@@ -29,7 +29,7 @@ cd HARC
 ##### Decompression - decompress compressed archive.
 ```bash
 ./harc -d compressed_file -o outputfile [-t num_threads]
--o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2
+-o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2. If quality is not retained, FASTA file is produced.
 -t num_threads - Default 8
 ```
 
@@ -39,37 +39,54 @@ cd HARC
 ```
 
 ### Example Usage of HARC
-For compressing file.fastq in the HARC home directory without preserving order using default 8 threads, 
+For compressing file_1.fastq and file_2.fastq losslessly using default 8 threads and qvz for qualities.
 ```bash
-./harc -c file.fastq
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -i -p -o outputname
 ```
-The compressed file is located in the same directory and is named file.harc.
-
-To decompress file.harc to file.dna.d containing the reads (not in the original order) using 4 threads,
+Using BSC instead of QVZ, 16 threads.
 ```bash
-./harc -d file.harc -t 4
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -i -p -o outputname -t 16
 ```
-
-For compressing file.fastq while preserving its order, run 
+Compressing with only paired end info preserved, ids not stored.
 ```bash
-./harc -c file.fastq -p
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -o outputname
 ```
-
-Now, file.harc also contains the order information and it can be decompressed with or without the -p flag. If -p flag is not used, the reads will be decompressed faster but not in the original order. To decompress and restore the original order, run
+Compressing with Illumina binning followed by qvz.
 ```bash
-./harc -d file.harc -p
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q illumina_binning_qvz -i -p -o outputname
 ```
-Decompression with -p flag also allows the user to set the maximum memory used during the order restoration step by using the -m flag, e.g., to use at most 10 GB memory for that step while decompressing, run
+Compressing with Illumina binning followed by BSC.
 ```bash
-./harc -d file.harc -p -m 10
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q illumina_binning_bsc -i -p -o outputname
 ```
-Note, however, that the BSC decompression step uses 350 MB/thread (both with and without -p) irrespective of the -m switch. This component can be controlled by reducing the number of threads. Also, maximum threads used by HARC during decompression is limited by the number of threads used during compression.
-
-To preserve the quality and read identifiers, use -q switch during compression, e.g.,
+Compressing with QVZ lossy compression with rate 1.0 bits/quality value.
 ```bash
-./harc -c file.fastq -q
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -r 1.0 -i -p -o outputname
 ```
-This will write the quality values to file.quality and read identifiers to file.id in the same directory as file.fastq. Since the command was run without the -p flag, the quality values and the IDs will be reordered to match the new order of the reads. Quality value compressor QVZ (available at https://github.com/mikelhernaez/qvz) can be used to directly compress file.quality.
+Compressing only reads and ids.
+```bash
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -i -p -o outputname
+```
+Compressing only reads losslessly.
+```bash
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -p -o outputname
+```
+Compressing only reads with paired end info preserved.
+```bash
+./harc -c -1 file_1.fastq -P -2 file_2.fastq -o outputname
+```
+For single end file, compressing without order preserved.
+```bash
+./harc -c -1 file_1.fastq -q qvz -i -o outputname
+```
+For single end file, compressing with order preserved (lossless).
+```bash
+./harc -c -1 file_1.fastq -q qvz -i -p -o outputname
+```
+Decompression.
+```bash
+./harc -d compressedfilename -o uncompressedfilename
+```
 
 ### Downloading datasets
 ###### Genomic sequencing reads
