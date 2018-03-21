@@ -5,7 +5,7 @@ CC=g++
 RM=rm -f
 
 CXXFLAGS=-O3 -march=native -ffast-math -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -Wall -I../include -I/usr/local/include -I../libssh/build/src  -D__APPLE__ -std=c++11
-LDFLAGS=-L/usr/local/lib -lc -lm -lpthread -L../libssh/build/src -lssh -I../include -std=c++11
+LDFLAGS=-L/usr/local/lib -lc -lm -lpthread -I../include -std=c++11
 
 %.o : %.c
 	$(CC) -gdwarf-2 $(CXXFLAGS) -c $< 
