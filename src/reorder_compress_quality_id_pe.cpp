@@ -137,10 +137,38 @@ void generate_order()
 
 void reorder_quality()
 {
-	char *quality = new char [(uint64_t)numreads_by_2*(max_readlen+1)];
-	uint8_t *read_lengths =  new uint8_t [numreads_by_2];
 	std::string infile_fastq[2] = {infile_fastq_1,infile_fastq_2};		
 	std::string line;
+	char line_ch[max_readlen+1];
+	uint8_t cur_readlen;
+	if((quality_mode == "bsc" || quality_mode == "illumina_binning_bsc") && preserve_order == "True")
+	//just write to file without newlines
+	{
+		for(int k = 0; k < 2; k++)
+		{
+			if(k == 1 && paired_end == "False")
+				continue;
+			std::ifstream f_in(infile_fastq[k]);
+			std::ofstream f_out(basedir+"/quality_"+std::to_string(k+1)+".txt");
+			for (uint64_t i = 0; i < numreads_by_2; i++)
+			{
+				std::getline(f_in,line);
+				std::getline(f_in,line);
+				std::getline(f_in,line);
+				f_in.getline(line_ch,max_readlen+1);
+				cur_readlen = f_in.gcount() - 1;
+				if(quality_mode == "illumina_binning_bsc")
+					illumina_binning(line_ch, cur_readlen);
+				f_out.write(line_ch, cur_readlen);
+			}
+			f_in.close();
+			f_out.close();
+		}
+		return;
+	}
+	char *quality = new char [(uint64_t)numreads_by_2*(max_readlen+1)];
+	uint8_t *read_lengths =  new uint8_t [numreads_by_2];
+
 	for(int k = 0; k < 2; k++)
 	{
 		if(k == 1 && paired_end == "False")
@@ -154,25 +182,11 @@ void reorder_quality()
 			std::getline(f_in,line);
 			f_in.getline((quality+i*(max_readlen+1)),max_readlen+1);
 			read_lengths[i] = f_in.gcount() - 1;
-			if(quality_mode == "illumina_binning_qvz" || quality_mode == "illumina_binning_bsc")
+			if(quality_mode == "illumina_binning_qvz")
 				illumina_binning(quality+i*(max_readlen+1), read_lengths[i]);
 		}
 		f_in.close();
 
-		if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
-		{	
-			//just write to file without newlines
-			std::ofstream f_out(basedir+"/quality_"+std::to_string(k+1)+".txt");
-			std::ifstream f_order(outfile_order,std::ios::binary);
-			uint32_t order;
-			for (uint64_t i = 0; i < numreads_by_2; i++)
-			{
-				f_order.read((char*)&order,sizeof(uint32_t));
-				f_out.write(quality+(uint64_t)order*(max_readlen+1), read_lengths[order]);
-			}	
-			f_out.close();
-			continue;
-		}
 		#pragma omp parallel	
 		{
 		int tid = omp_get_thread_num();
