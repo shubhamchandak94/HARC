@@ -9,8 +9,8 @@ Compression tool for Fastq files. Works on reads of length less than 256. Maximu
 
 Usage: 
 Compression - compresses FASTQ files.
-./harc -c -1 Fastq_file_1 [-P -2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] [-i] -o outputfile
--P paired end files, need to specify second file if this flag used
+./harc -c -1 Fastq_file_1 [-2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] [-i] -o outputfile
+-2 second file for paired end reads
 -p Preserve order of reads
 -t num_threads - Default 8
 -q Retain quality values. Possible modes:
@@ -215,16 +215,15 @@ quality_mode=''
 quality_ratio=''
 outputfilename=''
 
-while getopts ':c1:2:o:d:t:pq:r:iPh' opt; do
+while getopts ':c1:2:o:d:t:pq:r:ih' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c';;
     d) [[ -n "$mode" ]] && usage || mode='d' && compressedfilename=$OPTARG;;
     1) filename_1=$OPTARG;;	
-    2) filename_2=$OPTARG;;
+    2) paired_end="True" && filename_2=$OPTARG;;
     o) outputfilename=$OPTARG;;		
     t) num_thr=$OPTARG;;
-    p) preserve_order="True";;
-    P) paired_end="True";;	
+    p) preserve_order="True";;	
     q) preserve_quality="True" && quality_mode=$OPTARG;;
     r) quality_ratio=$OPTARG;;	
     i) preserve_id="True";;	
