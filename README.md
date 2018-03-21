@@ -12,8 +12,8 @@ cd HARC
 ### Usage
 ##### Compression - compresses FASTQ files.
 ```bash
-./harc -c -1 Fastq_file_1 [-P -2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] [-i] -o outputfile
--P paired end files, need to specify second file if this flag used
+./harc -c -1 Fastq_file_1 [-2 Fastq_file_2] [-p] [-t num_threads] [-q mode] [-r qvz_ratio] [-i] -o outputfile
+-2 second file for paired end reads
 -p Preserve order of reads
 -t num_threads - Default 8
 -q Retain quality values. Possible modes:
@@ -41,39 +41,39 @@ cd HARC
 ### Example Usage of HARC
 For compressing file_1.fastq and file_2.fastq losslessly using default 8 threads and qvz for qualities.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -i -p -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -q qvz -i -p -o outputname
 ```
 Using BSC instead of QVZ, 16 threads.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q bsc -i -p -o outputname -t 16
+./harc -c -1 file_1.fastq -2 file_2.fastq -q bsc -i -p -o outputname -t 16
 ```
 Compressing with only paired end info preserved, ids not stored.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -q qvz -o outputname
 ```
 Compressing with Illumina binning followed by qvz.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q illumina_binning_qvz -i -p -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -q illumina_binning_qvz -i -p -o outputname
 ```
 Compressing with Illumina binning followed by BSC.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q illumina_binning_bsc -i -p -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -q illumina_binning_bsc -i -p -o outputname
 ```
 Compressing with QVZ lossy compression with rate 1.0 bits/quality value.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -q qvz -r 1.0 -i -p -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -q qvz -r 1.0 -i -p -o outputname
 ```
 Compressing only reads and ids.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -i -p -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -i -p -o outputname
 ```
 Compressing only reads losslessly.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -p -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -p -o outputname
 ```
 Compressing only reads with paired end info preserved.
 ```bash
-./harc -c -1 file_1.fastq -P -2 file_2.fastq -o outputname
+./harc -c -1 file_1.fastq -2 file_2.fastq -o outputname
 ```
 For single end file, compressing without order preserved.
 ```bash
