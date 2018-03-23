@@ -187,6 +187,20 @@ void reorder_quality()
 		}
 		f_in.close();
 
+		if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
+		//just write to file without newlines
+		{
+			std::ofstream f_out(basedir+"/quality_"+std::to_string(k+1)+".txt");
+			std::ifstream f_order(outfile_order,std::ios::binary);
+			uint32_t order;
+			for (uint64_t i = 0; i < numreads_by_2; i++)
+			{
+				f_order.read((char*)&order,sizeof(uint32_t));
+				f_out.write(quality+(uint64_t)order*(max_readlen+1), read_lengths[order]);
+			}
+			f_out.close();
+			continue;
+		}
 		#pragma omp parallel	
 		{
 		int tid = omp_get_thread_num();
