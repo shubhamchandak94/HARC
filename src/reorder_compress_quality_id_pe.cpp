@@ -182,7 +182,7 @@ void reorder_quality()
 			std::getline(f_in,line);
 			f_in.getline((quality+i*(max_readlen+1)),max_readlen+1);
 			read_lengths[i] = f_in.gcount() - 1;
-			if(quality_mode == "illumina_binning_qvz")
+			if(quality_mode == "illumina_binning_qvz" || quality_mode == "illumina_binning_bsc")
 				illumina_binning(quality+i*(max_readlen+1), read_lengths[i]);
 		}
 		f_in.close();
