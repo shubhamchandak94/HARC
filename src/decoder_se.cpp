@@ -28,7 +28,8 @@ std::string infile_readlength;
 int max_readlen, num_thr, num_thr_e;
 uint32_t numreads; 
 uint32_t global_counter;
-std::string preserve_order, preserve_quality, preserve_id;
+std::string preserve_order, preserve_quality, preserve_id, fast_mode;
+uint64_t max_bin_size;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -45,9 +46,9 @@ bitset mask63;//bitset with 64 bits set to 1 (used in bitsettostring for convers
 
 void decode();
 
-void restore_order(std::string outfile, std::string infile_order);
+void restore_order(std::string outfile, std::string infile_order, uint32_t *index_array, bitset *reads_bin, uint8_t* read_lengths_bin);
 
-void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout);
+void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, uint8_t cur_readlen);
 
 void unpackbits();
 
@@ -83,7 +84,8 @@ int main(int argc, char** argv)
 	preserve_order = std::string(argv[5]);
 	preserve_quality = std::string(argv[6]);
 	preserve_id = std::string(argv[7]);
-	
+	fast_mode = std::string(argv[8]);	
+
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
@@ -97,7 +99,18 @@ int main(int argc, char** argv)
 	decode();
 		
 	if(preserve_order == "True")
-		restore_order(outfile, infile_order);
+	{
+		max_bin_size = 12000000000/(sizeof(bitset)+sizeof(uint32_t)+sizeof(uint8_t));
+		if(max_bin_size > numreads || fast_mode == "True")
+			max_bin_size = numreads + 1;//+1 just to make sure there is only one pass over the data
+		uint32_t *index_array = new uint32_t [max_bin_size];
+		uint8_t *read_lengths_bin = new uint8_t [max_bin_size];
+		bitset *reads_bin = new bitset [max_bin_size];
+		restore_order(outfile, infile_order, index_array, reads_bin, read_lengths_bin);
+		delete[] index_array;
+		delete[] reads_bin;
+		delete[] read_lengths_bin;	
+	}
 	return 0;
 }
 
@@ -131,10 +144,7 @@ void decode()
 	for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
 	{
 		std::ofstream f_1;
-		if(preserve_order == "True")
-			f_1.open(outfile+'.'+std::to_string(tid_e),std::ios::binary);
-		else
-			f_1.open(outfile+'.'+std::to_string(tid_e));
+		f_1.open(outfile+'.'+std::to_string(tid_e),std::ios::binary);
 		std::ifstream f_seq(infile_seq+'.'+std::to_string(tid_e));
 		std::ifstream f_pos(infile_pos+'.'+std::to_string(tid_e));
 		std::ifstream f_noise(infile_noise+'.'+std::to_string(tid_e));
@@ -186,26 +196,16 @@ void decode()
 			c = f_rev.get();
 			if(c == 'd')
 			{
-				if(preserve_order == "True")
-				{
-					b = chartobitset(currentread,cur_readlen);
-					f_1.write((char*)&cur_readlen,sizeof(uint8_t));
-					f_1.write((char*)&b,sizeof(bitset));
-				}
-				else
-					f_1 << currentread << "\n";
+				b = chartobitset(currentread,cur_readlen);
+				f_1.write((char*)&cur_readlen,sizeof(uint8_t));
+				f_1.write((char*)&b,sizeof(bitset));
 			}
 			else
 			{
 				reverse_complement(currentread,revread,cur_readlen);
-				if(preserve_order == "True")
-				{
-					b = chartobitset(revread,cur_readlen);
-					f_1.write((char*)&cur_readlen,sizeof(uint8_t));
-					f_1.write((char*)&b,sizeof(bitset));
-				}
-				else							
-					f_1 << revread << "\n";
+				b = chartobitset(revread,cur_readlen);
+				f_1.write((char*)&cur_readlen,sizeof(uint8_t));
+				f_1.write((char*)&b,sizeof(bitset));
 			}
 			pos_in_reordered_reads++;
 		}
@@ -224,7 +224,7 @@ void decode()
 		f_1.open(outfile,std::ios::binary);
 		for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 		{
-			std::ifstream f_in_1(outfile+'.'+std::to_string(tid_e));
+			std::ifstream f_in_1(outfile+'.'+std::to_string(tid_e),std::ios::binary);
 			f_1 << f_in_1.rdbuf();
 			f_1.clear();//clear error flags if f_in is empty	
 			f_in_1.close();
@@ -291,14 +291,18 @@ void decode()
 		char currentread[MAX_READ_LEN+1];
 		std::ofstream f_1;	
 		f_1.open(outfile);
+		bitset b;
+		uint8_t cur_readlen;
 		for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 		{
-			std::ifstream f_in_1(outfile+'.'+std::to_string(tid_e));
-			f_in_1.getline(currentread,max_readlen+1);
+			std::ifstream f_in_1(outfile+'.'+std::to_string(tid_e),std::ios::binary);
+			f_in_1.read((char*)&cur_readlen,sizeof(uint8_t));
 			while(!f_in_1.eof())
 			{
-				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
-				f_in_1.getline(currentread,max_readlen+1);
+				f_in_1.read((char*)&b,sizeof(bitset));
+				bitsettostring(b,currentread,cur_readlen);
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,cur_readlen);
+				f_in_1.read((char*)&cur_readlen,sizeof(uint8_t));
 			}	
 			f_1.clear();//clear error flags if f_in is empty	
 			f_in_1.close();
@@ -309,8 +313,6 @@ void decode()
 		std::ifstream f_readlength(infile_readlength,std::ios::binary);
 		f_readlength.seekg((uint64_t)pos_in_reorder_reads*sizeof(uint8_t));
 		std::ifstream f_singleton(infile_singleton);
-		uint8_t cur_readlen;
-		bitset b;
 		f_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
 		if(!f_readlength.eof())
 		{
@@ -318,7 +320,7 @@ void decode()
 			while(!f_singleton.eof())
 			{	
 				currentread[cur_readlen] = '\0';			
-				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1, cur_readlen);
 				
 				f_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
 				f_singleton.read(currentread,cur_readlen);
@@ -333,7 +335,7 @@ void decode()
 			while(!f_N.eof())
 			{
 				currentread[cur_readlen] = '\0';
-				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1);
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,cur_readlen);
 				f_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
 				f_N.read(currentread,cur_readlen);
 				pos_in_reorder_reads++;
@@ -349,12 +351,9 @@ void decode()
 	return;
 }
 
-void restore_order(std::string outfile, std::string infile_order)
+void restore_order(std::string outfile, std::string infile_order, uint32_t *index_array, bitset *reads_bin, uint8_t* read_lengths_bin)
 {
 	std::cout << "Restoring order\n";
-	uint64_t max_bin_size = 200000000;
-	if(max_bin_size > numreads)
-		max_bin_size = numreads + 1;//+1 just to make sure there is only one pass over the data
 	char s[MAX_READ_LEN+1];
 	
 	std::ofstream fout(outfile+".tmp");
@@ -369,9 +368,7 @@ void restore_order(std::string outfile, std::string infile_order)
 	if(preserve_id == "True")
 		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
 	global_counter = 1;
-	uint32_t *index_array = new uint32_t [max_bin_size];
-	bitset *reads_bin = new bitset [max_bin_size];
-	uint8_t *read_lengths_bin = new uint8_t [max_bin_size];
+
 	for (uint32_t i = 0; i <= numreads/max_bin_size; i++)
 	{
 		std::ifstream f_order(infile_order,std::ios::binary);
@@ -396,7 +393,7 @@ void restore_order(std::string outfile, std::string infile_order)
 		for(uint32_t j = 0; j < numreads_bin; j++)
 		{
 			bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
-			write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout);
+			write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout, read_lengths_bin[index_array[j]]);
 		}
 
 		f_order.close();
@@ -404,27 +401,30 @@ void restore_order(std::string outfile, std::string infile_order)
 	}
 	if(preserve_quality == "True")
 		remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
-	delete[] index_array;
-	delete[] reads_bin;
-	delete[] read_lengths_bin;	
 	fout.close();
 	remove(outfile.c_str());
 	rename((outfile+".tmp").c_str(),outfile.c_str());
 	return;
 }
 
-void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout)
+void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, uint8_t cur_readlen)
 {
-	std::string quality,id;
+	std::string id;
+	char quality[max_readlen+1];
 	if(preserve_quality == "True")
-		if(!std::getline(fin_quality,quality))
+	{
+		fin_quality.getline(quality,cur_readlen+1);
+		if(fin_quality.gcount() == 0)
 		{
 			fin_quality.close();
 			remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
 			current_tid_quality++;
 			fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
-			std::getline(fin_quality,quality);
+			fin_quality.getline(quality,cur_readlen+1);
 		}
+		quality[cur_readlen+1] = '\0';
+		fin_quality.clear();
+	}
 	if(preserve_id == "True")
 		if(!std::getline(fin_id,id))
 		{

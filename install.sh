@@ -7,8 +7,6 @@ mkdir -p data
 (cd src/libbsc && make)
 cp src/libbsc/bsc bin/
 
-#pip install --user distance biopython joblib tqdm
-
 #Compilation of files
 g++ src/preprocess.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/preprocess.out
 g++ src/pack_order.cpp -O3 -march=native -fopenmp -std=c++11 -o bin/pack_order.out

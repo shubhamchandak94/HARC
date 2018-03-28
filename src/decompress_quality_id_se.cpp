@@ -2,7 +2,6 @@
 #include <fstream>
 #include <string>
 #include <cstring>
-#include <chrono> //for timing
 #include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
@@ -24,7 +23,6 @@ std::string preserve_order, quality_mode, preserve_quality, preserve_id;
 
 void decompress_id();
 void decompress_quality(uint8_t *readlengths);
-void decompress_quality_bsc(uint8_t *readlengths);
 void load_readlengths(uint8_t *readlengths);
 
 void decode(char *input_file, char *output_file, struct qv_options_t *opts, uint8_t *read_lengths);
@@ -58,27 +56,15 @@ int main(int argc, char** argv)
  	std::cout << "Decompressing Quality and/or IDs\n";	
 	omp_set_num_threads(num_thr);
 
-	if(preserve_quality == "True")
+	if(preserve_quality == "True" && !(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc"))
 	{
 		uint8_t *readlengths = new uint8_t[numreads];
 		load_readlengths(readlengths);
-		
-		auto start_quality = std::chrono::steady_clock::now();
-		if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
-			decompress_quality_bsc(readlengths);
-		else
-			decompress_quality(readlengths);
-		auto end_quality = std::chrono::steady_clock::now();
-		auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
-		//std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
+		decompress_quality(readlengths);
 	}
 	if(preserve_id == "True")
 	{
-		auto start_id = std::chrono::steady_clock::now();
 		decompress_id();
-		auto end_id = std::chrono::steady_clock::now();
-		auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
-		//std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
 	}
 }
 
@@ -126,25 +112,6 @@ void decompress_quality(uint8_t *readlengths)
 		decode(input_file,output_file,&opts,read_lengths);
 	}
 	}
-	return;
-}
-
-void decompress_quality_bsc(uint8_t *readlengths)
-{
-	uint8_t *read_lengths;
-	read_lengths = readlengths;
-	std::ifstream f_in(outfile_quality);
-	std::ofstream f_out(outfile_quality+".0");
-	char quality[max_readlen];
-	for(uint32_t i = 0; i < numreads; i++)
-	{
-		f_in.read(quality,read_lengths[i]);
-		quality[read_lengths[i]] = '\0';
-		f_out << quality << "\n";
-	}
-	f_in.close();
-	f_out.close();
-	remove(outfile_quality.c_str());
 	return;
 }
 

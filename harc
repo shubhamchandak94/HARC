@@ -23,9 +23,9 @@ Compression - compresses FASTQ files.
 -o Output file name
 
 Decompression - decompress compressed archive.
-./harc -d compressed_file -o outputfile [-t num_threads]
+./harc -d compressed_file -o outputfile [-t num_threads] [-f]
 -o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2. If quality is not retained, FASTA file is produced.
-
+-f fast mode - speed up decompression (more RAM needed)
 -t num_threads - Default 8
 
 Help (this message)
@@ -169,9 +169,9 @@ decompress()
 		./$harcdir/bin/pe_decode.out $tempdir/ $preserve_order
 	fi
 	if [[ $quality_mode == "bsc" || $quality_mode == "illumina_binning_bsc" ]];then
-		./$harcdir/bin/bsc d $tempdir/quality_1.txt.bsc $tempdir/quality_1.txt -t$num_thr
+		./$harcdir/bin/bsc d $tempdir/quality_1.txt.bsc $tempdir/quality_1.txt.0 -t$num_thr
 		if [[ $paired_end == "True" ]];then
-			./$harcdir/bin/bsc d $tempdir/quality_2.txt.bsc $tempdir/quality_2.txt -t$num_thr
+			./$harcdir/bin/bsc d $tempdir/quality_2.txt.bsc $tempdir/quality_2.txt.0 -t$num_thr
 		fi
 	fi
 	if [[ $paired_end == "True" ]];then
@@ -180,9 +180,9 @@ decompress()
 		/usr/bin/time -v ./$harcdir/bin/decompress_quality_id_se.out $tempdir/ $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id $quality_mode
 	fi
 	if [[ $paired_end == "True" ]];then	
-		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id
+		/usr/bin/time -v ./$harcdir/bin/decoder_pe/decoder_pe_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id $fast_mode
 	else
-		/usr/bin/time -v ./$harcdir/bin/decoder_se/decoder_se_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id
+		/usr/bin/time -v ./$harcdir/bin/decoder_se/decoder_se_$bitset_size_decoder".out" $tempdir $max_readlen $num_thr $num_thr_e $preserve_order $preserve_quality $preserve_id $fast_mode
 	fi
 	if [[ $paired_end == "True" ]];then	
 		mv $tempdir/output_1.txt $outputfilename".1"
@@ -214,8 +214,9 @@ preserve_id="False"
 quality_mode=''
 quality_ratio=''
 outputfilename=''
+fast_mode='False'
 
-while getopts ':c1:2:o:d:t:pq:r:ih' opt; do
+while getopts ':c1:2:o:d:t:pq:r:ifh' opt; do
   case "$opt" in
     c) [[ -n "$mode" ]] && usage || mode='c';;
     d) [[ -n "$mode" ]] && usage || mode='d' && compressedfilename=$OPTARG;;
@@ -227,6 +228,7 @@ while getopts ':c1:2:o:d:t:pq:r:ih' opt; do
     q) preserve_quality="True" && quality_mode=$OPTARG;;
     r) quality_ratio=$OPTARG;;	
     i) preserve_id="True";;	
+    f) fast_mode='True';;
     h) usage ;;
     \?) usage ;;
     *) usage ;;

@@ -33,7 +33,9 @@ void illumina_binning(std::string &quality)
 
 void generate_illumina_binning_table()
 {
-	for(uint8_t i = 0; i <= 33+9; i++)
+	for(uint8_t i = 0; i <= 33+1; i++)
+		illumina_binning_table[i] = 33+0;
+	for(uint8_t i = 33+2; i <= 33+9; i++)
 		illumina_binning_table[i] = 33+6;
 	for(uint8_t i = 33+10; i <= 33+19; i++)
 		illumina_binning_table[i] = 33+15;

@@ -6,7 +6,6 @@
 #include <cstring>
 #include <string>
 #include <cstdio>
-#include <chrono> //for timing	
 #include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
@@ -82,19 +81,11 @@ int main(int argc, char** argv)
 	if(paired_end == "False")
 		numreads_by_2 = numreads;
 	generate_order();
-	auto start_quality = std::chrono::steady_clock::now();
 	std::cout << "Compressing qualities and/or ids\n";
 	if(preserve_quality == "True")
 		reorder_quality();
-	auto end_quality = std::chrono::steady_clock::now();
-	auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
-//	std::cout << "\nQuality compression total time: " << diff_quality.count() << " s\n";
-	auto start_id = std::chrono::steady_clock::now();
 	if(preserve_id == "True")
 		reorder_id();
-	auto end_id = std::chrono::steady_clock::now();
-	auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
-//	std::cout << "\nID compression total time: " << diff_id.count() << " s\n";
 	if(paired_end == "True")
 		remove((basedir + "/read_order.bin.tmp").c_str());
 	return 0;
@@ -280,7 +271,9 @@ void illumina_binning(char *quality, uint8_t readlen)
 
 void generate_illumina_binning_table()
 {
-	for(uint8_t i = 0; i <= 33+9; i++)
+	for(uint8_t i = 0; i <= 33+1; i++)
+		illumina_binning_table[i] = 33+0;
+	for(uint8_t i = 33+2; i <= 33+9; i++)
 		illumina_binning_table[i] = 33+6;
 	for(uint8_t i = 33+10; i <= 33+19; i++)
 		illumina_binning_table[i] = 33+15;

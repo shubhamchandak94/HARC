@@ -33,7 +33,8 @@ int max_readlen, num_thr, num_thr_e;
 uint32_t numreads, numreads_by_2; 
 uint32_t global_counter;
 uint8_t paired_id_code;
-std::string preserve_order, preserve_quality, preserve_id;
+std::string preserve_order, preserve_quality, preserve_id, fast_mode;
+uint64_t max_bin_size;
 
 typedef std::bitset<3*MAX_READ_LEN> bitset;
 
@@ -50,12 +51,12 @@ bitset mask63;//bitset with 64 bits set to 1 (used in bitsettostring for convers
 
 void decode();
 
-void restore_order(std::string outfile, std::string infile_order, int filenum);
+void restore_order(std::string outfile, std::string infile_order, int filenum, uint32_t *index_array, bitset *reads_bin, uint8_t *read_lengths_bin);
 //filenum 1 or 2
 
 void modify_id(std::string &id, uint8_t paired_id_code);
 
-void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match, int filenum);
+void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match, int filenum, uint8_t cur_readlen);
 
 void unpackbits();
 
@@ -97,7 +98,8 @@ int main(int argc, char** argv)
 	preserve_order = std::string(argv[5]);
 	preserve_quality = std::string(argv[6]);
 	preserve_id = std::string(argv[7]);
-	
+	fast_mode = std::string(argv[8]);
+		
 	std::ifstream f_numreads(infilenumreads, std::ios::binary);
 	f_numreads.seekg(4);
 	f_numreads.read((char*)&numreads,sizeof(uint32_t));
@@ -112,9 +114,18 @@ int main(int argc, char** argv)
 	
 	decode();
 		
-	restore_order(outfile_2, outfile_order_2, 2);
+	max_bin_size = 12000000000/(sizeof(bitset)+sizeof(uint32_t)+sizeof(uint8_t));
+	if(max_bin_size > numreads_by_2 || fast_mode == "True")
+		max_bin_size = numreads_by_2 + 1;//+1 just to make sure there is only one pass over the data
+	uint32_t *index_array = new uint32_t [max_bin_size];
+	uint8_t *read_lengths_bin = new uint8_t [max_bin_size];
+	bitset *reads_bin = new bitset [max_bin_size];
+	restore_order(outfile_2, outfile_order_2, 2, index_array, reads_bin, read_lengths_bin);
 	if(preserve_order == "True")
-		restore_order(outfile_1, infile_order, 1);
+		restore_order(outfile_1, infile_order, 1, index_array, reads_bin, read_lengths_bin);
+	delete[] index_array;
+	delete[] reads_bin;
+	delete[] read_lengths_bin;
 	return 0;
 }
 
@@ -148,10 +159,7 @@ void decode()
 	for(int tid_e = tid*num_thr_e/num_thr; tid_e < (tid+1)*num_thr_e/num_thr; tid_e++)
 	{
 		std::ofstream f_1;
-		if(preserve_order == "True")
-			f_1.open(outfile_1+'.'+std::to_string(tid_e),std::ios::binary);
-		else
-			f_1.open(outfile_1+'.'+std::to_string(tid_e));
+		f_1.open(outfile_1+'.'+std::to_string(tid_e),std::ios::binary);
 		std::ofstream f_2(outfile_2+'.'+std::to_string(tid_e),std::ios::binary);
 		std::ifstream f_seq(infile_seq+'.'+std::to_string(tid_e));
 		std::ifstream f_pos(infile_pos+'.'+std::to_string(tid_e));
@@ -210,14 +218,9 @@ void decode()
 			{
 				if(flag_first == '1')
 				{
-					if(preserve_order == "True")
-					{
-						b = chartobitset(currentread,cur_readlen);
-						f_1.write((char*)&cur_readlen,sizeof(uint8_t));
-						f_1.write((char*)&b,sizeof(bitset));
-					}
-					else
-						f_1 << currentread << "\n";
+					b = chartobitset(currentread,cur_readlen);
+					f_1.write((char*)&cur_readlen,sizeof(uint8_t));
+					f_1.write((char*)&b,sizeof(bitset));
 				}	
 				else
 				{
@@ -231,14 +234,9 @@ void decode()
 				reverse_complement(currentread,revread,cur_readlen);
 				if(flag_first == '1')
 				{
-					if(preserve_order == "True")
-					{
-						b = chartobitset(revread,cur_readlen);
-						f_1.write((char*)&cur_readlen,sizeof(uint8_t));
-						f_1.write((char*)&b,sizeof(bitset));
-					}
-					else							
-						f_1 << revread << "\n";
+					b = chartobitset(revread,cur_readlen);
+					f_1.write((char*)&cur_readlen,sizeof(uint8_t));
+					f_1.write((char*)&b,sizeof(bitset));
 				}	
 				else
 				{
@@ -267,7 +265,7 @@ void decode()
 		std::ofstream f_2(outfile_2,std::ios::binary);
 		for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 		{
-			std::ifstream f_in_1(outfile_1+'.'+std::to_string(tid_e));
+			std::ifstream f_in_1(outfile_1+'.'+std::to_string(tid_e),std::ios::binary);
 			std::ifstream f_in_2(outfile_2+'.'+std::to_string(tid_e),std::ios::binary);
 			f_1 << f_in_1.rdbuf();
 			f_2 << f_in_2.rdbuf();
@@ -365,15 +363,19 @@ void decode()
 		std::ofstream f_1;	
 		f_1.open(outfile_1);
 		std::ofstream f_2(outfile_2,std::ios::binary);
+		bitset b;
+		uint8_t cur_readlen;
 		for(int tid_e = 0; tid_e < num_thr_e; tid_e++)
 		{
-			std::ifstream f_in_1(outfile_1+'.'+std::to_string(tid_e));
+			std::ifstream f_in_1(outfile_1+'.'+std::to_string(tid_e),std::ios::binary);
 			std::ifstream f_in_2(outfile_2+'.'+std::to_string(tid_e),std::ios::binary);
-			f_in_1.getline(currentread,max_readlen+1);
+			f_in_1.read((char*)&cur_readlen,sizeof(uint8_t));
 			while(!f_in_1.eof())
 			{
-				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1);
-				f_in_1.getline(currentread,max_readlen+1);
+				f_in_1.read((char*)&b,sizeof(bitset));
+				bitsettostring(b,currentread,cur_readlen);
+				write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1, cur_readlen);
+				f_in_1.read((char*)&cur_readlen,sizeof(uint8_t));
 			}
 	
 			f_2 << f_in_2.rdbuf();
@@ -390,9 +392,7 @@ void decode()
 		f_readlength.seekg((uint64_t)pos_in_reorder_reads*sizeof(uint8_t));
 		f_flag_first.seekg(pos_in_reorder_reads);
 		std::ifstream f_singleton(infile_singleton);
-		uint8_t cur_readlen;
 		char flag_first;
-		bitset b;
 		f_readlength.read((char*)&cur_readlen,sizeof(uint8_t));
 		f_flag_first >> flag_first;
 		if(!f_readlength.eof())
@@ -403,7 +403,7 @@ void decode()
 				currentread[cur_readlen] = '\0';			
 				if(flag_first == '1')
 				{
-					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1);
+					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1, cur_readlen);
 				}
 				else
 				{			
@@ -427,7 +427,7 @@ void decode()
 				currentread[cur_readlen] = '\0';
 				if(flag_first == '1')
 				{
-					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1);
+					write_fastq_block(currentread,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,f_1,paired_id_match, 1, cur_readlen);
 				}
 				else
 				{			
@@ -453,12 +453,9 @@ void decode()
 	return;
 }
 
-void restore_order(std::string outfile, std::string infile_order, int filenum)
+void restore_order(std::string outfile, std::string infile_order, int filenum, uint32_t *index_array, bitset *reads_bin, uint8_t* read_lengths_bin)
 {
 	std::cout << "Restoring order\n";
-	uint64_t max_bin_size = 200000000;
-	if(max_bin_size > numreads_by_2)
-		max_bin_size = numreads_by_2 + 1;//+1 just to make sure there is only one pass over the data
 	char s[MAX_READ_LEN+1];
 	
 	std::ofstream fout(outfile+".tmp");
@@ -488,9 +485,6 @@ void restore_order(std::string outfile, std::string infile_order, int filenum)
 		fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
 	if(preserve_id == "True")
 		fin_id.open(id_file_prefix+"."+std::to_string(current_tid_id));
-	uint32_t *index_array = new uint32_t [max_bin_size];
-	bitset *reads_bin = new bitset [max_bin_size];
-	uint8_t *read_lengths_bin = new uint8_t [max_bin_size];
 	for (uint32_t i = 0; i <= numreads_by_2/max_bin_size; i++)
 	{
 		std::ifstream f_order(infile_order,std::ios::binary);
@@ -515,7 +509,7 @@ void restore_order(std::string outfile, std::string infile_order, int filenum)
 		for(uint32_t j = 0; j < numreads_bin; j++)
 		{
 			bitsettostring(reads_bin[index_array[j]],s,read_lengths_bin[index_array[j]]);
-			write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout,paired_id_match, filenum);
+			write_fastq_block(s,quality_file_prefix,id_file_prefix,fin_quality,fin_id,current_tid_quality,current_tid_id,fout,paired_id_match, filenum, read_lengths_bin[index_array[j]]);
 		}
 
 		f_order.close();
@@ -523,27 +517,30 @@ void restore_order(std::string outfile, std::string infile_order, int filenum)
 	}
 	if(preserve_quality == "True")
 		remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
-	delete[] index_array;
-	delete[] reads_bin;
-	delete[] read_lengths_bin;	
 	fout.close();
 	remove(outfile.c_str());
 	rename((outfile+".tmp").c_str(),outfile.c_str());
 	return;
 }
 
-void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match, int filenum)
+void write_fastq_block(char *read, std::string &quality_file_prefix, std::string &id_file_prefix, std::ifstream &fin_quality, std::ifstream &fin_id, int &current_tid_quality, int &current_tid_id, std::ofstream &fout, bool &paired_id_match, int filenum, uint8_t cur_readlen)
 {
-	std::string quality,id;
+	std::string id;
+	char quality[max_readlen+1];
 	if(preserve_quality == "True")
-		if(!std::getline(fin_quality,quality))
+	{
+		fin_quality.getline(quality,cur_readlen+1);	
+		if(fin_quality.gcount() == 0)
 		{
 			fin_quality.close();
 			remove((quality_file_prefix+"."+std::to_string(current_tid_quality)).c_str());
 			current_tid_quality++;
 			fin_quality.open(quality_file_prefix+"."+std::to_string(current_tid_quality));
-			std::getline(fin_quality,quality);
+			fin_quality.getline(quality,cur_readlen+1);
 		}
+		quality[cur_readlen+1] = '\0';
+		fin_quality.clear();
+	}
 	if(preserve_id == "True")
 	{
 		if(!std::getline(fin_id,id))

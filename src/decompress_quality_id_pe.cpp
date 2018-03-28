@@ -2,7 +2,6 @@
 #include <fstream>
 #include <string>
 #include <cstring>
-#include <chrono> //for timing
 #include <omp.h>
 #include "sam_block.h"
 #include "codebook.h"
@@ -28,7 +27,6 @@ std::string preserve_order, quality_mode, preserve_quality, preserve_id;
 
 void decompress_id();
 void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2);
-void decompress_quality_bsc(uint8_t *readlengths_1, uint8_t *readlengths_2);
 void load_readlengths(uint8_t *readlengths_1, uint8_t *readlengths_2);
 
 void decode(char *input_file, char *output_file, struct qv_options_t *opts, uint8_t *read_lengths);
@@ -71,30 +69,19 @@ int main(int argc, char** argv)
 
 	std::cout << "Decompressing Quality and/or IDs\n";
 	omp_set_num_threads(num_thr);
-	if(preserve_quality == "True")
+	if(preserve_quality == "True" && !(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc"))
 	{
 		uint8_t *readlengths_1 = new uint8_t[numreads_by_2];
 		uint8_t *readlengths_2 = new uint8_t[numreads_by_2];
 		load_readlengths(readlengths_1, readlengths_2);
 
-		auto start_quality = std::chrono::steady_clock::now();
-		if(quality_mode == "bsc" || quality_mode == "illumina_binning_bsc")
-			decompress_quality_bsc(readlengths_1, readlengths_2);
-		else
-			decompress_quality(readlengths_1, readlengths_2);
-		auto end_quality = std::chrono::steady_clock::now();
-		auto diff_quality = std::chrono::duration_cast<std::chrono::duration<double>>(end_quality-start_quality);
-		//std::cout << "\nQuality decompression total time: " << diff_quality.count() << " s\n";
+		decompress_quality(readlengths_1, readlengths_2);
 		delete[] readlengths_1;
 		delete[] readlengths_2;
 	}
 	if(preserve_id == "True")
 	{
-		auto start_id = std::chrono::steady_clock::now();
 		decompress_id();
-		auto end_id = std::chrono::steady_clock::now();
-		auto diff_id = std::chrono::duration_cast<std::chrono::duration<double>>(end_id-start_id);
-		//std::cout << "\nID decompression total time: " << diff_id.count() << " s\n";
 	}
 }
 
@@ -157,30 +144,6 @@ void decompress_quality(uint8_t *readlengths_1, uint8_t *readlengths_2)
 	return;
 }
 
-void decompress_quality_bsc(uint8_t *readlengths_1, uint8_t *readlengths_2)
-{
-	for(int k = 0; k < 2; k++)
-	{
-		uint8_t *read_lengths;
-		if(k == 0)
-			read_lengths = readlengths_1;
-		else
-			read_lengths = readlengths_2;
-		std::ifstream f_in(outfile_quality[k]);
-		std::ofstream f_out(outfile_quality[k]+".0");
-		char quality[max_readlen];
-		for(uint32_t i = 0; i < numreads_by_2; i++)
-		{
-			f_in.read(quality,read_lengths[i]);
-			quality[read_lengths[i]] = '\0';
-			f_out << quality << "\n";
-		}
-		f_in.close();
-		f_out.close();
-		remove(outfile_quality[k].c_str());
-	}
-	return;
-}
 void load_readlengths(uint8_t *readlengths_1, uint8_t *readlengths_2)
 {
 	if(preserve_order == "True")
