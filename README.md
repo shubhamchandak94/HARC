@@ -1,6 +1,6 @@
 # HARC
 
-Compression tool for Fastq files. For paired end reads, both files should have same number of reads. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. The algorithm requires C++11 and g++ compiler and works on Linux. p7zip should already be installed ( on linux, run: sudo apt-get install p7zip-full).
+Compression tool for Fastq files. For paired end reads, both files should have same number of reads. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion reads with lengths at most 256. The algorithm requires C++11 and g++ compiler and works on Linux. p7zip should already be installed (on Linux, run: sudo apt-get install p7zip-full).
 
 ### Installation
 ```bash
@@ -28,8 +28,9 @@ cd HARC
 
 ##### Decompression - decompress compressed archive.
 ```bash
-./harc -d compressed_file -o outputfile [-t num_threads]
+./harc -d compressed_file -o outputfile [-t num_threads] [-f]
 -o outputfile name, if compressed with -P flag, two files created: outputfile.1 and outputfile.2. If quality is not retained, FASTA file is produced.
+-f fast mode - speed up decompression (more RAM needed)
 -t num_threads - Default 8
 ```
 
