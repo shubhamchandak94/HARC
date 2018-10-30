@@ -1,8 +1,8 @@
 # HARC
 
-## [Bioinformatics](https://academic.oup.com/bioinformatics/article/34/4/558/4386919?guestAccessKey=92f2ced6-72aa-4792-aef7-d42e2ea293ad)
+### [Bioinformatics](https://academic.oup.com/bioinformatics/article/34/4/558/4386919?guestAccessKey=92f2ced6-72aa-4792-aef7-d42e2ea293ad)
 
-## Improved FASTQ compressor: [SPRING](https://github.com/shubhamchandak94/Spring/)
+### Improved FASTQ compressor: [SPRING](https://github.com/shubhamchandak94/Spring/)
 
 HARC (HAsh-based Read Compressor) - Tool for compression of genomic reads in FASTQ format. Compresses only the read sequences. Achieves near-optimal compression ratios and fast decompression. Supports upto 4.29 Billion fixed-length reads with lengths at most 256. Requires around 50 Bytes of RAM/read for read length 100 during compression. The algorithm requires C++11 and g++ compiler and works on Linux. p7zip should already be installed.
 
