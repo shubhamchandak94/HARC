@@ -33,12 +33,14 @@ class bbhashdict
 		bphf = NULL;
 		startpos = NULL;
 		read_id = NULL;
+        empty_bin = NULL;
 	}
 	~bbhashdict()
 	{
-		delete[] startpos;
-		delete[] read_id;
-		delete bphf;
+		if (startpos != NULL) delete[] startpos;
+		if (read_id != NULL) delete[] read_id;
+        if (empty_bin != NULL) delete[] empty_bin;
+		if (bphf != NULL) delete bphf;
 	}	
 };
 
@@ -115,8 +117,10 @@ int main(int argc, char** argv)
 	std::cout << "Reading file: " << infile << std::endl;
 	readDnaFile(read);
 	bbhashdict dict[numdict];
-	std::cout << "Constructing dictionaries\n";
-	constructdictionary(read,dict);
+    if (numreads > 0) {
+    	std::cout << "Constructing dictionaries\n";
+	    constructdictionary(read,dict);
+    }
 	std::cout << "Reordering reads\n";
 	reorder(read,dict);
 	std::cout << "Writing to file\n";
@@ -471,15 +475,26 @@ void reorder(std::bitset<2*readlen> *read, bbhashdict *dict)
 	int64_t remainingpos = numreads-1;//used for searching next unmatched read when no match is found
 	#pragma omp critical
 	{//doing initial setup and first read
-		current = firstread;	
+		current = firstread;
+        // some fix below to make sure no errors occurs when we have very few
+        // reads (comparable to num_threads). basically if read already taken,
+        // this thread just gives up
+        if (numreads == 0) {
+            done = true;
+        } else if (remainingreads[current] == 0) {
+            done = true;
+        } else {
+            remainingreads[current] = 0;
+            unmatched[tid]++;
+        }
 		firstread += numreads/omp_get_num_threads();//spread out first read equally
-		remainingreads[current] = 0;
-		unmatched[tid]++;
 	}
 	#pragma omp barrier
-	updaterefcount(read[current],ref,revref,count,true,false,0);
-	prev_unmatched = true;	
-	prev = current;
+    if (!done) {
+	    updaterefcount(read[current],ref,revref,count,true,false,0);
+	    prev_unmatched = true;	
+	    prev = current;
+    }
 	uint32_t numdone= 0;
 	while(!done)
 	{

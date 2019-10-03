@@ -37,12 +37,14 @@ class bbhashdict
 		bphf = NULL;
 		startpos = NULL;
 		read_id = NULL;
+        empty_bin = NULL;
 	}
 	~bbhashdict()
 	{
-		delete[] startpos;
-		delete[] read_id;
-		delete bphf;
+		if (startpos != NULL) delete[] startpos;
+		if (read_id != NULL) delete[] read_id;
+        if (empty_bin != NULL) delete[] empty_bin;
+		if (bphf != NULL) delete bphf;
 	}	
 };
 
@@ -142,7 +144,8 @@ int main(int argc, char** argv)
 		dict_end[1] = 41*readlen/50;
 	}
 	bbhashdict dict[numdict_s];
-	constructdictionary(read,dict);
+    if (numreads_s + numreads_N > 0)
+	    constructdictionary(read,dict);
 	encode(read,dict,order_s);
 	delete[] read;
 	return 0;
@@ -163,6 +166,19 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	std::bitset<3*readlen> mask1[numdict_s];
 	generateindexmasks(mask1);
 	std::cout<<"Encoding reads\n";
+    uint32_t *start_read_num = new uint32_t [num_thr];
+    uint32_t *end_read_num = new uint32_t [num_thr];
+    uint32_t numreads_per_thread = 1 + ((numreads-1)/num_thr);
+    for (int i = 0; i < num_thr; i++) {
+        if (i == 0)
+            start_read_num[i] = 0;
+        else
+            start_read_num[i] = end_read_num[i-1];
+        if (start_read_num[i] > numreads) start_read_num[i] = numreads;
+        end_read_num[i] = start_read_num[i] + numreads_per_thread;
+        if (end_read_num[i] > numreads) end_read_num[i] = numreads;
+    }
+    uint32_t firstread = 0;
 	#pragma omp parallel 
 	{
 	int tid = omp_get_thread_num();
@@ -178,17 +194,12 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 	std::ofstream f_order(infile_order+'.'+std::to_string(tid),std::ios::binary);
 	std::ofstream f_RC(infile_RC+'.'+std::to_string(tid));
 	std::ofstream f_order_N_pe(outfile_order_N_pe+'.'+std::to_string(tid),std::ios::binary);	
-	uint64_t i, stop;
+	uint64_t i = start_read_num[tid], stop = end_read_num[tid];
 	int64_t dictidx[2];//to store the start and end index (end not inclusive) in the dict read_id array
 	uint32_t startposidx;//index in startpos
 	uint64_t ull;
 	bool flag = 0;
 	//flag to check if match was found or not
-	//doing initial setup and first read
-	i = uint64_t(tid)*numreads/omp_get_num_threads();//spread out first read equally
-	stop = uint64_t(tid+1)*numreads/omp_get_num_threads();
-	if(tid == omp_get_num_threads()-1)
-		stop = numreads;
 	f.seekg(uint64_t(i)*(readlen+1), f.beg);
 	in_flag.seekg(i, in_flag.beg);
 	in_pos.seekg(i*sizeof(uint8_t),in_pos.beg);
@@ -217,192 +228,194 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 			if(list_size!=0)
 			{
 				ref = buildcontig(reads,pos,list_size);
-				//try to align the singleton reads to ref
-				//first create bitsets from first readlen positions of ref
-				forward_bitset = stringtobitset(ref.substr(0,readlen));
-				reverse_bitset = stringtobitset(reverse_complement(ref.substr(0,readlen)));
-				auto pos_it = pos.begin();
-				auto reads_it = reads.begin();
-				auto order_it = order.begin();
-				auto RC_it = RC.begin();
-				long nextpos = 0;
-				//storing positions of non-singleton reads, so that singletons 
-				//are inserted correctly
-				*pos_it = 0; //putting 0 in first pos (originally was readlen and will be converted 
-				//to readlen in writecontig
-				//convert pos to cumulative list
-				long cumsum = 0;
-				for(auto it = pos.begin();it!=pos.end();++it)
-				{
-					*it = cumsum + *it;
-					cumsum = *it;
-				}	
-				for(uint32_t j = 0; j < ref.size()-readlen+1; j++)
-				{
-					if(j == nextpos)//go through non-singleton reads at this pos
-					{
-						while(pos_it!= pos.end())
-						{
-							if(*pos_it == j)
-							{
-								++pos_it;++reads_it;++order_it;++RC_it;
-							}
-							else
-							{
-								nextpos = *pos_it;
-								break;
-							}
-						}
-					}	
-					//search for singleton reads
-					for(int l = 0; l < numdict_s; l++)//forward
-					{
-						b = forward_bitset&mask1[l];
-						ull = (b>>3*dict_start[l]).to_ullong();
-					//	std::vector<uint32_t> deleted_rids;
-						//if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l]-dict_start[l]+1)))-1)) 
-						//	continue;//added because there were too many of these
-						//making the whole thing slow due to locking
-						startposidx = dict[l].bphf->lookup(ull);
-						if(startposidx >= dict[l].numkeys)//not found
-							continue;
-						//check if any other thread is modifying same dictpos
-						if(!omp_test_lock(&dict_lock[startposidx]))
-							continue;
-						dict[l].findpos(dictidx,startposidx);
-						if(dict[l].empty_bin[startposidx])//bin is empty
-						{
-							omp_unset_lock(&dict_lock[startposidx]);
-							continue;
-						}
-						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
-						if(ull == ull1)//checking if ull is actually the key for this bin
-						{	
-							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
-							{
-								auto rid = dict[l].read_id[i];
-								if((forward_bitset^read[rid]).count()<=thresh_s)
-								{	
-									omp_set_lock(&read_lock[rid]);
-									if(remainingreads[rid])
-									{
-										remainingreads[rid]=0;
-										flag = 1;
-									}
-									omp_unset_lock(&read_lock[rid]);
-								}
-								if(flag == 1)//match found
-								{
-									flag = 0;
-									list_size++;
-									pos.insert(pos_it,j);
-									reads.insert(reads_it,bitsettostring(read[rid]));
-									order.insert(order_it,order_s[rid]);
-									RC.insert(RC_it,'d');
-									for(int l1 = 0;l1 < numdict_s; l1++)
-										deleted_rids[l1].push_back(rid);
-								}
-							}
-						}
-						omp_unset_lock(&dict_lock[startposidx]);
-						//delete from dictionaries
-						for(int l1= 0; l1 < numdict_s; l1++)
-							for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
-							{
-								b = read[*it]&mask1[l1];
-								ull = (b>>3*dict_start[l1]).to_ullong();
-								startposidx = dict[l1].bphf->lookup(ull);
-								if(!omp_test_lock(&dict_lock[startposidx]))
-								{
-									++it;
-									continue;
-								}
-								dict[l1].findpos(dictidx,startposidx);
-								dict[l1].remove(dictidx,startposidx,*it);
-								it = deleted_rids[l1].erase(it);	
-								omp_unset_lock(&dict_lock[startposidx]);
-							}
-					}
-					for(int l = 0; l < numdict_s; l++)//reverse
-					{
-						b = reverse_bitset&mask1[l];
-						ull = (b>>3*dict_start[l]).to_ullong();
-						startposidx = dict[l].bphf->lookup(ull);
-						if(startposidx >= dict[l].numkeys)//not found
-							continue;
-						//check if any other thread is modifying same dictpos
-						if(!omp_test_lock(&dict_lock[startposidx]))
-							continue;
-						dict[l].findpos(dictidx,startposidx);
-						if(dict[l].empty_bin[startposidx])//bin is empty
-						{
-							omp_unset_lock(&dict_lock[startposidx]);
-							continue;
-						}
-						uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
-						if(ull == ull1)//checking if ull is actually the key for this bin
-						{	
-							for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
-							{
-								auto rid = dict[l].read_id[i];
-								if((reverse_bitset^read[rid]).count()<=thresh_s)
-								{	
-									omp_set_lock(&read_lock[rid]);
-									if(remainingreads[rid])
-									{
-										remainingreads[rid]=0;
-										flag = 1;
-									}
-									omp_unset_lock(&read_lock[rid]);
-								}
-								if(flag == 1)//match found
-								{
-									flag = 0;
-									list_size++;
-									pos.insert(pos_it,j);
-									reads.insert(reads_it,reverse_complement(bitsettostring(read[rid])));
-									order.insert(order_it,order_s[rid]);
-									RC.insert(RC_it,'r');
-									for(int l1 = 0;l1 < numdict_s; l1++)
-										deleted_rids[l1].push_back(rid);
-								}
-							}
-						}
-						omp_unset_lock(&dict_lock[startposidx]);
-						//delete from dictionaries
-						for(int l1= 0; l1 < numdict_s; l1++)
-							for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
-							{
-								b = read[*it]&mask1[l1];
-								ull = (b>>3*dict_start[l1]).to_ullong();
-								startposidx = dict[l1].bphf->lookup(ull);
-								if(!omp_test_lock(&dict_lock[startposidx]))
-								{
-									++it;
-									continue;
-								}
-								dict[l1].findpos(dictidx,startposidx);
-								dict[l1].remove(dictidx,startposidx,*it);
-								it = deleted_rids[l1].erase(it);	
-								omp_unset_lock(&dict_lock[startposidx]);
-							}
-					}
-					if(j != ref.size()-readlen)//not at last position,shift bitsets
-					{
-						forward_bitset >>= 3;
-						forward_bitset |= basemask[readlen-1][ref[j+readlen]];
-						reverse_bitset <<= 3;
-						reverse_bitset |= basemask[0][chartorevchar[ref[j+readlen]]];
-					}	
-							
-				}
-				//convert pos to differences again
-				long prevpos = 0;
-				for(auto it = pos.begin(); it != pos.end(); ++it)
-				{
-					*it = *it - prevpos;
-					prevpos = prevpos + *it;
-				}
+                if (numreads_s + numreads_N > 0) {
+                    //try to align the singleton reads to ref
+                    //first create bitsets from first readlen positions of ref
+                    forward_bitset = stringtobitset(ref.substr(0,readlen));
+                    reverse_bitset = stringtobitset(reverse_complement(ref.substr(0,readlen)));
+                    auto pos_it = pos.begin();
+                    auto reads_it = reads.begin();
+                    auto order_it = order.begin();
+                    auto RC_it = RC.begin();
+                    long nextpos = 0;
+                    //storing positions of non-singleton reads, so that singletons 
+                    //are inserted correctly
+                    *pos_it = 0; //putting 0 in first pos (originally was readlen and will be converted 
+                    //to readlen in writecontig
+                    //convert pos to cumulative list
+                    long cumsum = 0;
+                    for(auto it = pos.begin();it!=pos.end();++it)
+                    {
+                        *it = cumsum + *it;
+                        cumsum = *it;
+                    }	
+                    for(uint32_t j = 0; j < ref.size()-readlen+1; j++)
+                    {
+                        if(j == nextpos)//go through non-singleton reads at this pos
+                        {
+                            while(pos_it!= pos.end())
+                            {
+                                if(*pos_it == j)
+                                {
+                                    ++pos_it;++reads_it;++order_it;++RC_it;
+                                }
+                                else
+                                {
+                                    nextpos = *pos_it;
+                                    break;
+                                }
+                            }
+                        }	
+                        //search for singleton reads
+                        for(int l = 0; l < numdict_s; l++)//forward
+                        {
+                            b = forward_bitset&mask1[l];
+                            ull = (b>>3*dict_start[l]).to_ullong();
+                        //	std::vector<uint32_t> deleted_rids;
+                            //if(ull == 0 || ull == ((uint64_t(1)<<(2*(dict_end[l]-dict_start[l]+1)))-1)) 
+                            //	continue;//added because there were too many of these
+                            //making the whole thing slow due to locking
+                            startposidx = dict[l].bphf->lookup(ull);
+                            if(startposidx >= dict[l].numkeys)//not found
+                                continue;
+                            //check if any other thread is modifying same dictpos
+                            if(!omp_test_lock(&dict_lock[startposidx]))
+                                continue;
+                            dict[l].findpos(dictidx,startposidx);
+                            if(dict[l].empty_bin[startposidx])//bin is empty
+                            {
+                                omp_unset_lock(&dict_lock[startposidx]);
+                                continue;
+                            }
+                            uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
+                            if(ull == ull1)//checking if ull is actually the key for this bin
+                            {	
+                                for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
+                                {
+                                    auto rid = dict[l].read_id[i];
+                                    if((forward_bitset^read[rid]).count()<=thresh_s)
+                                    {	
+                                        omp_set_lock(&read_lock[rid]);
+                                        if(remainingreads[rid])
+                                        {
+                                            remainingreads[rid]=0;
+                                            flag = 1;
+                                        }
+                                        omp_unset_lock(&read_lock[rid]);
+                                    }
+                                    if(flag == 1)//match found
+                                    {
+                                        flag = 0;
+                                        list_size++;
+                                        pos.insert(pos_it,j);
+                                        reads.insert(reads_it,bitsettostring(read[rid]));
+                                        order.insert(order_it,order_s[rid]);
+                                        RC.insert(RC_it,'d');
+                                        for(int l1 = 0;l1 < numdict_s; l1++)
+                                            deleted_rids[l1].push_back(rid);
+                                    }
+                                }
+                            }
+                            omp_unset_lock(&dict_lock[startposidx]);
+                            //delete from dictionaries
+                            for(int l1= 0; l1 < numdict_s; l1++)
+                                for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
+                                {
+                                    b = read[*it]&mask1[l1];
+                                    ull = (b>>3*dict_start[l1]).to_ullong();
+                                    startposidx = dict[l1].bphf->lookup(ull);
+                                    if(!omp_test_lock(&dict_lock[startposidx]))
+                                    {
+                                        ++it;
+                                        continue;
+                                    }
+                                    dict[l1].findpos(dictidx,startposidx);
+                                    dict[l1].remove(dictidx,startposidx,*it);
+                                    it = deleted_rids[l1].erase(it);	
+                                    omp_unset_lock(&dict_lock[startposidx]);
+                                }
+                        }
+                        for(int l = 0; l < numdict_s; l++)//reverse
+                        {
+                            b = reverse_bitset&mask1[l];
+                            ull = (b>>3*dict_start[l]).to_ullong();
+                            startposidx = dict[l].bphf->lookup(ull);
+                            if(startposidx >= dict[l].numkeys)//not found
+                                continue;
+                            //check if any other thread is modifying same dictpos
+                            if(!omp_test_lock(&dict_lock[startposidx]))
+                                continue;
+                            dict[l].findpos(dictidx,startposidx);
+                            if(dict[l].empty_bin[startposidx])//bin is empty
+                            {
+                                omp_unset_lock(&dict_lock[startposidx]);
+                                continue;
+                            }
+                            uint64_t ull1 = ((read[dict[l].read_id[dictidx[0]]]&mask1[l])>>3*dict_start[l]).to_ullong();
+                            if(ull == ull1)//checking if ull is actually the key for this bin
+                            {	
+                                for (int64_t i = dictidx[1] - 1 ; i >= dictidx[0] && i >= dictidx[1] - maxsearch; i--)
+                                {
+                                    auto rid = dict[l].read_id[i];
+                                    if((reverse_bitset^read[rid]).count()<=thresh_s)
+                                    {	
+                                        omp_set_lock(&read_lock[rid]);
+                                        if(remainingreads[rid])
+                                        {
+                                            remainingreads[rid]=0;
+                                            flag = 1;
+                                        }
+                                        omp_unset_lock(&read_lock[rid]);
+                                    }
+                                    if(flag == 1)//match found
+                                    {
+                                        flag = 0;
+                                        list_size++;
+                                        pos.insert(pos_it,j);
+                                        reads.insert(reads_it,reverse_complement(bitsettostring(read[rid])));
+                                        order.insert(order_it,order_s[rid]);
+                                        RC.insert(RC_it,'r');
+                                        for(int l1 = 0;l1 < numdict_s; l1++)
+                                            deleted_rids[l1].push_back(rid);
+                                    }
+                                }
+                            }
+                            omp_unset_lock(&dict_lock[startposidx]);
+                            //delete from dictionaries
+                            for(int l1= 0; l1 < numdict_s; l1++)
+                                for(auto it = deleted_rids[l1].begin(); it!=deleted_rids[l1].end();)
+                                {
+                                    b = read[*it]&mask1[l1];
+                                    ull = (b>>3*dict_start[l1]).to_ullong();
+                                    startposidx = dict[l1].bphf->lookup(ull);
+                                    if(!omp_test_lock(&dict_lock[startposidx]))
+                                    {
+                                        ++it;
+                                        continue;
+                                    }
+                                    dict[l1].findpos(dictidx,startposidx);
+                                    dict[l1].remove(dictidx,startposidx,*it);
+                                    it = deleted_rids[l1].erase(it);	
+                                    omp_unset_lock(&dict_lock[startposidx]);
+                                }
+                        }
+                        if(j != ref.size()-readlen)//not at last position,shift bitsets
+                        {
+                            forward_bitset >>= 3;
+                            forward_bitset |= basemask[readlen-1][ref[j+readlen]];
+                            reverse_bitset <<= 3;
+                            reverse_bitset |= basemask[0][chartorevchar[ref[j+readlen]]];
+                        }	
+                                
+                    }
+                    //convert pos to differences again
+                    long prevpos = 0;
+                    for(auto it = pos.begin(); it != pos.end(); ++it)
+                    {
+                        *it = *it - prevpos;
+                        prevpos = prevpos + *it;
+                    }
+                }
 				writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
 			}
 			reads = {current};
@@ -422,8 +435,10 @@ void encode(std::bitset<3*readlen> *read, bbhashdict *dict, uint32_t *order_s)
 		i++;	
 					
 	}
-	ref = buildcontig(reads,pos,list_size);
-	writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
+    if (start_read_num[tid] != end_read_num[tid]) {
+	    ref = buildcontig(reads,pos,list_size);
+    	writecontig(ref,pos,reads,order,RC,f_seq,f_pos,f_noise,f_noisepos,f_order,f_RC,f_order_N_pe,list_size);
+    }
 
 	f.close();
 	in_flag.close();
